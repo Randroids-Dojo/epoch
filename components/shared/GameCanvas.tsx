@@ -1,14 +1,22 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { generateMap, GameMap, HexCell } from '@/engine/map';
-import { hexKey, hexToPixel, pixelToHex } from '@/engine/hex';
+import { GameMap, HexCell } from '@/engine/map';
+import { GameState } from '@/engine/state';
+import { Hex, hexKey, hexToPixel, pixelToHex } from '@/engine/hex';
 import { Camera, DEFAULT_ZOOM, zoomToward, canvasToWorld } from '@/renderer/camera';
 import { BASE_HEX_SIZE, drawBackground, drawHexCell } from '@/renderer/drawHex';
+import { drawUnits, drawStructures, drawTargetingOverlay } from '@/renderer/drawEntities';
+import { InteractionMode } from '@/lib/types';
 
 const ZOOM_STEP = 1.15;
 const PAN_SPEED = 20; // CSS px per keypress
-const INITIAL_MAP_SEED = 42;
+
+interface GameCanvasProps {
+  gameState: GameState;
+  mode: InteractionMode;
+  onHexClick(hex: Hex): void;
+}
 
 function getInitialCamera(map: GameMap, cssW: number, cssH: number): Camera {
   const { x: wx, y: wy } = hexToPixel(map.playerStart, BASE_HEX_SIZE);
@@ -19,17 +27,24 @@ function getInitialCamera(map: GameMap, cssW: number, cssH: number): Camera {
   };
 }
 
-export default function GameCanvas() {
+export default function GameCanvas({ gameState, mode, onHexClick }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const camRef    = useRef<Camera>({ x: 0, y: 0, zoom: DEFAULT_ZOOM });
   const mapRef    = useRef<GameMap | null>(null);
   const frameRef  = useRef<number>(0);
   const dprRef    = useRef(1);
 
+  // Keep mapRef in sync with the current game state map.
+  mapRef.current = gameState.map;
+
   // Selected hex key — kept in a ref for the render loop, in state for the info panel.
   const selectedRef = useRef<string | null>(null);
   const [selectedCell, setSelectedCell] = useState<HexCell | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Keep mode accessible in render without re-creating the callback.
+  const modeRef = useRef<InteractionMode>(mode);
+  modeRef.current = mode;
 
   // ── Pan state ──────────────────────────────────────────────────────────────
   const dragging  = useRef(false);
@@ -37,6 +52,14 @@ export default function GameCanvas() {
 
   // ── Pinch state ────────────────────────────────────────────────────────────
   const pinchDist = useRef<number | null>(null);
+
+  // Keep a stable ref to the latest onHexClick so we don't recreate render.
+  const onHexClickRef = useRef(onHexClick);
+  onHexClickRef.current = onHexClick;
+
+  // Keep refs to the latest gameState for the render loop.
+  const gameStateRef = useRef(gameState);
+  gameStateRef.current = gameState;
 
   // ── Render loop ────────────────────────────────────────────────────────────
   const render = useCallback(() => {
@@ -51,6 +74,8 @@ export default function GameCanvas() {
     const dpr  = dprRef.current;
     const cssW = canvas.clientWidth;
     const cssH = canvas.clientHeight;
+    const gs   = gameStateRef.current;
+    const m    = modeRef.current;
 
     // Reset transform every frame so DPR scaling is idempotent.
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -68,6 +93,15 @@ export default function GameCanvas() {
       const key = hexKey(cell.hex);
       drawHexCell(ctx, cell, cam, sx, sy, selectedRef.current === key);
     }
+
+    // ── Targeting overlay ────────────────────────────────────────────────────
+    if (m.kind === 'targeting') {
+      drawTargetingOverlay(ctx, map.cells, m.eligibleKeys, cam);
+    }
+
+    // ── Structures + units ───────────────────────────────────────────────────
+    drawStructures(ctx, gs.structures, cam);
+    drawUnits(ctx, gs.units, cam);
   }, []);
 
   // ── Animation frame loop ───────────────────────────────────────────────────
@@ -80,13 +114,10 @@ export default function GameCanvas() {
     return () => cancelAnimationFrame(frameRef.current);
   }, [render]);
 
-  // ── Initialise map + ResizeObserver ────────────────────────────────────────
+  // ── Initialise ResizeObserver (map now comes from props) ───────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
-    const map = generateMap(INITIAL_MAP_SEED);
-    mapRef.current = map;
 
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
@@ -94,7 +125,9 @@ export default function GameCanvas() {
       dprRef.current = dpr;
       canvas.width  = Math.floor(width  * dpr);
       canvas.height = Math.floor(height * dpr);
-      camRef.current = getInitialCamera(map, width, height);
+      // Centre on player start once we know the canvas size.
+      const map = mapRef.current;
+      if (map) camRef.current = getInitialCamera(map, width, height);
     });
     observer.observe(canvas);
     return () => observer.disconnect();
@@ -126,7 +159,7 @@ export default function GameCanvas() {
     dragging.current = false;
     setIsDragging(false);
 
-    // Tiny movement → treat as click (hex selection).
+    // Tiny movement → treat as click.
     if (Math.abs(dx) < 4 && Math.abs(dy) < 4) {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -137,11 +170,16 @@ export default function GameCanvas() {
       const hex = pixelToHex(wx, wy, BASE_HEX_SIZE);
       const key = hexKey(hex);
       const map = mapRef.current;
+
+      // Update hex inspect panel (only visible in idle mode).
       if (map?.cells.has(key)) {
         const next = key === selectedRef.current ? null : key;
         selectedRef.current = next;
         setSelectedCell(next ? (map.cells.get(next) ?? null) : null);
       }
+
+      // Notify parent of the hex click.
+      onHexClickRef.current(hex);
     }
   }, []);
 
@@ -266,20 +304,23 @@ export default function GameCanvas() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  const isTargeting = mode.kind === 'targeting';
+  const cursor = isTargeting ? 'crosshair' : isDragging ? 'grabbing' : 'grab';
+
   return (
     <div className="relative h-full w-full">
       <canvas
         ref={canvasRef}
         className="block h-full w-full"
-        style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+        style={{ cursor, touchAction: 'none' }}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={() => { dragging.current = false; setIsDragging(false); }}
       />
 
-      {/* Hex info panel */}
-      {selectedCell && (
+      {/* Hex info panel — only in idle mode */}
+      {mode.kind === 'idle' && selectedCell && (
         <div
           className="pointer-events-none absolute bottom-4 left-4 rounded border border-slate-700 px-3 py-2 font-mono text-xs"
           style={{ background: 'rgba(10,14,26,0.90)', color: '#94a3b8' }}
@@ -300,7 +341,8 @@ export default function GameCanvas() {
         <div>Drag / WASD — pan</div>
         <div>Scroll / ± — zoom</div>
         <div>Home — snap to base</div>
-        <div>Click hex — inspect</div>
+        {mode.kind === 'idle' && <div>Click hex — inspect</div>}
+        {mode.kind === 'targeting' && <div style={{ color: '#00d4ff' }}>Click target hex</div>}
       </div>
     </div>
   );

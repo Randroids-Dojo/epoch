@@ -65,6 +65,8 @@ export type Command =
   | DefendCommand
   | TemporalCommand;
 
+export type CommandType = Command['type'];
+
 /** A player's command queue for one epoch. Null entries are empty slots. */
 export type CommandQueue = Array<Command | null>;
 
