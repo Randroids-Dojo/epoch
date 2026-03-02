@@ -9,7 +9,10 @@ export type TerrainType =
 export interface TerrainDef {
   readonly label: string;
   readonly passable: boolean;
-  /** Movement cost multiplier: 1 = normal, 2 = slow, Infinity = impassable. */
+  /**
+   * Movement cost multiplier: 1 = normal, 2 = slow, Infinity = impassable.
+   * Deferred: bfsPath currently uses only `passable`; weighted pathfinding is post-MVP.
+   */
   readonly moveCost: number;
 }
 

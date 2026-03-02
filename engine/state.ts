@@ -1,4 +1,5 @@
 import { GameMap, generateMap } from './map';
+import { Hex, hexEqual, hexKey } from './hex';
 import { PlayerId, PLAYER_IDS } from './player';
 import { Unit, UNIT_DEFS } from './units';
 import { Structure, STRUCTURE_DEFS } from './structures';
@@ -80,7 +81,7 @@ export function createInitialState(seed?: number): GameState {
       id,
       owner:               pid,
       type:                'drone',
-      hex:                 map.cells.has(`${droneHex.q},${droneHex.r}`) ? droneHex : startHex,
+      hex:                 map.cells.has(hexKey(droneHex)) ? droneHex : startHex,
       hp:                  droneDef.maxHp,
       isDefending:         false,
       assignedExtractorId: null,
@@ -129,11 +130,11 @@ export function findNexus(state: GameState, owner: PlayerId): Structure | undefi
 /** Returns the first unit of the given owner at the given hex, if any. */
 export function findUnitAt(
   state: GameState,
-  hex: { q: number; r: number },
+  hex: Hex,
   owner?: PlayerId,
 ): Unit | undefined {
   for (const u of state.units.values()) {
-    if (u.hex.q === hex.q && u.hex.r === hex.r) {
+    if (hexEqual(u.hex, hex)) {
       if (owner === undefined || u.owner === owner) return u;
     }
   }
@@ -143,11 +144,11 @@ export function findUnitAt(
 /** Returns the first structure of the given owner at the given hex, if any. */
 export function findStructureAt(
   state: GameState,
-  hex: { q: number; r: number },
+  hex: Hex,
   owner?: PlayerId,
 ): Structure | undefined {
   for (const s of state.structures.values()) {
-    if (s.hex.q === hex.q && s.hex.r === hex.r) {
+    if (hexEqual(s.hex, hex)) {
       if (owner === undefined || s.owner === owner) return s;
     }
   }

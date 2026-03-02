@@ -24,10 +24,10 @@ import {
 } from './state';
 import {
   AttackCommand, BuildCommand, Command, DefendCommand,
-  GatherCommand, MoveCommand, TemporalCommand, TrainCommand,
+  GatherCommand, MAX_COMMAND_SLOTS, MoveCommand, TemporalCommand, TrainCommand,
 } from './commands';
-import { PlayerId, opponent } from './player';
-import { UNIT_DEFS, UnitType } from './units';
+import { PlayerId, PLAYER_IDS, opponent } from './player';
+import { UNIT_DEFS } from './units';
 import { STRUCTURE_DEFS, isComplete } from './structures';
 import { computeFog } from './map';
 
@@ -46,7 +46,7 @@ interface CommandEntry {
 /** Collect all non-null commands from both players, tagged with owner. */
 function gatherCommands(state: GameState): CommandEntry[] {
   const entries: CommandEntry[] = [];
-  for (const pid of ['player', 'ai'] as PlayerId[]) {
+  for (const pid of PLAYER_IDS) {
     for (const cmd of state.players[pid].commands) {
       if (cmd !== null) entries.push({ owner: pid, command: cmd });
     }
@@ -67,9 +67,10 @@ function bfsPath(from: Hex, to: Hex, state: GameState, blocked: Set<string>): He
   if (hexEqual(from, to)) return [];
   const parent = new Map<string, Hex | null>([[hexKey(from), null]]);
   const queue: Hex[] = [from];
+  let qi = 0;
 
-  while (queue.length > 0) {
-    const hex = queue.shift()!;
+  while (qi < queue.length) {
+    const hex = queue[qi++];
     for (const nb of hexNeighbors(hex)) {
       const key = hexKey(nb);
       if (parent.has(key) || blocked.has(key)) continue;
@@ -148,24 +149,29 @@ function stepMove(state: GameState, commands: CommandEntry[], log: string[]): vo
       return mapOrder(ua.hex, ub.hex);
     });
 
+  // Build blocked set once; update it as units move so later movers see vacated hexes.
+  // Structures don't block movement.
+  const blocked = new Set<string>();
+  for (const u of state.units.values()) blocked.add(hexKey(u.hex));
+
   for (const { owner, command } of moves) {
     const unit = state.units.get(command.unitId);
     if (!unit || unit.owner !== owner) continue;
 
-    const def  = UNIT_DEFS[unit.type];
-    // Blocked = all other units' current hexes (structures don't block movement).
-    const blocked = new Set<string>();
-    for (const [id, u] of state.units) {
-      if (id !== unit.id) blocked.add(hexKey(u.hex));
-    }
+    const def    = UNIT_DEFS[unit.type];
+    const ownKey = hexKey(unit.hex);
+    blocked.delete(ownKey); // Allow the unit to leave its current hex.
 
     const path  = bfsPath(unit.hex, command.targetHex, state, blocked);
     const steps = path.slice(0, def.speed);
-    if (steps.length === 0) continue;
-
-    const dest = steps[steps.length - 1];
-    unit.hex = dest;
-    log.push(`${owner} ${unit.type} → (${dest.q},${dest.r})`);
+    if (steps.length > 0) {
+      const dest = steps[steps.length - 1];
+      unit.hex = dest;
+      blocked.add(hexKey(dest)); // Mark new position occupied for subsequent movers.
+      log.push(`${owner} ${unit.type} → (${dest.q},${dest.r})`);
+    } else {
+      blocked.add(ownKey); // Unit didn't move; restore its hex in the blocked set.
+    }
   }
 }
 
@@ -199,9 +205,7 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
     const targetStruct = targetUnit ? undefined : findStructureAt(state, command.targetHex, foe);
 
     if (!targetUnit && !targetStruct) continue;
-
-    const targetHex = targetUnit ? targetUnit.hex : targetStruct!.hex;
-    if (hexDistance(attacker.hex, targetHex) > def.range) continue;
+    if (hexDistance(attacker.hex, command.targetHex) > def.range) continue;
 
     if (targetUnit) {
       const dmg = targetUnit.isDefending
@@ -303,6 +307,10 @@ function stepGather(state: GameState, commands: CommandEntry[], log: string[]): 
     (e): e is { owner: PlayerId; command: GatherCommand } => e.command.type === 'gather',
   );
 
+  // Build blocked set once for drone repositioning; reflects post-move unit positions.
+  const blocked = new Set<string>();
+  for (const u of state.units.values()) blocked.add(hexKey(u.hex));
+
   // Assign drones to their extractors.
   for (const { owner, command } of gathers) {
     const unit = state.units.get(command.unitId);
@@ -317,13 +325,16 @@ function stepGather(state: GameState, commands: CommandEntry[], log: string[]): 
 
     // Move drone to the extractor hex if not already there.
     if (!hexEqual(unit.hex, command.targetHex)) {
-      const blocked = new Set<string>();
-      for (const [id, u] of state.units) {
-        if (id !== unit.id) blocked.add(hexKey(u.hex));
-      }
+      const ownKey = hexKey(unit.hex);
+      blocked.delete(ownKey);
       const path  = bfsPath(unit.hex, command.targetHex, state, blocked);
       const steps = path.slice(0, UNIT_DEFS.drone.speed);
-      if (steps.length > 0) unit.hex = steps[steps.length - 1];
+      if (steps.length > 0) {
+        unit.hex = steps[steps.length - 1];
+        blocked.add(hexKey(unit.hex));
+      } else {
+        blocked.add(ownKey);
+      }
     }
 
     extractor.assignedDroneId = unit.id;
@@ -353,10 +364,14 @@ function stepTrain(state: GameState, commands: CommandEntry[], log: string[]): v
   for (const { owner, command } of trains) {
     const player    = state.players[owner];
     const barracks  = state.structures.get(command.structureId);
-    const unitDef   = UNIT_DEFS[command.unitType as UnitType];
+    const unitDef   = UNIT_DEFS[command.unitType];
 
     if (!barracks || barracks.owner !== owner) continue;
-    if (!isComplete(barracks) || barracks.type !== 'barracks') {
+    if (barracks.type !== 'barracks') {
+      log.push(`${owner} Train failed — structure is not a Barracks`);
+      continue;
+    }
+    if (!isComplete(barracks)) {
       log.push(`${owner} Train failed — Barracks not ready`);
       continue;
     }
@@ -376,7 +391,7 @@ function stepTrain(state: GameState, commands: CommandEntry[], log: string[]): v
     state.units.set(id, {
       id,
       owner,
-      type:                command.unitType as UnitType,
+      type:                command.unitType,
       hex:                 spawnHex,
       hp:                  unitDef.maxHp,
       isDefending:         false,
@@ -401,7 +416,7 @@ function findSpawnHex(state: GameState, barracksHex: Hex): Hex | null {
 
 function stepPostResolution(state: GameState): void {
   // Passive TE regeneration (+1 per epoch).
-  for (const pid of ['player', 'ai'] as PlayerId[]) {
+  for (const pid of PLAYER_IDS) {
     const p = state.players[pid];
     p.resources.te = Math.min(p.resources.te + 1, 10); // cap at 10 (MVP)
     // Early lock-in bonus.
@@ -409,7 +424,7 @@ function stepPostResolution(state: GameState): void {
       p.resources.te = Math.min(p.resources.te + 1, 10);
     }
     // Clear commands and lock-in for the new planning phase.
-    p.commands  = Array(p.commandSlots).fill(null);
+    p.commands  = Array(MAX_COMMAND_SLOTS).fill(null);
     p.lockedIn  = false;
   }
 
@@ -438,10 +453,8 @@ function checkWinConditions(state: GameState): void {
   const playerNexus = findNexus(state, 'player');
   const aiNexus     = findNexus(state, 'ai');
 
-  if (!playerNexus && !aiNexus) {
-    // Mutual destruction — treat as player defeat (edge case).
-    state.winner = 'ai';
-  } else if (!playerNexus) {
+  if (!playerNexus) {
+    // Also covers mutual destruction — treat as player defeat.
     state.winner = 'ai';
   } else if (!aiNexus) {
     state.winner = 'player';

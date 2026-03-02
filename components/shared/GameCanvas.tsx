@@ -8,6 +8,7 @@ import { BASE_HEX_SIZE, drawBackground, drawHexCell } from '@/renderer/drawHex';
 
 const ZOOM_STEP = 1.15;
 const PAN_SPEED = 20; // CSS px per keypress
+const INITIAL_MAP_SEED = 42;
 
 function getInitialCamera(map: GameMap, cssW: number, cssH: number): Camera {
   const { x: wx, y: wy } = hexToPixel(map.playerStart, BASE_HEX_SIZE);
@@ -23,10 +24,12 @@ export default function GameCanvas() {
   const camRef    = useRef<Camera>({ x: 0, y: 0, zoom: DEFAULT_ZOOM });
   const mapRef    = useRef<GameMap | null>(null);
   const frameRef  = useRef<number>(0);
+  const dprRef    = useRef(1);
 
   // Selected hex key — kept in a ref for the render loop, in state for the info panel.
   const selectedRef = useRef<string | null>(null);
   const [selectedCell, setSelectedCell] = useState<HexCell | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   // ── Pan state ──────────────────────────────────────────────────────────────
   const dragging  = useRef(false);
@@ -45,7 +48,7 @@ export default function GameCanvas() {
     if (!ctx) return;
 
     const cam  = camRef.current;
-    const dpr  = window.devicePixelRatio || 1;
+    const dpr  = dprRef.current;
     const cssW = canvas.clientWidth;
     const cssH = canvas.clientHeight;
 
@@ -57,12 +60,13 @@ export default function GameCanvas() {
     const pad     = hexSize * 2;
 
     for (const cell of map.cells.values()) {
-      const wp = hexToPixel(cell.hex, BASE_HEX_SIZE);
+      const wp           = hexToPixel(cell.hex, BASE_HEX_SIZE);
       const sx = cam.x + wp.x * cam.zoom;
       const sy = cam.y + wp.y * cam.zoom;
       // Cull off-screen hexes.
       if (sx < -pad || sx > cssW + pad || sy < -pad || sy > cssH + pad) continue;
-      drawHexCell(ctx, cell, cam, selectedRef.current === hexKey(cell.hex));
+      const key = hexKey(cell.hex);
+      drawHexCell(ctx, cell, cam, sx, sy, selectedRef.current === key);
     }
   }, []);
 
@@ -81,12 +85,13 @@ export default function GameCanvas() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const map = generateMap(42);
+    const map = generateMap(INITIAL_MAP_SEED);
     mapRef.current = map;
 
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
       const dpr = window.devicePixelRatio || 1;
+      dprRef.current = dpr;
       canvas.width  = Math.floor(width  * dpr);
       canvas.height = Math.floor(height * dpr);
       camRef.current = getInitialCamera(map, width, height);
@@ -98,6 +103,7 @@ export default function GameCanvas() {
   // ── Mouse events ───────────────────────────────────────────────────────────
   const onMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     dragging.current = true;
+    setIsDragging(true);
     dragStart.current = {
       x: e.clientX, y: e.clientY,
       camX: camRef.current.x, camY: camRef.current.y,
@@ -118,6 +124,7 @@ export default function GameCanvas() {
     const dx = e.clientX - dragStart.current.x;
     const dy = e.clientY - dragStart.current.y;
     dragging.current = false;
+    setIsDragging(false);
 
     // Tiny movement → treat as click (hex selection).
     if (Math.abs(dx) < 4 && Math.abs(dy) < 4) {
@@ -163,6 +170,7 @@ export default function GameCanvas() {
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length === 1) {
         dragging.current = true;
+        setIsDragging(true);
         dragStart.current = {
           x: e.touches[0].clientX, y: e.touches[0].clientY,
           camX: camRef.current.x,  camY: camRef.current.y,
@@ -170,6 +178,7 @@ export default function GameCanvas() {
         pinchDist.current = null;
       } else if (e.touches.length === 2) {
         dragging.current = false;
+        setIsDragging(false);
         pinchDist.current = Math.hypot(
           e.touches[0].clientX - e.touches[1].clientX,
           e.touches[0].clientY - e.touches[1].clientY,
@@ -201,6 +210,7 @@ export default function GameCanvas() {
 
     const onTouchEnd = () => {
       dragging.current  = false;
+      setIsDragging(false);
       pinchDist.current = null;
     };
 
@@ -261,11 +271,11 @@ export default function GameCanvas() {
       <canvas
         ref={canvasRef}
         className="block h-full w-full"
-        style={{ cursor: dragging.current ? 'grabbing' : 'grab', touchAction: 'none' }}
+        style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
-        onMouseLeave={() => { dragging.current = false; }}
+        onMouseLeave={() => { dragging.current = false; setIsDragging(false); }}
       />
 
       {/* Hex info panel */}

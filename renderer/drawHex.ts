@@ -1,4 +1,3 @@
-import { hexCorners, hexToPixel } from '../engine/hex';
 import { FogState, HexCell } from '../engine/map';
 import { TerrainType } from '../engine/terrain';
 import { Camera } from './camera';
@@ -12,35 +11,42 @@ const C = {
   hexBorderSelect: '#00e5ff',
   unexplored:      '#070b14',
   exploredOverlay: 'rgba(0,0,0,0.40)',
-  crystalNode:     '#7dd3fc',
-  voidRift:        '#0c1220',
-  ridge:           '#475569',
-  energyField:     '#4c1d95',
-  fluxVent:        '#d946ef',
-  fog:             '#334155',
+  crystalNode:        '#7dd3fc',
+  crystalNodeVisible: '#0c2d4a',
+  voidRift:           '#0c1220',
+  ridge:              '#475569',
+  ridgeVisible:       '#1c2535',
+  energyField:        '#110a24',
+  energyFieldSymbol:  '#7c3aed',
+  fluxVent:           '#d946ef',
+  fluxVentVisible:    '#1a0a2e',
+  fog:                '#334155',
 } as const;
 
 /** Base hex size in world pixels (before camera zoom is applied). */
 export const BASE_HEX_SIZE = 28;
+
+// Precomputed cos/sin for pointy-top hex corners (angles: −30°, 30°, 90°, 150°, 210°, 270°).
+// Eliminates per-frame trig and Array allocation in the render loop.
+const CORNER_COS = Array.from({ length: 6 }, (_, i) => Math.cos((Math.PI / 180) * (60 * i - 30)));
+const CORNER_SIN = Array.from({ length: 6 }, (_, i) => Math.sin((Math.PI / 180) * (60 * i - 30)));
 
 /** Draw a single hex cell onto the canvas. */
 export function drawHexCell(
   ctx: CanvasRenderingContext2D,
   cell: HexCell,
   cam: Camera,
+  sx: number,
+  sy: number,
   selected = false,
 ): void {
   const size = BASE_HEX_SIZE * cam.zoom;
-  const wp = hexToPixel(cell.hex, BASE_HEX_SIZE);
-  const sx = cam.x + wp.x * cam.zoom;
-  const sy = cam.y + wp.y * cam.zoom;
-  const corners = hexCorners(sx, sy, size);
 
   // ── Hex fill ──────────────────────────────────────────────────────────────
   ctx.beginPath();
-  ctx.moveTo(corners[0][0], corners[0][1]);
-  for (let i = 1; i < corners.length; i++) {
-    ctx.lineTo(corners[i][0], corners[i][1]);
+  ctx.moveTo(sx + size * CORNER_COS[0], sy + size * CORNER_SIN[0]);
+  for (let i = 1; i < 6; i++) {
+    ctx.lineTo(sx + size * CORNER_COS[i], sy + size * CORNER_SIN[i]);
   }
   ctx.closePath();
 
@@ -69,10 +75,10 @@ function getHexFill(terrain: TerrainType, fog: FogState): string {
   const visible = fog === 'visible';
   switch (terrain) {
     case 'void_rift':    return C.voidRift;
-    case 'crystal_node': return visible ? '#0c2d4a' : C.hexFill;
-    case 'flux_vent':    return visible ? '#1a0a2e' : C.hexFill;
-    case 'ridge':        return visible ? '#1c2535' : C.hexFill;
-    case 'energy_field': return visible ? '#110a24' : C.hexFill;
+    case 'crystal_node': return visible ? C.crystalNodeVisible : C.hexFill;
+    case 'flux_vent':    return visible ? C.fluxVentVisible : C.hexFill;
+    case 'ridge':        return visible ? C.ridgeVisible : C.hexFill;
+    case 'energy_field': return visible ? C.energyField : C.hexFill;
     case 'open':
     default:
       return visible ? C.hexFillVisible : C.hexFill;
@@ -87,10 +93,11 @@ function drawTerrainSymbol(
   size: number,
   desaturated: boolean,
 ): void {
-  const r = size * 0.32;
-  ctx.save();
-  ctx.globalAlpha = desaturated ? 0.4 : 1.0;
-  ctx.lineWidth = Math.max(1, size * 0.05);
+  const r           = size * 0.32;
+  const prevAlpha   = ctx.globalAlpha;
+  const prevLW      = ctx.lineWidth;
+  ctx.globalAlpha   = desaturated ? 0.4 : 1.0;
+  ctx.lineWidth     = Math.max(1, size * 0.05);
 
   switch (terrain) {
     case 'crystal_node': {
@@ -105,7 +112,7 @@ function drawTerrainSymbol(
       break;
     }
     case 'void_rift': {
-      ctx.strokeStyle = '#475569';
+      ctx.strokeStyle = C.ridge;
       ctx.beginPath();
       ctx.moveTo(cx - r * 0.6, cy - r * 0.6);
       ctx.lineTo(cx + r * 0.6, cy + r * 0.6);
@@ -135,7 +142,7 @@ function drawTerrainSymbol(
       break;
     }
     case 'energy_field': {
-      ctx.strokeStyle = '#7c3aed';
+      ctx.strokeStyle = C.energyFieldSymbol;
       ctx.beginPath();
       ctx.moveTo(cx - r, cy);
       ctx.bezierCurveTo(
@@ -150,7 +157,8 @@ function drawTerrainSymbol(
       break;
   }
 
-  ctx.restore();
+  ctx.globalAlpha = prevAlpha;
+  ctx.lineWidth   = prevLW;
 }
 
 /** Fill the entire canvas with the background color. */
