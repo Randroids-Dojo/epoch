@@ -1,0 +1,22 @@
+# Next.js
+.next/
+out/
+
+# Dependencies
+node_modules/
+
+# Vercel
+.vercel/
+
+# Playwright
+playwright-report/
+test-results/
+
+# OS
+.DS_Store
+
+# Env
+.env
+.env.local
+.env.*.local
+.vercel

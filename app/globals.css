@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy: #0a0e1a;
+  --color-navy-light: #111827;
+  --color-cyan: #00d4ff;
+  --color-cyan-dim: #0099bb;
+  --color-coral: #ff6b6b;
+  --color-gold: #ffd700;
+  --color-magenta: #ff00ff;
+  --color-ice: #e0f7ff;
+  --color-ice-dim: #a8d8ea;
+
+  --font-mono: ui-monospace, 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+}
+
+html,
+body {
+  font-family: var(--font-mono);
+  background-color: var(--color-navy);
+  color: var(--color-ice);
+}
