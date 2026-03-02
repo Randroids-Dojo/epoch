@@ -20,3 +20,294 @@ body {
   background-color: var(--color-navy);
   color: var(--color-ice);
 }
+
+/* ── Feedback FAB ────────────────────────────────────────────────────────── */
+
+.epoch-fab {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 3000;
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  border: 1px solid #334155;
+  background: rgba(10, 14, 26, 0.90);
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.epoch-fab:hover {
+  border-color: #00d4ff;
+  color: #00d4ff;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+}
+
+.epoch-fab.open {
+  border-color: #475569;
+  color: #64748b;
+}
+
+.epoch-fab-icon {
+  width: 18px;
+  height: 18px;
+  position: absolute;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.epoch-fab-menu {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.epoch-fab-close {
+  opacity: 0;
+  transform: scale(0.5) rotate(-45deg);
+}
+
+.epoch-fab.open .epoch-fab-menu {
+  opacity: 0;
+  transform: scale(0.5) rotate(45deg);
+}
+
+.epoch-fab.open .epoch-fab-close {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
+
+/* ── FAB Menu ────────────────────────────────────────────────────────────── */
+
+.epoch-fab-menu {
+  position: fixed;
+  bottom: 4.5rem;
+  right: 1.25rem;
+  z-index: 2999;
+  display: flex;
+  flex-direction: column;
+  background: #0d1321;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(6px) scale(0.95);
+  transform-origin: bottom right;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.epoch-fab-menu.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.epoch-fab-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 1.1rem;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.epoch-fab-menu-item svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.epoch-fab-menu-item:hover {
+  background: rgba(0, 212, 255, 0.06);
+  color: #00d4ff;
+}
+
+.epoch-fab-menu-item + .epoch-fab-menu-item {
+  border-top: 1px solid #1e293b;
+}
+
+/* ── Feedback Panel ──────────────────────────────────────────────────────── */
+
+.epoch-feedback-panel {
+  position: fixed;
+  bottom: 4.5rem;
+  right: 1.25rem;
+  z-index: 2999;
+  width: 340px;
+  background: #0d1321;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.7), 0 0 30px rgba(0, 212, 255, 0.06);
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
+  transform-origin: bottom right;
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.epoch-feedback-panel.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.epoch-feedback-header {
+  padding: 0.85rem 1rem 0.6rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  color: #00d4ff;
+  border-bottom: 1px solid #1e293b;
+}
+
+.epoch-feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem 1rem;
+}
+
+.epoch-feedback-textarea {
+  width: 100%;
+  background: #070b14;
+  border: 1px solid #1e293b;
+  border-radius: 4px;
+  padding: 0.65rem 0.75rem;
+  color: #e0f7ff;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 90px;
+  max-height: 200px;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  box-sizing: border-box;
+}
+
+.epoch-feedback-textarea::placeholder {
+  color: #334155;
+}
+
+.epoch-feedback-textarea:focus {
+  border-color: #334155;
+  box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.12);
+}
+
+.epoch-feedback-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  background: #00d4ff;
+  color: #0a0e1a;
+  border: none;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: opacity 0.15s ease, box-shadow 0.15s ease;
+  align-self: flex-start;
+}
+
+.epoch-feedback-submit:hover:not(:disabled) {
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.4);
+}
+
+.epoch-feedback-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.epoch-feedback-submit .sending,
+.epoch-feedback-submit.sending .label,
+.epoch-feedback-submit.sending .arrow {
+  display: none;
+}
+
+.epoch-feedback-submit.sending .sending {
+  display: inline;
+}
+
+.epoch-feedback-submit.error {
+  background: #ff6b6b;
+  color: #fff;
+}
+
+.epoch-feedback-hint {
+  font-size: 0.68rem;
+  color: #334155;
+  letter-spacing: 0.02em;
+}
+
+/* Success state */
+
+.epoch-feedback-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 1rem 2.25rem;
+  text-align: center;
+  gap: 0.5rem;
+}
+
+.epoch-feedback-success-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #00d4ff;
+  color: #00d4ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.epoch-feedback-success p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #e0f7ff;
+  font-family: var(--font-mono);
+}
+
+.epoch-feedback-success p.sub {
+  font-size: 0.75rem;
+  color: #475569;
+}
+
+/* ── Mobile ──────────────────────────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  .epoch-feedback-panel {
+    right: 0.75rem;
+    left: 0.75rem;
+    width: auto;
+    bottom: 4.25rem;
+  }
+
+  .epoch-fab-menu {
+    right: 0.75rem;
+    bottom: 4.25rem;
+  }
+
+  .epoch-fab {
+    right: 0.75rem;
+    bottom: 0.75rem;
+  }
+}
