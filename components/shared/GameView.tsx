@@ -57,6 +57,16 @@ export default function GameView() {
 
   finishExecutionRef.current = finishExecution;
 
+  // ── Dev-only test hook ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development') {
+      (window as unknown as Record<string, unknown>).__triggerGameOver = (winner: 'player' | 'ai') => {
+        animationRef.current = null;
+        setGameState((s) => ({ ...s, phase: 'over', winner }));
+      };
+    }
+  }, []);
+
   // ── handleResolve ─────────────────────────────────────────────────────────
   const handleResolveRef = useRef<() => void>(() => {});
 
@@ -354,10 +364,12 @@ export default function GameView() {
         {/* Game-over overlay */}
         {gameState.phase === 'over' && (
           <div
+            data-testid="game-over-overlay"
             className="absolute inset-0 flex flex-col items-center justify-center"
             style={{ background: 'rgba(10,14,26,0.85)' }}
           >
             <div
+              data-testid="game-over-result"
               className="font-mono text-2xl font-bold tracking-widest uppercase"
               style={{ color: gameState.winner === 'player' ? '#00d4ff' : '#ff6b6b' }}
             >
@@ -366,12 +378,24 @@ export default function GameView() {
             <div className="mt-2 text-sm" style={{ color: '#475569' }}>
               Epoch {gameState.epoch}
             </div>
+            <button
+              data-testid="play-again-btn"
+              className="mt-6 font-mono text-sm tracking-widest uppercase px-6 py-2 border"
+              style={{ color: '#94a3b8', borderColor: '#334155' }}
+              onClick={() => {
+                setGameState(createInitialState(Date.now()));
+                setMode({ kind: 'idle' });
+                setTimeLeft(PLANNING_DURATION);
+              }}
+            >
+              Play Again
+            </button>
           </div>
         )}
       </div>
 
-      {/* Hide tray during execution */}
-      {!isExecuting && (
+      {/* Hide tray during execution and after game over */}
+      {!isExecuting && gameState.phase !== 'over' && (
         <CommandTray
           commands={gameState.players.player.commands}
           selectedSlot={

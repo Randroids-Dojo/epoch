@@ -456,6 +456,34 @@ describe('Win conditions', () => {
     expect(s.phase).toBe('over');
   });
 
+  it('AI wins on mutual Nexus destruction (simultaneous)', () => {
+    const s = createInitialState(1);
+    const playerNexus = findNexus(s, 'player')!;
+    const aiNexus = findNexus(s, 'ai')!;
+
+    // Set both nexuses to 1 HP.
+    playerNexus.hp = 1;
+    aiNexus.hp = 1;
+
+    // Player attacks AI nexus; AI attacks player nexus — both die in same epoch.
+    const playerSentry = addUnit(s, {
+      owner: 'player', type: 'pulse_sentry',
+      hex: { q: aiNexus.hex.q - 1, r: aiNexus.hex.r }, hp: 40,
+    });
+    const aiSentry = addUnit(s, {
+      owner: 'ai', type: 'pulse_sentry',
+      hex: { q: playerNexus.hex.q + 1, r: playerNexus.hex.r }, hp: 40,
+    });
+    queueCommand(s, 'player', 0, { type: 'attack', unitId: playerSentry.id, targetHex: aiNexus.hex });
+    queueCommand(s, 'ai', 0, { type: 'attack', unitId: aiSentry.id, targetHex: playerNexus.hex });
+
+    resolveEpoch(s);
+
+    // Per spec: mutual destruction treats as player defeat.
+    expect(s.winner).toBe('ai');
+    expect(s.phase).toBe('over');
+  });
+
   it('advances epoch and transitions to planning if no winner', () => {
     const s = createInitialState(1);
     resolveEpoch(s);
