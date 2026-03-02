@@ -7,10 +7,15 @@ import { Hex, hexKey } from '@/engine/hex';
 import { Command } from '@/engine/commands';
 import { getFirstEligibleUnit, computeEligibleHexes, TargetingCommandType } from '@/engine/targeting';
 import { InteractionMode } from '@/lib/types';
+import {
+  ExecutionAnimation, UnitSnapshot, StructSnapshot,
+  buildAnimationTimeline, TOTAL_DURATION,
+} from '@/renderer/animation';
 import GameCanvas from './GameCanvas';
 import PlanningBar from '../hud/PlanningBar';
 import CommandTray from '../hud/CommandTray';
 import CommandPicker from '../hud/CommandPicker';
+import ExecutionOverlay from '../hud/ExecutionOverlay';
 
 const PLANNING_DURATION = 30;
 
@@ -19,6 +24,7 @@ export default function GameView() {
   const [mode, setMode]             = useState<InteractionMode>({ kind: 'idle' });
   const [timeLeft, setTimeLeft]     = useState(PLANNING_DURATION);
   const [lockInFlash, setLockInFlash] = useState(false);
+  const [animElapsed, setAnimElapsed] = useState(0);
 
   // Stable refs so callbacks always see the latest values.
   const gameStateRef = useRef(gameState);
@@ -29,29 +35,79 @@ export default function GameView() {
 
   const lockedIn = gameState.players.player.lockedIn;
 
-  // ── handleResolve (stable ref so timer effect can call it) ────────────────
+  // ── Execution animation ref ───────────────────────────────────────────────
+  const animationRef = useRef<ExecutionAnimation | null>(null);
+
+  // ── finishExecution (stable ref for use in effects) ───────────────────────
+  const finishExecutionRef = useRef<() => void>(() => {});
+
+  const finishExecution = useCallback(() => {
+    animationRef.current = null;
+    setAnimElapsed(0);
+    setMode({ kind: 'idle' });
+    setTimeLeft(PLANNING_DURATION);
+
+    const s = gameStateRef.current;
+    if (s.phase !== 'over') {
+      s.phase = 'planning';
+      setGameState({ ...s });
+    }
+  }, []);
+
+  finishExecutionRef.current = finishExecution;
+
+  // ── handleResolve ─────────────────────────────────────────────────────────
   const handleResolveRef = useRef<() => void>(() => {});
 
   const handleResolve = useCallback(() => {
     const state = gameStateRef.current;
     if (state.phase !== 'planning') return;
 
-    resolveEpoch(state);
-    setMode({ kind: 'idle' });
-    setTimeLeft(PLANNING_DURATION);
-    setGameState({ ...state });
+    // Snapshot unit and structure state before resolution.
+    const unitSnaps = new Map<string, UnitSnapshot>();
+    for (const [id, u] of state.units) {
+      unitSnaps.set(id, { hex: { ...u.hex }, hp: u.hp, owner: u.owner });
+    }
+    const structSnaps = new Map<string, StructSnapshot>();
+    for (const [id, s] of state.structures) {
+      structSnaps.set(id, { hex: { ...s.hex }, hp: s.hp, owner: s.owner });
+    }
 
-    // After 1 s transition pause, move back to planning if game isn't over.
-    setTimeout(() => {
-      const s = gameStateRef.current;
-      if (s.phase !== 'over') {
-        s.phase = 'planning';
-        setGameState({ ...s });
-      }
-    }, 1000);
+    // Run resolution instantly.
+    resolveEpoch(state);
+
+    // Build animation timeline from diff.
+    const anim = buildAnimationTimeline(unitSnaps, structSnaps, state);
+    animationRef.current = anim;
+
+    setMode({ kind: 'idle' });
+    setGameState({ ...state });
   }, []);
 
   handleResolveRef.current = handleResolve;
+
+  // ── Animation tick — drives overlay updates and completion ────────────────
+  useEffect(() => {
+    if (!animationRef.current) return;
+
+    let rafId: number;
+    const tick = () => {
+      const anim = animationRef.current;
+      if (!anim) return;
+
+      const elapsed = (performance.now() - anim.startedAt) / 1000;
+      setAnimElapsed(elapsed);
+
+      if (elapsed >= TOTAL_DURATION) {
+        finishExecutionRef.current();
+        return;
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [gameState.phase]); // re-run when phase changes to execution
 
   // ── Countdown timer ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -78,8 +134,13 @@ export default function GameView() {
     setGameState({ ...state });
     setLockInFlash(true);
     setTimeout(() => setLockInFlash(false), 500);
-    // Brief delay so the LOCKED state renders before resolution clears it.
+    // Brief delay so the LOCKED state renders before resolution.
     setTimeout(() => handleResolveRef.current(), 800);
+  }, []);
+
+  // ── Skip execution ──────────────────────────────────────────────────────
+  const handleSkip = useCallback(() => {
+    finishExecutionRef.current();
   }, []);
 
   // ── Slot interaction ──────────────────────────────────────────────────────
@@ -89,16 +150,13 @@ export default function GameView() {
     const cmd   = state.players.player.commands[i];
 
     if (m.kind === 'slot_selected' && m.slotIndex === i) {
-      // Second click on the same selected slot → open picker.
       setMode({ kind: 'picker_open', slotIndex: i });
       return;
     }
 
     if (cmd !== null) {
-      // Filled slot: select it (Delete/Backspace will clear).
       setMode({ kind: 'slot_selected', slotIndex: i });
     } else {
-      // Empty slot: directly open the picker.
       setMode({ kind: 'picker_open', slotIndex: i });
     }
   }, []);
@@ -146,7 +204,6 @@ export default function GameView() {
       return;
     }
 
-    // build, train, temporal — disabled in picker, shouldn't reach here.
     setMode({ kind: 'idle' });
   }, []);
 
@@ -185,12 +242,25 @@ export default function GameView() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const m = modeRef.current;
+      const state = gameStateRef.current;
+
+      // During execution: Space or Escape → skip.
+      if (animationRef.current !== null) {
+        if (e.key === ' ' || e.key === 'Escape') {
+          e.preventDefault();
+          finishExecutionRef.current();
+          return;
+        }
+        return; // Ignore other keys during execution.
+      }
+
+      // Planning phase shortcuts.
+      if (state.phase !== 'planning') return;
 
       // 1–5: select slot.
       if (e.key >= '1' && e.key <= '5') {
         const idx = parseInt(e.key, 10) - 1;
-        const state = gameStateRef.current;
-        const cmd   = state.players.player.commands[idx];
+        const cmd = state.players.player.commands[idx];
         if (cmd !== null) {
           setMode({ kind: 'slot_selected', slotIndex: idx });
         } else {
@@ -227,6 +297,8 @@ export default function GameView() {
     (u) => u.owner === 'player',
   );
 
+  const isExecuting = animationRef.current !== null;
+
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden">
       <PlanningBar
@@ -241,16 +313,26 @@ export default function GameView() {
         <GameCanvas
           gameState={gameState}
           mode={mode}
+          animation={animationRef.current}
           onHexClick={handleHexClick}
         />
 
         {/* Command picker floats above the tray */}
-        {mode.kind === 'picker_open' && (
+        {mode.kind === 'picker_open' && !isExecuting && (
           <CommandPicker
             slotIndex={mode.slotIndex}
             playerUnits={playerUnits}
             onSelect={handleCommandPick}
             onClose={() => setMode({ kind: 'idle' })}
+          />
+        )}
+
+        {/* Execution overlay */}
+        {isExecuting && animationRef.current && (
+          <ExecutionOverlay
+            animation={animationRef.current}
+            elapsed={animElapsed}
+            onSkip={handleSkip}
           />
         )}
 
@@ -273,20 +355,22 @@ export default function GameView() {
         )}
       </div>
 
-      <CommandTray
-        commands={gameState.players.player.commands}
-        selectedSlot={
-          mode.kind === 'slot_selected' || mode.kind === 'picker_open'
-            ? mode.slotIndex
-            : null
-        }
-        lockedIn={lockedIn}
-        lockInFlash={lockInFlash}
-        onSlotClick={handleSlotClick}
-        onSlotClear={handleSlotClear}
-        onLockIn={handleLockIn}
-      />
+      {/* Hide tray during execution */}
+      {!isExecuting && (
+        <CommandTray
+          commands={gameState.players.player.commands}
+          selectedSlot={
+            mode.kind === 'slot_selected' || mode.kind === 'picker_open'
+              ? mode.slotIndex
+              : null
+          }
+          lockedIn={lockedIn}
+          lockInFlash={lockInFlash}
+          onSlotClick={handleSlotClick}
+          onSlotClear={handleSlotClear}
+          onLockIn={handleLockIn}
+        />
+      )}
     </div>
   );
 }
-

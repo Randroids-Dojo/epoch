@@ -13,6 +13,10 @@ npm run test:e2e      # Playwright e2e tests
 
 CI enforces all four automatically on every push/PR and will block merges on failure.
 
+### Local vs CI E2E Testing
+
+When working locally, always run **lint**, **typecheck**, and **unit tests** before pushing. For **E2E tests**, it is acceptable to let CI run them via the PR pipeline rather than running them locally — the dev server may not be available, ports may conflict, or browser dependencies may differ from CI. Push your branch, open/update the PR, and let CI validate E2E. Fix any failures in subsequent commits.
+
 ---
 
 ## Testing Overview

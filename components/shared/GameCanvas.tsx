@@ -6,8 +6,9 @@ import { GameState } from '@/engine/state';
 import { Hex, hexKey, hexToPixel, pixelToHex } from '@/engine/hex';
 import { Camera, DEFAULT_ZOOM, zoomToward, canvasToWorld } from '@/renderer/camera';
 import { BASE_HEX_SIZE, drawBackground, drawHexCell } from '@/renderer/drawHex';
-import { drawUnits, drawStructures, drawTargetingOverlay } from '@/renderer/drawEntities';
+import { drawUnits, drawStructures, drawTargetingOverlay, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities } from '@/renderer/drawEntities';
 import { InteractionMode } from '@/lib/types';
+import { ExecutionAnimation } from '@/renderer/animation';
 
 const ZOOM_STEP = 1.15;
 const PAN_SPEED = 20; // CSS px per keypress
@@ -15,6 +16,7 @@ const PAN_SPEED = 20; // CSS px per keypress
 interface GameCanvasProps {
   gameState: GameState;
   mode: InteractionMode;
+  animation: ExecutionAnimation | null;
   onHexClick(hex: Hex): void;
 }
 
@@ -27,7 +29,7 @@ function getInitialCamera(map: GameMap, cssW: number, cssH: number): Camera {
   };
 }
 
-export default function GameCanvas({ gameState, mode, onHexClick }: GameCanvasProps) {
+export default function GameCanvas({ gameState, mode, animation, onHexClick }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const camRef    = useRef<Camera>({ x: 0, y: 0, zoom: DEFAULT_ZOOM });
   const mapRef    = useRef<GameMap | null>(null);
@@ -57,9 +59,12 @@ export default function GameCanvas({ gameState, mode, onHexClick }: GameCanvasPr
   const onHexClickRef = useRef(onHexClick);
   onHexClickRef.current = onHexClick;
 
-  // Keep refs to the latest gameState for the render loop.
+  // Keep refs to the latest gameState and animation for the render loop.
   const gameStateRef = useRef(gameState);
   gameStateRef.current = gameState;
+
+  const animationRef = useRef<ExecutionAnimation | null>(animation);
+  animationRef.current = animation;
 
   // ── Render loop ────────────────────────────────────────────────────────────
   const render = useCallback(() => {
@@ -100,8 +105,16 @@ export default function GameCanvas({ gameState, mode, onHexClick }: GameCanvasPr
     }
 
     // ── Structures + units ───────────────────────────────────────────────────
-    drawStructures(ctx, gs.structures, cam);
-    drawUnits(ctx, gs.units, cam);
+    const anim = animationRef.current;
+    if (anim) {
+      const elapsed = (performance.now() - anim.startedAt) / 1000;
+      drawAnimatedStructures(ctx, anim, cam, elapsed);
+      drawDestroyedEntities(ctx, anim, cam, elapsed);
+      drawAnimatedUnits(ctx, anim, cam, elapsed);
+    } else {
+      drawStructures(ctx, gs.structures, cam);
+      drawUnits(ctx, gs.units, cam);
+    }
   }, []);
 
   // ── Animation frame loop ───────────────────────────────────────────────────
