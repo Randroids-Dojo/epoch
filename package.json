@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "node scripts/run-if-deps.mjs playwright test",
+    "test:smoke": "node scripts/run-if-deps.mjs playwright test --grep @smoke"
   },
   "dependencies": {
     "next": "15.2.9",
