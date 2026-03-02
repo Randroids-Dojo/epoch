@@ -60,7 +60,7 @@ export default function GameView() {
 
   // ── Dev-only test hook ────────────────────────────────────────────────────
   useEffect(() => {
-    if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === 'development') {
       (window as Window & { __triggerGameOver?: (winner: PlayerId) => void }).__triggerGameOver =
         (winner: PlayerId) => {
           animationRef.current = null;

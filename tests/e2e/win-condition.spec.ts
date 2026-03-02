@@ -3,7 +3,7 @@ import { PlayerId } from '@/engine/player';
 
 async function triggerGameOver(page: Page, winner: PlayerId): Promise<void> {
   await page.evaluate((w) => {
-    (window as Window & { __triggerGameOver?: (winner: string) => void }).__triggerGameOver?.(w);
+    (window as Window & { __triggerGameOver?: (winner: PlayerId) => void }).__triggerGameOver?.(w);
   }, winner);
 }
 
