@@ -7,6 +7,7 @@ import { Hex, hexKey } from '@/engine/hex';
 import { Command, TEMPORAL_ECHO_COST } from '@/engine/commands';
 import { getFirstEligibleUnit, computeEligibleHexes, TargetingCommandType } from '@/engine/targeting';
 import { generateAICommands } from '@/engine/ai';
+import { PlayerId } from '@/engine/player';
 import { InteractionMode } from '@/lib/types';
 import {
   ExecutionAnimation, UnitSnapshot, StructSnapshot,
@@ -60,10 +61,11 @@ export default function GameView() {
   // ── Dev-only test hook ────────────────────────────────────────────────────
   useEffect(() => {
     if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development') {
-      (window as unknown as Record<string, unknown>).__triggerGameOver = (winner: 'player' | 'ai') => {
-        animationRef.current = null;
-        setGameState((s) => ({ ...s, phase: 'over', winner }));
-      };
+      (window as Window & { __triggerGameOver?: (winner: PlayerId) => void }).__triggerGameOver =
+        (winner: PlayerId) => {
+          animationRef.current = null;
+          setGameState((s) => ({ ...s, phase: 'over', winner }));
+        };
     }
   }, []);
 
@@ -139,6 +141,13 @@ export default function GameView() {
       handleResolveRef.current();
     }
   }, [timeLeft, gameState.phase, lockedIn]);
+
+  // ── Play Again ────────────────────────────────────────────────────────────
+  const handlePlayAgain = useCallback(() => {
+    setGameState(createInitialState(Date.now()));
+    setMode({ kind: 'idle' });
+    setTimeLeft(PLANNING_DURATION);
+  }, []);
 
   // ── Lock-in ───────────────────────────────────────────────────────────────
   const handleLockIn = useCallback(() => {
@@ -382,11 +391,7 @@ export default function GameView() {
               data-testid="play-again-btn"
               className="mt-6 font-mono text-sm tracking-widest uppercase px-6 py-2 border"
               style={{ color: '#94a3b8', borderColor: '#334155' }}
-              onClick={() => {
-                setGameState(createInitialState(Date.now()));
-                setMode({ kind: 'idle' });
-                setTimeLeft(PLANNING_DURATION);
-              }}
+              onClick={handlePlayAgain}
             >
               Play Again
             </button>
@@ -394,8 +399,8 @@ export default function GameView() {
         )}
       </div>
 
-      {/* Hide tray during execution and after game over */}
-      {!isExecuting && gameState.phase !== 'over' && (
+      {/* Show tray only during planning phase */}
+      {gameState.phase === 'planning' && !isExecuting && (
         <CommandTray
           commands={gameState.players.player.commands}
           selectedSlot={
