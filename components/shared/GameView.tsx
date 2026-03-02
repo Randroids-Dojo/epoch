@@ -8,6 +8,7 @@ import { Command, TEMPORAL_ECHO_COST } from '@/engine/commands';
 import { getFirstEligibleUnit, computeEligibleHexes, TargetingCommandType } from '@/engine/targeting';
 import { generateAICommands } from '@/engine/ai';
 import { PlayerId } from '@/engine/player';
+import { COLORS } from '@/lib/constants';
 import { InteractionMode } from '@/lib/types';
 import {
   ExecutionAnimation, UnitSnapshot, StructSnapshot,
@@ -334,12 +335,14 @@ export default function GameView() {
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden">
-      <PlanningBar
-        epoch={gameState.epoch}
-        resources={gameState.players.player.resources}
-        timeLeft={timeLeft}
-        lockedIn={lockedIn}
-      />
+      {gameState.phase !== 'over' && (
+        <PlanningBar
+          epoch={gameState.epoch}
+          resources={gameState.players.player.resources}
+          timeLeft={timeLeft}
+          lockedIn={lockedIn}
+        />
+      )}
 
       {/* Canvas area fills remaining space */}
       <div className="relative min-h-0 flex-1">
@@ -380,7 +383,7 @@ export default function GameView() {
             <div
               data-testid="game-over-result"
               className="font-mono text-2xl font-bold tracking-widest uppercase"
-              style={{ color: gameState.winner === 'player' ? '#00d4ff' : '#ff6b6b' }}
+              style={{ color: gameState.winner === 'player' ? COLORS.CYAN : COLORS.CORAL }}
             >
               {gameState.winner === 'player' ? 'VICTORY' : 'DEFEAT'}
             </div>
