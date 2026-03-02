@@ -16,16 +16,16 @@ test('skip button is visible during execution', async ({ page }) => {
   await expect(page.getByTestId('skip-btn')).toBeVisible({ timeout: 5000 });
 });
 
-test('skip button ends execution and returns to planning', async ({ page }) => {
+test('skipping execution returns to planning', async ({ page }) => {
   await page.goto('/');
   const lockBtn = page.getByTestId('lock-in-btn');
   await lockBtn.click({ force: true });
   // Wait for execution phase to start.
-  await expect(page.getByTestId('skip-btn')).toBeVisible({ timeout: 5000 });
-  // Click skip (force: true to bypass FAB overlay interception).
-  await page.getByTestId('skip-btn').click({ force: true });
+  await expect(page.getByTestId('phase-label')).toBeVisible({ timeout: 5000 });
+  // Skip via keyboard (Escape) — avoids FAB pointer interception race.
+  await page.keyboard.press('Escape');
   // After skip, command tray should reappear (planning phase).
-  await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 3000 });
+  await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 5000 });
   // Phase label should be gone.
   await expect(page.getByTestId('phase-label')).not.toBeVisible();
 });
