@@ -10,6 +10,14 @@ export const COLORS = {
   ICE_DIM: '#a8d8ea',
 } as const
 
+/** Responsive slot dimensions for the command tray. */
+export const SLOT_LAYOUT = {
+  DESKTOP: { width: 80, height: 52, gap: 8  },
+  MOBILE:  { width: 44, height: 48, gap: 4  },
+} as const
+
+export const MOBILE_BREAKPOINT_PX = 480
+
 export const GAME_CONSTANTS = {
   GRID_COLS: 12,
   GRID_ROWS: 8,

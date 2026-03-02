@@ -11,8 +11,10 @@ import { InteractionMode } from '@/lib/types';
 import { ExecutionAnimation } from '@/renderer/animation';
 import { Command } from '@/engine/commands';
 
-const ZOOM_STEP = 1.15;
-const PAN_SPEED = 20; // CSS px per keypress
+const ZOOM_STEP       = 1.15;
+const PAN_SPEED       = 20; // CSS px per keypress
+const MOUSE_TAP_PX    = 4;
+const TOUCH_TAP_PX    = 8;
 
 interface GameCanvasProps {
   gameState: GameState;
@@ -157,6 +159,25 @@ export default function GameCanvas({ gameState, mode, animation, echoCommands, o
     return () => observer.disconnect();
   }, []);
 
+  // ── Shared hex-tap handler (mouse click and touch tap) ─────────────────────
+  const fireHexTap = useCallback((clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect        = canvas.getBoundingClientRect();
+    const { x: wx, y: wy } = canvasToWorld(
+      clientX - rect.left, clientY - rect.top, camRef.current,
+    );
+    const hex = pixelToHex(wx, wy, BASE_HEX_SIZE);
+    const key = hexKey(hex);
+    const map = mapRef.current;
+    if (map?.cells.has(key)) {
+      const next = key === selectedRef.current ? null : key;
+      selectedRef.current = next;
+      setSelectedCell(next ? (map.cells.get(next) ?? null) : null);
+    }
+    onHexClickRef.current(hex);
+  }, []);
+
   // ── Mouse events ───────────────────────────────────────────────────────────
   const onMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     dragging.current = true;
@@ -182,30 +203,10 @@ export default function GameCanvas({ gameState, mode, animation, echoCommands, o
     const dy = e.clientY - dragStart.current.y;
     dragging.current = false;
     setIsDragging(false);
-
-    // Tiny movement → treat as click.
-    if (Math.abs(dx) < 4 && Math.abs(dy) < 4) {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const { x: wx, y: wy } = canvasToWorld(
-        e.clientX - rect.left, e.clientY - rect.top, camRef.current,
-      );
-      const hex = pixelToHex(wx, wy, BASE_HEX_SIZE);
-      const key = hexKey(hex);
-      const map = mapRef.current;
-
-      // Update hex inspect panel (only visible in idle mode).
-      if (map?.cells.has(key)) {
-        const next = key === selectedRef.current ? null : key;
-        selectedRef.current = next;
-        setSelectedCell(next ? (map.cells.get(next) ?? null) : null);
-      }
-
-      // Notify parent of the hex click.
-      onHexClickRef.current(hex);
+    if (Math.abs(dx) < MOUSE_TAP_PX && Math.abs(dy) < MOUSE_TAP_PX) {
+      fireHexTap(e.clientX, e.clientY);
     }
-  }, []);
+  }, [fireHexTap]);
 
   // ── Scroll-wheel zoom (non-passive so we can preventDefault) ──────────────
   useEffect(() => {
@@ -270,7 +271,15 @@ export default function GameCanvas({ gameState, mode, animation, echoCommands, o
       }
     };
 
-    const onTouchEnd = () => {
+    const onTouchEnd = (e: TouchEvent) => {
+      if (dragging.current && e.changedTouches.length === 1) {
+        const t  = e.changedTouches[0];
+        const dx = t.clientX - dragStart.current.x;
+        const dy = t.clientY - dragStart.current.y;
+        if (Math.abs(dx) < TOUCH_TAP_PX && Math.abs(dy) < TOUCH_TAP_PX) {
+          fireHexTap(t.clientX, t.clientY);
+        }
+      }
       dragging.current  = false;
       setIsDragging(false);
       pinchDist.current = null;
@@ -284,7 +293,7 @@ export default function GameCanvas({ gameState, mode, animation, echoCommands, o
       canvas.removeEventListener('touchmove',  onTouchMove);
       canvas.removeEventListener('touchend',   onTouchEnd);
     };
-  }, []);
+  }, [fireHexTap]);
 
   // ── Keyboard pan / zoom ────────────────────────────────────────────────────
   useEffect(() => {
@@ -357,16 +366,16 @@ export default function GameCanvas({ gameState, mode, animation, echoCommands, o
         </div>
       )}
 
-      {/* Controls hint */}
+      {/* Controls hint — hidden on small screens */}
       <div
-        className="pointer-events-none absolute right-4 top-4 rounded border border-slate-700 px-3 py-2 font-mono text-xs"
+        className="pointer-events-none absolute right-4 top-4 hidden rounded border border-slate-700 px-3 py-2 font-mono text-xs sm:block"
         style={{ background: 'rgba(10,14,26,0.85)', color: '#475569' }}
       >
         <div>Drag / WASD — pan</div>
-        <div>Scroll / ± — zoom</div>
+        <div>Scroll / pinch / ± — zoom</div>
         <div>Home — snap to base</div>
         {mode.kind === 'idle' && <div>Click hex — inspect</div>}
-        {mode.kind === 'targeting' && <div style={{ color: '#00d4ff' }}>Click target hex</div>}
+        {mode.kind === 'targeting' && <div style={{ color: '#00d4ff' }}>Tap target hex</div>}
       </div>
     </div>
   );

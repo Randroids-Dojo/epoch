@@ -5,6 +5,7 @@ import { CommandType, TEMPORAL_ECHO_COST } from '@/engine/commands';
 
 interface CommandPickerProps {
   slotIndex: number;
+  left: number;
   playerTE: number;
   onSelect(type: CommandType): void;
   onClose(): void;
@@ -22,7 +23,7 @@ interface PickerEntry {
 const TRAY_HEIGHT = 76;
 
 export default function CommandPicker(props: CommandPickerProps) {
-  const { slotIndex, playerTE, onSelect, onClose } = props;
+  const { slotIndex, left, playerTE, onSelect, onClose } = props;
 
   const entries: PickerEntry[] = [
     { type: 'move',     label: 'Move',         shortcut: 'M', enabled: true  },
@@ -39,15 +40,15 @@ export default function CommandPicker(props: CommandPickerProps) {
   ];
   const ref = useRef<HTMLDivElement>(null);
 
-  // Close on click outside.
+  // Close on click/tap outside (pointerdown covers both mouse and touch).
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handler = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         onClose();
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
   }, [onClose]);
 
   // Close on Escape.
@@ -59,16 +60,13 @@ export default function CommandPicker(props: CommandPickerProps) {
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  // Horizontal position: align with the selected slot (each slot is ~80px + 8px gap).
-  const slotOffset = slotIndex * (80 + 8) + 16; // 16px = px-4 padding
-
   return (
     <div
       ref={ref}
       className="absolute font-mono text-xs"
       style={{
         bottom: TRAY_HEIGHT + 8,
-        left: slotOffset,
+        left,
         zIndex: 100,
         background: '#0d1321',
         border: '1px solid #334155',

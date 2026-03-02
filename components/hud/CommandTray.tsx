@@ -1,12 +1,14 @@
 'use client';
 
 import { Command, CommandQueue } from '@/engine/commands';
+import { SLOT_LAYOUT } from '@/lib/constants';
 
 interface CommandTrayProps {
   commands: CommandQueue;
   selectedSlot: number | null;
   lockedIn: boolean;
   lockInFlash: boolean;
+  isMobile?: boolean;
   onSlotClick(i: number): void;
   onSlotClear(i: number): void;
   onLockIn(): void;
@@ -46,14 +48,17 @@ export default function CommandTray({
   selectedSlot,
   lockedIn,
   lockInFlash,
+  isMobile = false,
   onSlotClick,
   onSlotClear,
   onLockIn,
 }: CommandTrayProps) {
+  const slot = isMobile ? SLOT_LAYOUT.MOBILE : SLOT_LAYOUT.DESKTOP;
+
   return (
     <div
-      className="shrink-0 flex items-center gap-2 px-4 py-3 font-mono"
-      style={{ background: 'rgba(10,14,26,0.95)', borderTop: '1px solid #1e293b' }}
+      className="shrink-0 flex items-center px-4 py-3 font-mono"
+      style={{ gap: slot.gap, background: 'rgba(10,14,26,0.95)', borderTop: '1px solid #1e293b' }}
     >
       {/* Command slots */}
       {commands.map((cmd, i) => {
@@ -66,8 +71,8 @@ export default function CommandTray({
             onClick={() => onSlotClick(i)}
             className="relative flex items-center justify-center rounded text-xs select-none"
             style={{
-              width: 80,
-              height: 52,
+              width: slot.width,
+              height: slot.height,
               cursor: 'pointer',
               border: isSelected
                 ? '1.5px solid #00d4ff'
@@ -144,7 +149,7 @@ export default function CommandTray({
         data-testid="lock-in-btn"
         disabled={lockedIn}
         onClick={onLockIn}
-        className="rounded px-4 py-2 text-xs font-bold tracking-widest uppercase"
+        className="rounded px-3 py-2 text-xs font-bold tracking-widest uppercase"
         style={{
           background: lockedIn
             ? 'rgba(30,41,59,0.5)'
@@ -155,10 +160,12 @@ export default function CommandTray({
           color: lockedIn ? '#334155' : '#00d4ff',
           cursor: lockedIn ? 'not-allowed' : 'pointer',
           transition: 'background 0.2s ease, border-color 0.2s ease',
-          minWidth: 100,
+          minWidth: isMobile ? 72 : 100, // narrower lock button on mobile
         }}
       >
-        {lockedIn ? 'LOCKED IN' : 'LOCK IN +TE'}
+        {lockedIn
+          ? (isMobile ? 'LOCKED' : 'LOCKED IN')
+          : (isMobile ? 'LOCK' : 'LOCK IN +TE')}
       </button>
     </div>
   );

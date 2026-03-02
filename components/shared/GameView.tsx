@@ -8,7 +8,7 @@ import { Command, TEMPORAL_ECHO_COST } from '@/engine/commands';
 import { getFirstEligibleUnit, computeEligibleHexes, TargetingCommandType } from '@/engine/targeting';
 import { generateAICommands } from '@/engine/ai';
 import { PlayerId } from '@/engine/player';
-import { COLORS, GAME_CONSTANTS } from '@/lib/constants';
+import { COLORS, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
 import { InteractionMode } from '@/lib/types';
 import {
   ExecutionAnimation, UnitSnapshot, StructSnapshot,
@@ -28,6 +28,7 @@ export default function GameView() {
   const [timeLeft, setTimeLeft]     = useState(PLANNING_DURATION);
   const [lockInFlash, setLockInFlash] = useState(false);
   const [animElapsed, setAnimElapsed] = useState(0);
+  const [isMobile, setIsMobile] = useState(false); // default desktop; corrected after mount
 
   // Stable refs so callbacks always see the latest values.
   const gameStateRef = useRef(gameState);
@@ -58,6 +59,16 @@ export default function GameView() {
   }, []);
 
   finishExecutionRef.current = finishExecution;
+
+  // ── Viewport tracking for responsive layout ───────────────────────────────
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT_PX);
+    check(); // sync after hydration
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  const slotDims = isMobile ? SLOT_LAYOUT.MOBILE : SLOT_LAYOUT.DESKTOP;
 
   // ── Dev-only test hook ────────────────────────────────────────────────────
   useEffect(() => {
@@ -358,6 +369,10 @@ export default function GameView() {
         {mode.kind === 'picker_open' && !isExecuting && (
           <CommandPicker
             slotIndex={mode.slotIndex}
+            left={Math.min(
+              mode.slotIndex * (slotDims.width + slotDims.gap) + 16,
+              window.innerWidth - 148,
+            )}
             playerTE={gameState.players.player.resources.te}
             onSelect={handleCommandPick}
             onClose={() => setMode({ kind: 'idle' })}
@@ -413,6 +428,7 @@ export default function GameView() {
           }
           lockedIn={lockedIn}
           lockInFlash={lockInFlash}
+          isMobile={isMobile}
           onSlotClick={handleSlotClick}
           onSlotClear={handleSlotClear}
           onLockIn={handleLockIn}
