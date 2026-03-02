@@ -2,6 +2,9 @@
 .next/
 out/
 
+# TypeScript
+*.tsbuildinfo
+
 # Dependencies
 node_modules/
 
