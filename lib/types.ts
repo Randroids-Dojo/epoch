@@ -1,4 +1,19 @@
 import { GAME_CONSTANTS } from './constants'
+import type { TargetingCommandType } from '../engine/targeting'
+
+// ── Interaction Mode (Planning Phase UI) ──────────────────────────────────────
+
+export type InteractionMode =
+  | { kind: 'idle' }
+  | { kind: 'slot_selected'; slotIndex: number }
+  | { kind: 'picker_open'; slotIndex: number }
+  | {
+      kind: 'targeting';
+      slotIndex: number;
+      commandType: TargetingCommandType;
+      eligibleKeys: Set<string>;
+      subjectUnitId: string;
+    }
 
 export type Phase = 'planning' | 'temporal' | 'execution'
 

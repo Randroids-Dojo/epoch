@@ -21,6 +21,28 @@ body {
   color: var(--color-ice);
 }
 
+/* ── Planning Phase UI Animations ───────────────────────────────────────── */
+
+@keyframes pulse-border {
+  0%, 100% {
+    border-color: #1e293b;
+    box-shadow: none;
+  }
+  50% {
+    border-color: #334155;
+    box-shadow: 0 0 6px rgba(0, 212, 255, 0.08);
+  }
+}
+
+@keyframes pulse-timer {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
 /* ── Feedback FAB ────────────────────────────────────────────────────────── */
 
 .epoch-fab {

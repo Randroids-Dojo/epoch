@@ -17,8 +17,8 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
-      name: 'iphone-14',
-      use: { ...devices['iPhone 14'] },
+      name: 'mobile-chrome',
+      use: { ...devices['Pixel 5'] },
     },
   ],
   webServer: process.env.BASE_URL ? undefined : {
