@@ -6,6 +6,7 @@ import { resolveEpoch } from '@/engine/resolution';
 import { Hex, hexKey } from '@/engine/hex';
 import { Command } from '@/engine/commands';
 import { getFirstEligibleUnit, computeEligibleHexes, TargetingCommandType } from '@/engine/targeting';
+import { generateAICommands } from '@/engine/ai';
 import { InteractionMode } from '@/lib/types';
 import {
   ExecutionAnimation, UnitSnapshot, StructSnapshot,
@@ -62,6 +63,9 @@ export default function GameView() {
   const handleResolve = useCallback(() => {
     const state = gameStateRef.current;
     if (state.phase !== 'planning') return;
+
+    // Generate AI commands before resolution.
+    generateAICommands(state);
 
     // Snapshot unit and structure state before resolution.
     const unitSnaps = new Map<string, UnitSnapshot>();
