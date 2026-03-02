@@ -4,6 +4,7 @@ import { resolveEpoch } from '@/engine/resolution';
 import { Unit } from '@/engine/units';
 import { Structure } from '@/engine/structures';
 import { newId } from '@/engine/state';
+import { queueCommand } from './helpers';
 
 beforeEach(() => resetIdSeq());
 
@@ -31,10 +32,6 @@ function addStructure(state: GameState, partial: Partial<Structure> & Pick<Struc
   };
   state.structures.set(s.id, s);
   return s;
-}
-
-function queueCommand(state: GameState, owner: 'player' | 'ai', slot: number, cmd: NonNullable<GameState['players']['player']['commands'][number]>): void {
-  state.players[owner].commands[slot] = cmd;
 }
 
 // ── Step 1: Defend ────────────────────────────────────────────────────────────

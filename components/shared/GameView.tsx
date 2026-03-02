@@ -8,7 +8,7 @@ import { Command, TEMPORAL_ECHO_COST } from '@/engine/commands';
 import { getFirstEligibleUnit, computeEligibleHexes, TargetingCommandType } from '@/engine/targeting';
 import { generateAICommands } from '@/engine/ai';
 import { PlayerId } from '@/engine/player';
-import { COLORS } from '@/lib/constants';
+import { COLORS, GAME_CONSTANTS } from '@/lib/constants';
 import { InteractionMode } from '@/lib/types';
 import {
   ExecutionAnimation, UnitSnapshot, StructSnapshot,
@@ -20,7 +20,7 @@ import CommandTray from '../hud/CommandTray';
 import CommandPicker from '../hud/CommandPicker';
 import ExecutionOverlay from '../hud/ExecutionOverlay';
 
-const PLANNING_DURATION = 30;
+const PLANNING_DURATION = GAME_CONSTANTS.PLANNING_PHASE_DURATION_MS / 1000;
 
 export default function GameView() {
   const [gameState, setGameState]   = useState<GameState>(() => createInitialState(42));

@@ -1,17 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createInitialState, resetIdSeq, GameState } from '@/engine/state';
+import { createInitialState, resetIdSeq } from '@/engine/state';
 import { resolveEpoch } from '@/engine/resolution';
+import { queueCommand } from './helpers';
 
 beforeEach(() => resetIdSeq());
-
-function queueCommand(
-  state: GameState,
-  owner: 'player' | 'ai',
-  slot: number,
-  cmd: NonNullable<GameState['players']['player']['commands'][number]>,
-): void {
-  state.players[owner].commands[slot] = cmd;
-}
 
 describe('Temporal Echo — resolution', () => {
   it('deducts 2 TE on successful activation', () => {
