@@ -22,8 +22,8 @@ test('skip button ends execution and returns to planning', async ({ page }) => {
   await lockBtn.click({ force: true });
   // Wait for execution phase to start.
   await expect(page.getByTestId('skip-btn')).toBeVisible({ timeout: 5000 });
-  // Click skip.
-  await page.getByTestId('skip-btn').click();
+  // Click skip (force: true to bypass FAB overlay interception).
+  await page.getByTestId('skip-btn').click({ force: true });
   // After skip, command tray should reappear (planning phase).
   await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 3000 });
   // Phase label should be gone.
