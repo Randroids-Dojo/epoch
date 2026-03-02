@@ -48,6 +48,8 @@ export interface DefendCommand {
   readonly unitId: string;
 }
 
+export const TEMPORAL_ECHO_COST = 2;
+
 /** Activate a temporal ability (MVP: Temporal Echo only). */
 export interface TemporalCommand {
   readonly type: 'temporal';

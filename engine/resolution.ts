@@ -415,17 +415,19 @@ function findSpawnHex(state: GameState, barracksHex: Hex): Hex | null {
 // ── Post-resolution ───────────────────────────────────────────────────────────
 
 function stepPostResolution(state: GameState): void {
-  // Passive TE regeneration (+1 per epoch).
   for (const pid of PLAYER_IDS) {
     const p = state.players[pid];
-    p.resources.te = Math.min(p.resources.te + 1, 10); // cap at 10 (MVP)
+    // Snapshot commands before clearing — used by Temporal Echo next epoch.
+    state.prevEpochCommands[pid] = p.commands.filter((c): c is Command => c !== null);
+    // Passive TE regeneration (+1 per epoch, capped at 10).
+    p.resources.te = Math.min(p.resources.te + 1, 10);
     // Early lock-in bonus.
     if (p.lockedIn) {
       p.resources.te = Math.min(p.resources.te + 1, 10);
     }
     // Clear commands and lock-in for the new planning phase.
-    p.commands  = Array(MAX_COMMAND_SLOTS).fill(null);
-    p.lockedIn  = false;
+    p.commands = Array(MAX_COMMAND_SLOTS).fill(null);
+    p.lockedIn = false;
   }
 
   // Recompute fog of war based on current unit + structure vision.

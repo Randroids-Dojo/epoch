@@ -1,12 +1,11 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { CommandType } from '@/engine/commands';
-import { Unit } from '@/engine/units';
+import { CommandType, TEMPORAL_ECHO_COST } from '@/engine/commands';
 
 interface CommandPickerProps {
   slotIndex: number;
-  playerUnits: Unit[];
+  playerTE: number;
   onSelect(type: CommandType): void;
   onClose(): void;
 }
@@ -15,24 +14,29 @@ interface PickerEntry {
   type: CommandType;
   label: string;
   shortcut: string;
+  cost?: string;
   enabled: boolean;
 }
-
-const PICKER_ENTRIES: PickerEntry[] = [
-  { type: 'move',     label: 'Move',     shortcut: 'M', enabled: true  },
-  { type: 'attack',   label: 'Attack',   shortcut: 'A', enabled: true  },
-  { type: 'gather',   label: 'Gather',   shortcut: 'G', enabled: true  },
-  { type: 'defend',   label: 'Defend',   shortcut: 'D', enabled: true  },
-  { type: 'build',    label: 'Build',    shortcut: 'B', enabled: false },
-  { type: 'train',    label: 'Train',    shortcut: 'T', enabled: false },
-  { type: 'temporal', label: 'Temporal', shortcut: 'E', enabled: false },
-];
 
 // Approx height of the command tray in px — picker floats above it.
 const TRAY_HEIGHT = 76;
 
 export default function CommandPicker(props: CommandPickerProps) {
-  const { slotIndex, onSelect, onClose } = props;
+  const { slotIndex, playerTE, onSelect, onClose } = props;
+
+  const entries: PickerEntry[] = [
+    { type: 'move',     label: 'Move',         shortcut: 'M', enabled: true  },
+    { type: 'attack',   label: 'Attack',       shortcut: 'A', enabled: true  },
+    { type: 'gather',   label: 'Gather',       shortcut: 'G', enabled: true  },
+    { type: 'defend',   label: 'Defend',       shortcut: 'D', enabled: true  },
+    { type: 'build',    label: 'Build',        shortcut: 'B', enabled: false },
+    { type: 'train',    label: 'Train',        shortcut: 'T', enabled: false },
+    {
+      type: 'temporal', label: 'Echo',         shortcut: 'E',
+      cost: `${TEMPORAL_ECHO_COST}TE`,
+      enabled: playerTE >= TEMPORAL_ECHO_COST,
+    },
+  ];
   const ref = useRef<HTMLDivElement>(null);
 
   // Close on click outside.
@@ -83,7 +87,7 @@ export default function CommandPicker(props: CommandPickerProps) {
         SLOT {slotIndex + 1} — COMMAND
       </div>
 
-      {PICKER_ENTRIES.map((entry) => (
+      {entries.map((entry) => (
         <button
           key={entry.type}
           role="menuitem"
@@ -108,7 +112,14 @@ export default function CommandPicker(props: CommandPickerProps) {
           }}
         >
           <span>{entry.label}</span>
-          <span style={{ color: '#334155', marginLeft: 16 }}>{entry.shortcut}</span>
+          <span style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 16 }}>
+            {entry.cost && (
+              <span style={{ color: entry.enabled ? '#fbbf24' : '#334155', fontSize: '0.6rem' }}>
+                {entry.cost}
+              </span>
+            )}
+            <span style={{ color: '#334155' }}>{entry.shortcut}</span>
+          </span>
         </button>
       ))}
     </div>

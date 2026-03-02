@@ -6,9 +6,10 @@ import { GameState } from '@/engine/state';
 import { Hex, hexKey, hexToPixel, pixelToHex } from '@/engine/hex';
 import { Camera, DEFAULT_ZOOM, zoomToward, canvasToWorld } from '@/renderer/camera';
 import { BASE_HEX_SIZE, drawBackground, drawHexCell } from '@/renderer/drawHex';
-import { drawUnits, drawStructures, drawTargetingOverlay, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities } from '@/renderer/drawEntities';
+import { drawUnits, drawStructures, drawTargetingOverlay, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawEchoOverlay } from '@/renderer/drawEntities';
 import { InteractionMode } from '@/lib/types';
 import { ExecutionAnimation } from '@/renderer/animation';
+import { Command } from '@/engine/commands';
 
 const ZOOM_STEP = 1.15;
 const PAN_SPEED = 20; // CSS px per keypress
@@ -17,6 +18,7 @@ interface GameCanvasProps {
   gameState: GameState;
   mode: InteractionMode;
   animation: ExecutionAnimation | null;
+  echoCommands: Command[] | null;
   onHexClick(hex: Hex): void;
 }
 
@@ -29,7 +31,7 @@ function getInitialCamera(map: GameMap, cssW: number, cssH: number): Camera {
   };
 }
 
-export default function GameCanvas({ gameState, mode, animation, onHexClick }: GameCanvasProps) {
+export default function GameCanvas({ gameState, mode, animation, echoCommands, onHexClick }: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const camRef    = useRef<Camera>({ x: 0, y: 0, zoom: DEFAULT_ZOOM });
   const mapRef    = useRef<GameMap | null>(null);
@@ -65,6 +67,9 @@ export default function GameCanvas({ gameState, mode, animation, onHexClick }: G
 
   const animationRef = useRef<ExecutionAnimation | null>(animation);
   animationRef.current = animation;
+
+  const echoCommandsRef = useRef<Command[] | null>(echoCommands);
+  echoCommandsRef.current = echoCommands;
 
   // ── Render loop ────────────────────────────────────────────────────────────
   const render = useCallback(() => {
@@ -114,6 +119,12 @@ export default function GameCanvas({ gameState, mode, animation, onHexClick }: G
     } else {
       drawStructures(ctx, gs.structures, cam);
       drawUnits(ctx, gs.units, cam);
+    }
+
+    // ── Temporal Echo overlay (planning phase only) ───────────────────────────
+    const echo = echoCommandsRef.current;
+    if (echo && echo.length > 0 && !anim) {
+      drawEchoOverlay(ctx, echo, cam, performance.now());
     }
   }, []);
 

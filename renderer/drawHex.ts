@@ -31,6 +31,16 @@ export const BASE_HEX_SIZE = 28;
 const CORNER_COS = Array.from({ length: 6 }, (_, i) => Math.cos((Math.PI / 180) * (60 * i - 30)));
 const CORNER_SIN = Array.from({ length: 6 }, (_, i) => Math.sin((Math.PI / 180) * (60 * i - 30)));
 
+/** Trace a closed pointy-top hex outline onto the canvas path (beginPath…closePath). Call stroke()/fill() after. */
+export function hexPath(ctx: CanvasRenderingContext2D, sx: number, sy: number, size: number): void {
+  ctx.beginPath();
+  ctx.moveTo(sx + size * CORNER_COS[0], sy + size * CORNER_SIN[0]);
+  for (let i = 1; i < 6; i++) {
+    ctx.lineTo(sx + size * CORNER_COS[i], sy + size * CORNER_SIN[i]);
+  }
+  ctx.closePath();
+}
+
 /** Draw a single hex cell onto the canvas. */
 export function drawHexCell(
   ctx: CanvasRenderingContext2D,
@@ -43,12 +53,7 @@ export function drawHexCell(
   const size = BASE_HEX_SIZE * cam.zoom;
 
   // ── Hex fill ──────────────────────────────────────────────────────────────
-  ctx.beginPath();
-  ctx.moveTo(sx + size * CORNER_COS[0], sy + size * CORNER_SIN[0]);
-  for (let i = 1; i < 6; i++) {
-    ctx.lineTo(sx + size * CORNER_COS[i], sy + size * CORNER_SIN[i]);
-  }
-  ctx.closePath();
+  hexPath(ctx, sx, sy, size);
 
   ctx.fillStyle = getHexFill(cell.terrain, cell.fog);
   ctx.fill();

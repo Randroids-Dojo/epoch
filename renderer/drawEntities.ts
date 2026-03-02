@@ -1,19 +1,16 @@
-import { Camera } from './camera';
-import { BASE_HEX_SIZE } from './drawHex';
+import { Camera, worldToCanvas } from './camera';
+import { BASE_HEX_SIZE, hexPath } from './drawHex';
 import { hexToPixel } from '../engine/hex';
 import { Unit } from '../engine/units';
 import { Structure } from '../engine/structures';
 import { HexCell } from '../engine/map';
 import { TERRAIN } from '../engine/terrain';
+import { Command } from '../engine/commands';
 import {
   ExecutionAnimation,
   getAnimatedUnitPosition, getCurrentPhase, getPhaseProgress,
   PHASE_ATTACK, PHASE_BUILD,
 } from './animation';
-
-// Precomputed cos/sin for pointy-top hex corners — same constants as drawHex.ts.
-const CORNER_COS = Array.from({ length: 6 }, (_, i) => Math.cos((Math.PI / 180) * (60 * i - 30)));
-const CORNER_SIN = Array.from({ length: 6 }, (_, i) => Math.sin((Math.PI / 180) * (60 * i - 30)));
 
 /** Draw all units onto the canvas. Player units are cyan; AI units are coral. */
 export function drawUnits(
@@ -90,12 +87,7 @@ export function drawTargetingOverlay(
     const sx = cam.x + wp.x * cam.zoom;
     const sy = cam.y + wp.y * cam.zoom;
 
-    ctx.beginPath();
-    ctx.moveTo(sx + size * CORNER_COS[0], sy + size * CORNER_SIN[0]);
-    for (let i = 1; i < 6; i++) {
-      ctx.lineTo(sx + size * CORNER_COS[i], sy + size * CORNER_SIN[i]);
-    }
-    ctx.closePath();
+    hexPath(ctx, sx, sy, size);
 
     ctx.fillStyle = isEligible ? 'rgba(0,212,255,0.18)' : 'rgba(0,0,0,0.30)';
     ctx.fill();
@@ -310,6 +302,74 @@ export function drawDestroyedEntities(
     ctx.restore();
 
     drawDeathRing(ctx, sx, sy, structR, ap, color);
+  }
+
+  ctx.globalAlpha = prevAlpha;
+}
+
+const ECHO_LABELS: Partial<Record<Command['type'], string>> = {
+  move:   'MVE',
+  attack: 'ATK',
+  gather: 'GTH',
+  build:  'BLD',
+};
+
+/**
+ * Draw Temporal Echo overlays — translucent gold ghost indicators showing the
+ * previous epoch's enemy commands during the planning phase.
+ *
+ * @param timeMs  Current time in ms (e.g. performance.now()) for pulse animation.
+ */
+export function drawEchoOverlay(
+  ctx: CanvasRenderingContext2D,
+  commands: Command[],
+  cam: Camera,
+  timeMs: number,
+): void {
+  const pulse      = 0.45 + 0.3 * Math.sin(timeMs / 700); // 0.45–0.75 oscillation
+  const hexR       = BASE_HEX_SIZE * cam.zoom;
+  const alphaFill  = pulse * 0.18;
+  const alphaLabel = pulse * 0.9;
+  const prevAlpha  = ctx.globalAlpha;
+
+  ctx.strokeStyle  = '#fbbf24';
+  ctx.fillStyle    = '#fbbf24';
+  ctx.lineWidth    = 1.5;
+  ctx.font         = `bold ${Math.max(8, Math.round(hexR * 0.38))}px monospace`;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+
+  for (const cmd of commands) {
+    let targetHex: { q: number; r: number } | null = null;
+
+    if (
+      cmd.type === 'move' ||
+      cmd.type === 'attack' ||
+      cmd.type === 'gather' ||
+      cmd.type === 'build'
+    ) {
+      targetHex = cmd.targetHex;
+    }
+    if (!targetHex) continue;
+
+    const wp = hexToPixel(targetHex, BASE_HEX_SIZE);
+    const { x: sx, y: sy } = worldToCanvas(wp.x, wp.y, cam);
+
+    // Hex outline.
+    hexPath(ctx, sx, sy, hexR);
+    ctx.globalAlpha = pulse;
+    ctx.stroke();
+
+    // Inner fill.
+    ctx.globalAlpha = alphaFill;
+    ctx.fill();
+
+    // Label.
+    const label = ECHO_LABELS[cmd.type];
+    if (label) {
+      ctx.globalAlpha = alphaLabel;
+      ctx.fillText(label, sx, sy);
+    }
   }
 
   ctx.globalAlpha = prevAlpha;

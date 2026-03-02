@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { GameState, createInitialState } from '@/engine/state';
 import { resolveEpoch } from '@/engine/resolution';
 import { Hex, hexKey } from '@/engine/hex';
-import { Command } from '@/engine/commands';
+import { Command, TEMPORAL_ECHO_COST } from '@/engine/commands';
 import { getFirstEligibleUnit, computeEligibleHexes, TargetingCommandType } from '@/engine/targeting';
 import { generateAICommands } from '@/engine/ai';
 import { InteractionMode } from '@/lib/types';
@@ -181,6 +181,16 @@ export default function GameView() {
     const { slotIndex } = m;
     const state = gameStateRef.current;
 
+    if (type === 'temporal') {
+      const newCmd: Command = { type: 'temporal', ability: 'echo', teCost: TEMPORAL_ECHO_COST };
+      const newCommands = [...state.players.player.commands];
+      newCommands[slotIndex] = newCmd;
+      state.players.player.commands = newCommands;
+      setGameState({ ...state });
+      setMode({ kind: 'idle' });
+      return;
+    }
+
     if (type === 'defend') {
       const unit = getFirstEligibleUnit(state, 'defend');
       if (!unit) { setMode({ kind: 'idle' }); return; }
@@ -297,11 +307,11 @@ export default function GameView() {
     return () => window.removeEventListener('keydown', handler);
   }, [handleSlotClear, handleLockIn]);
 
-  const playerUnits = Array.from(gameState.units.values()).filter(
-    (u) => u.owner === 'player',
-  );
-
   const isExecuting = animationRef.current !== null;
+
+  // Show previous epoch AI commands as echo overlay when player has Echo queued.
+  const hasEcho = gameState.players.player.commands.some((c) => c?.type === 'temporal');
+  const echoCommands = hasEcho ? gameState.prevEpochCommands.ai : null;
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden">
@@ -318,6 +328,7 @@ export default function GameView() {
           gameState={gameState}
           mode={mode}
           animation={animationRef.current}
+          echoCommands={echoCommands}
           onHexClick={handleHexClick}
         />
 
@@ -325,7 +336,7 @@ export default function GameView() {
         {mode.kind === 'picker_open' && !isExecuting && (
           <CommandPicker
             slotIndex={mode.slotIndex}
-            playerUnits={playerUnits}
+            playerTE={gameState.players.player.resources.te}
             onSelect={handleCommandPick}
             onClose={() => setMode({ kind: 'idle' })}
           />

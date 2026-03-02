@@ -3,7 +3,7 @@ import { Hex, hexEqual, hexKey } from './hex';
 import { PlayerId, PLAYER_IDS } from './player';
 import { Unit, UNIT_DEFS } from './units';
 import { Structure, STRUCTURE_DEFS } from './structures';
-import { CommandQueue, MAX_COMMAND_SLOTS } from './commands';
+import { Command, CommandQueue, MAX_COMMAND_SLOTS } from './commands';
 
 export type GamePhase = 'planning' | 'execution' | 'transition' | 'over';
 
@@ -32,6 +32,8 @@ export interface GameState {
   winner: PlayerId | null;
   /** Human-readable log lines from the last epoch resolution. */
   eventLog: string[];
+  /** Commands each player queued in the previous epoch (for Temporal Echo). */
+  prevEpochCommands: Record<PlayerId, Command[]>;
 }
 
 // ── ID generator ─────────────────────────────────────────────────────────────
@@ -96,6 +98,7 @@ export function createInitialState(seed?: number): GameState {
     epoch:  1,
     winner: null,
     eventLog: [],
+    prevEpochCommands: { player: [], ai: [] },
     units,
     structures,
     players: {
