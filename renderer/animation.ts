@@ -8,6 +8,8 @@
 import { Hex, hexToPixel } from '../engine/hex';
 import { GameState } from '../engine/state';
 import { PlayerId } from '../engine/player';
+import { UnitType, UNIT_DEFS } from '../engine/units';
+import { StructureType, STRUCTURE_DEFS } from '../engine/structures';
 import { BASE_HEX_SIZE } from './drawHex';
 
 // ── Snapshot types (captured before resolution) ────────────────────────────
@@ -16,6 +18,7 @@ export interface UnitSnapshot {
   hex: Hex;
   hp: number;
   owner: PlayerId;
+  type: UnitType;
   isDefending?: boolean;
 }
 
@@ -23,6 +26,7 @@ export interface StructSnapshot {
   hex: Hex;
   hp: number;
   owner: PlayerId;
+  type: StructureType;
 }
 
 // ── Animation data ─────────────────────────────────────────────────────────
@@ -30,10 +34,12 @@ export interface StructSnapshot {
 export interface UnitAnim {
   unitId: string;
   owner: PlayerId;
+  unitType: UnitType;
   fromPixel: { x: number; y: number };
   toPixel: { x: number; y: number };
   oldHp: number;
   newHp: number; // -1 if destroyed
+  maxHp: number;
   wasDestroyed: boolean;
   wasSpawned: boolean;
   isDefending: boolean;
@@ -42,9 +48,11 @@ export interface UnitAnim {
 export interface StructAnim {
   structureId: string;
   owner: PlayerId;
+  structureType: StructureType;
   pixel: { x: number; y: number };
   oldHp: number;
   newHp: number;
+  maxHp: number;
   wasDamaged: boolean;
   wasDestroyed: boolean;
   wasBuilt: boolean;
@@ -104,10 +112,12 @@ export function buildAnimationTimeline(
     const anim: UnitAnim = {
       unitId: id,
       owner: snap.owner,
+      unitType: snap.type,
       fromPixel,
       toPixel,
       oldHp: snap.hp,
       newHp: destroyed ? -1 : newUnit.hp,
+      maxHp: UNIT_DEFS[snap.type].maxHp,
       wasDestroyed: destroyed,
       wasSpawned: false,
       isDefending: destroyed ? false : newUnit.isDefending,
@@ -127,10 +137,12 @@ export function buildAnimationTimeline(
     units.set(id, {
       unitId: id,
       owner: unit.owner,
+      unitType: unit.type,
       fromPixel: pixel,
       toPixel: pixel,
       oldHp: 0,
       newHp: unit.hp,
+      maxHp: UNIT_DEFS[unit.type].maxHp,
       wasDestroyed: false,
       wasSpawned: true,
       isDefending: false,
@@ -149,9 +161,11 @@ export function buildAnimationTimeline(
     const anim: StructAnim = {
       structureId: id,
       owner: snap.owner,
+      structureType: snap.type,
       pixel,
       oldHp: snap.hp,
       newHp: destroyed ? -1 : newStruct.hp,
+      maxHp: STRUCTURE_DEFS[snap.type].maxHp,
       wasDamaged: destroyed || newStruct.hp < snap.hp,
       wasDestroyed: destroyed,
       wasBuilt: false,
@@ -170,9 +184,11 @@ export function buildAnimationTimeline(
     structures.set(id, {
       structureId: id,
       owner: s.owner,
+      structureType: s.type,
       pixel,
       oldHp: 0,
       newHp: s.hp,
+      maxHp: STRUCTURE_DEFS[s.type].maxHp,
       wasDamaged: false,
       wasDestroyed: false,
       wasBuilt: true,

@@ -249,11 +249,11 @@ export default function GameView() {
     // Snapshot unit and structure state before resolution.
     const unitSnaps = new Map<string, UnitSnapshot>();
     for (const [id, u] of state.units) {
-      unitSnaps.set(id, { hex: { ...u.hex }, hp: u.hp, owner: u.owner });
+      unitSnaps.set(id, { hex: { ...u.hex }, hp: u.hp, owner: u.owner, type: u.type });
     }
     const structSnaps = new Map<string, StructSnapshot>();
     for (const [id, s] of state.structures) {
-      structSnaps.set(id, { hex: { ...s.hex }, hp: s.hp, owner: s.owner });
+      structSnaps.set(id, { hex: { ...s.hex }, hp: s.hp, owner: s.owner, type: s.type });
     }
 
     // Run resolution instantly.

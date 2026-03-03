@@ -27,7 +27,7 @@ describe('buildAnimationTimeline', () => {
     const oldHex = { ...unit.hex };
 
     const unitSnaps = new Map<string, UnitSnapshot>();
-    unitSnaps.set(uid, { hex: oldHex, hp: unit.hp, owner: 'player' });
+    unitSnaps.set(uid, { hex: oldHex, hp: unit.hp, owner: 'player', type: unit.type });
     const structSnaps = new Map<string, StructSnapshot>();
 
     // Simulate move.
@@ -48,7 +48,7 @@ describe('buildAnimationTimeline', () => {
     const [uid, unit] = [...state.units.entries()].find(([, u]) => u.owner === 'ai')!;
 
     const unitSnaps = new Map<string, UnitSnapshot>();
-    unitSnaps.set(uid, { hex: { ...unit.hex }, hp: unit.hp, owner: 'ai' });
+    unitSnaps.set(uid, { hex: { ...unit.hex }, hp: unit.hp, owner: 'ai', type: unit.type });
     const structSnaps = new Map<string, StructSnapshot>();
 
     // Remove unit to simulate destruction.
@@ -83,7 +83,7 @@ describe('buildAnimationTimeline', () => {
     const [sid, struct] = [...state.structures.entries()].find(([, s]) => s.owner === 'ai')!;
 
     const structSnaps = new Map<string, StructSnapshot>();
-    structSnaps.set(sid, { hex: { ...struct.hex }, hp: struct.hp, owner: 'ai' });
+    structSnaps.set(sid, { hex: { ...struct.hex }, hp: struct.hp, owner: 'ai', type: struct.type });
     const unitSnaps = new Map<string, UnitSnapshot>();
 
     // Simulate damage.
@@ -101,7 +101,7 @@ describe('buildAnimationTimeline', () => {
     const [sid, struct] = [...state.structures.entries()].find(([, s]) => s.owner === 'ai')!;
 
     const structSnaps = new Map<string, StructSnapshot>();
-    structSnaps.set(sid, { hex: { ...struct.hex }, hp: struct.hp, owner: 'ai' });
+    structSnaps.set(sid, { hex: { ...struct.hex }, hp: struct.hp, owner: 'ai', type: struct.type });
     const unitSnaps = new Map<string, UnitSnapshot>();
 
     state.structures.delete(sid);
@@ -130,9 +130,9 @@ describe('getAnimatedUnitPosition', () => {
   const from = { x: 0, y: 0 };
   const to = { x: 100, y: 50 };
   const anim = {
-    unitId: 'u1', owner: 'player' as const,
+    unitId: 'u1', owner: 'player' as const, unitType: 'drone' as const,
     fromPixel: from, toPixel: to,
-    oldHp: 10, newHp: 10,
+    oldHp: 10, newHp: 10, maxHp: 15,
     wasDestroyed: false, wasSpawned: false, isDefending: false,
   };
 
