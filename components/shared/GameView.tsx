@@ -162,13 +162,11 @@ export default function GameView() {
 
   // ── Dev-only test hook ────────────────────────────────────────────────────
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      (window as Window & { __triggerGameOver?: (winner: PlayerId) => void }).__triggerGameOver =
-        (winner: PlayerId) => {
-          animationRef.current = null;
-          setGameState((s) => ({ ...s, phase: 'over', winner }));
-        };
-    }
+    (window as Window & { __triggerGameOver?: (winner: PlayerId) => void }).__triggerGameOver =
+      (winner: PlayerId) => {
+        animationRef.current = null;
+        setGameState((s) => ({ ...s, phase: 'over', winner }));
+      };
   }, []);
 
   // ── handleResolve ─────────────────────────────────────────────────────────

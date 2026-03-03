@@ -419,6 +419,7 @@ export default function GameCanvas({
     <div className="relative h-full w-full">
       <canvas
         ref={canvasRef}
+        data-testid="game-canvas"
         className="block h-full w-full"
         style={{ cursor, touchAction: 'none' }}
         onMouseDown={onMouseDown}
