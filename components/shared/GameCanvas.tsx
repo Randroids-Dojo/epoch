@@ -22,6 +22,28 @@ interface GameCanvasProps {
   animation: ExecutionAnimation | null;
   echoCommands: Command[] | null;
   onHexClick(hex: Hex): void;
+  onCameraChange?: (snapshot: CameraSnapshot) => void;
+  centerRequest?: CameraCenterRequest | null;
+}
+
+export interface CameraSnapshot {
+  camera: Camera;
+  viewportWorld: {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+  };
+  canvasSize: {
+    width: number;
+    height: number;
+  };
+}
+
+export interface CameraCenterRequest {
+  nonce: number;
+  worldX: number;
+  worldY: number;
 }
 
 function getInitialCamera(map: GameMap, cssW: number, cssH: number): Camera {
@@ -33,7 +55,15 @@ function getInitialCamera(map: GameMap, cssW: number, cssH: number): Camera {
   };
 }
 
-export default function GameCanvas({ gameState, mode, animation, echoCommands, onHexClick }: GameCanvasProps) {
+export default function GameCanvas({
+  gameState,
+  mode,
+  animation,
+  echoCommands,
+  onHexClick,
+  onCameraChange,
+  centerRequest,
+}: GameCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const camRef    = useRef<Camera>({ x: 0, y: 0, zoom: DEFAULT_ZOOM });
   const mapRef    = useRef<GameMap | null>(null);
@@ -72,6 +102,11 @@ export default function GameCanvas({ gameState, mode, animation, echoCommands, o
 
   const echoCommandsRef = useRef<Command[] | null>(echoCommands);
   echoCommandsRef.current = echoCommands;
+
+  const onCameraChangeRef = useRef(onCameraChange);
+  onCameraChangeRef.current = onCameraChange;
+
+  const lastCameraSnapshotRef = useRef<CameraSnapshot | null>(null);
 
   // ── Render loop ────────────────────────────────────────────────────────────
   const render = useCallback(() => {
@@ -128,6 +163,34 @@ export default function GameCanvas({ gameState, mode, animation, echoCommands, o
     if (echo && echo.length > 0 && !anim) {
       drawEchoOverlay(ctx, echo, cam, performance.now());
     }
+
+    const topLeft = canvasToWorld(0, 0, cam);
+    const bottomRight = canvasToWorld(cssW, cssH, cam);
+    const snapshot: CameraSnapshot = {
+      camera: { ...cam },
+      viewportWorld: {
+        left: topLeft.x,
+        top: topLeft.y,
+        right: bottomRight.x,
+        bottom: bottomRight.y,
+      },
+      canvasSize: {
+        width: cssW,
+        height: cssH,
+      },
+    };
+
+    const prev = lastCameraSnapshotRef.current;
+    const changed = !prev
+      || Math.abs(prev.camera.x - snapshot.camera.x) > 0.5
+      || Math.abs(prev.camera.y - snapshot.camera.y) > 0.5
+      || Math.abs(prev.camera.zoom - snapshot.camera.zoom) > 0.001
+      || prev.canvasSize.width !== snapshot.canvasSize.width
+      || prev.canvasSize.height !== snapshot.canvasSize.height;
+    if (changed) {
+      lastCameraSnapshotRef.current = snapshot;
+      onCameraChangeRef.current?.(snapshot);
+    }
   }, []);
 
   // ── Animation frame loop ───────────────────────────────────────────────────
@@ -158,6 +221,18 @@ export default function GameCanvas({ gameState, mode, animation, echoCommands, o
     observer.observe(canvas);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (!centerRequest) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const cam = camRef.current;
+    camRef.current = {
+      ...cam,
+      x: canvas.clientWidth / 2 - centerRequest.worldX * cam.zoom,
+      y: canvas.clientHeight / 2 - centerRequest.worldY * cam.zoom,
+    };
+  }, [centerRequest]);
 
   // ── Shared hex-tap handler (mouse click and touch tap) ─────────────────────
   const fireHexTap = useCallback((clientX: number, clientY: number) => {
