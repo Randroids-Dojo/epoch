@@ -183,7 +183,7 @@ export default function GameView() {
 
   const slotDims = isMobile ? SLOT_LAYOUT.MOBILE : SLOT_LAYOUT.DESKTOP;
 
-  // ── Dev-only test hook ────────────────────────────────────────────────────
+  // ── Test hook used by Playwright win-condition specs ───────────────────────
   useEffect(() => {
     (window as Window & { __triggerGameOver?: (winner: PlayerId) => void }).__triggerGameOver =
       (winner: PlayerId) => {
