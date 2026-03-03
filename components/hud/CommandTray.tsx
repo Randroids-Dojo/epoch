@@ -108,8 +108,10 @@ export default function CommandTray({
                   </span>
                 </div>
 
-                {/* Clear button */}
-                <button
+                {/* Clear control */}
+                <span
+                  role="button"
+                  tabIndex={0}
                   className="absolute right-0.5 top-0.5 flex items-center justify-center rounded"
                   style={{
                     width: 16, height: 16,
@@ -121,10 +123,17 @@ export default function CommandTray({
                     lineHeight: 1,
                   }}
                   onClick={(e) => { e.stopPropagation(); onSlotClear(i); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onSlotClear(i);
+                    }
+                  }}
                   aria-label={`Clear slot ${i + 1}`}
                 >
                   ×
-                </button>
+                </span>
               </>
             ) : (
               <>

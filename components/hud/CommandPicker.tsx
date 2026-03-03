@@ -30,7 +30,7 @@ export default function CommandPicker(props: CommandPickerProps) {
     { type: 'attack',   label: 'Attack',       shortcut: 'A', enabled: true  },
     { type: 'gather',   label: 'Gather',       shortcut: 'G', enabled: true  },
     { type: 'defend',   label: 'Defend',       shortcut: 'D', enabled: true  },
-    { type: 'build',    label: 'Build',        shortcut: 'B', enabled: false },
+    { type: 'build',    label: 'Build',        shortcut: 'B', enabled: true },
     { type: 'train',    label: 'Train',        shortcut: 'T', enabled: false },
     {
       type: 'temporal', label: 'Echo',         shortcut: 'E',

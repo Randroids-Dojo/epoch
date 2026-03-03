@@ -3,9 +3,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GameState, createInitialState, findNexus } from '@/engine/state';
 import { resolveEpoch } from '@/engine/resolution';
-import { Hex, hexKey } from '@/engine/hex';
+import { Hex, hexKey, hexToPixel } from '@/engine/hex';
+import { BASE_HEX_SIZE } from '@/renderer/drawHex';
 import { Command, TEMPORAL_ECHO_COST } from '@/engine/commands';
-import { getFirstEligibleUnit, computeEligibleHexes, TargetingCommandType } from '@/engine/targeting';
+import {
+  getFirstEligibleUnit,
+  computeEligibleHexes,
+  computeEligibleBuildHexes,
+  TargetingCommandType,
+  BuildStructureType,
+} from '@/engine/targeting';
 import { generateAICommands } from '@/engine/ai';
 import { PlayerId } from '@/engine/player';
 import { COLORS, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
@@ -18,12 +25,15 @@ import {
 } from '@/renderer/animation';
 import { audioEngine } from '@/audio/engine';
 import GameCanvas from './GameCanvas';
+import { CameraSnapshot } from './GameCanvas';
 import PlanningBar from '../hud/PlanningBar';
 import CommandTray from '../hud/CommandTray';
 import CommandPicker from '../hud/CommandPicker';
 import ExecutionOverlay from '../hud/ExecutionOverlay';
+import Minimap from '../hud/Minimap';
 
 const PLANNING_DURATION = GAME_CONSTANTS.PLANNING_PHASE_DURATION_MS / 1000;
+const BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks', 'tech_lab', 'watchtower'];
 
 export default function GameView() {
   const [gameState, setGameState]   = useState<GameState>(() => createInitialState(42));
@@ -32,6 +42,9 @@ export default function GameView() {
   const [lockInFlash, setLockInFlash] = useState(false);
   const [animElapsed, setAnimElapsed] = useState(0);
   const [isMobile, setIsMobile] = useState(false); // default desktop; corrected after mount
+  const [cameraSnapshot, setCameraSnapshot] = useState<CameraSnapshot | null>(null);
+  const [centerRequest, setCenterRequest] = useState<{ nonce: number; worldX: number; worldY: number } | null>(null);
+  const centerNonceRef = useRef(0);
 
   // Stable refs so callbacks always see the latest values.
   const gameStateRef = useRef(gameState);
@@ -156,13 +169,11 @@ export default function GameView() {
 
   // ── Dev-only test hook ────────────────────────────────────────────────────
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      (window as Window & { __triggerGameOver?: (winner: PlayerId) => void }).__triggerGameOver =
-        (winner: PlayerId) => {
-          animationRef.current = null;
-          setGameState((s) => ({ ...s, phase: 'over', winner }));
-        };
-    }
+    (window as Window & { __triggerGameOver?: (winner: PlayerId) => void }).__triggerGameOver =
+      (winner: PlayerId) => {
+        animationRef.current = null;
+        setGameState((s) => ({ ...s, phase: 'over', winner }));
+      };
   }, []);
 
   // ── handleResolve ─────────────────────────────────────────────────────────
@@ -249,6 +260,17 @@ export default function GameView() {
     setTimeLeft(PLANNING_DURATION);
   }, []);
 
+  const queueRecenter = useCallback((worldX: number, worldY: number) => {
+    centerNonceRef.current += 1;
+    setCenterRequest({ nonce: centerNonceRef.current, worldX, worldY });
+  }, []);
+
+  const handleSnapHome = useCallback(() => {
+    const home = gameStateRef.current.map.playerStart;
+    const wp = hexToPixel(home, BASE_HEX_SIZE);
+    queueRecenter(wp.x, wp.y);
+  }, [queueRecenter]);
+
   // ── Lock-in ───────────────────────────────────────────────────────────────
   const handleLockIn = useCallback(() => {
     const state = gameStateRef.current;
@@ -327,6 +349,11 @@ export default function GameView() {
       return;
     }
 
+    if (type === 'build') {
+      setMode({ kind: 'build_select', slotIndex });
+      return;
+    }
+
     if (type === 'move' || type === 'attack' || type === 'gather') {
       const cmdType = type as TargetingCommandType;
       const unit    = getFirstEligibleUnit(state, cmdType);
@@ -345,10 +372,23 @@ export default function GameView() {
     setMode({ kind: 'idle' });
   }, []);
 
+  const handleBuildStructureSelect = useCallback((structureType: BuildStructureType) => {
+    const m = modeRef.current;
+    if (m.kind !== 'build_select') return;
+
+    const eligibleKeys = computeEligibleBuildHexes(gameStateRef.current);
+    setMode({
+      kind: 'build_targeting',
+      slotIndex: m.slotIndex,
+      structureType,
+      eligibleKeys,
+    });
+  }, []);
+
   // ── Hex click from canvas ─────────────────────────────────────────────────
   const handleHexClick = useCallback((hex: Hex) => {
     const m = modeRef.current;
-    if (m.kind !== 'targeting') return;
+    if (m.kind !== 'targeting' && m.kind !== 'build_targeting') return;
 
     const key   = hexKey(hex);
     const state = gameStateRef.current;
@@ -358,15 +398,20 @@ export default function GameView() {
       return;
     }
 
-    const { slotIndex, commandType, subjectUnitId } = m;
+    const { slotIndex } = m;
     let newCmd: Command;
 
-    if (commandType === 'move') {
-      newCmd = { type: 'move',   unitId: subjectUnitId, targetHex: hex };
-    } else if (commandType === 'attack') {
-      newCmd = { type: 'attack', unitId: subjectUnitId, targetHex: hex };
+    if (m.kind === 'targeting') {
+      const { commandType, subjectUnitId } = m;
+      if (commandType === 'move') {
+        newCmd = { type: 'move', unitId: subjectUnitId, targetHex: hex };
+      } else if (commandType === 'attack') {
+        newCmd = { type: 'attack', unitId: subjectUnitId, targetHex: hex };
+      } else {
+        newCmd = { type: 'gather', unitId: subjectUnitId, targetHex: hex };
+      }
     } else {
-      newCmd = { type: 'gather', unitId: subjectUnitId, targetHex: hex };
+      newCmd = { type: 'build', structureType: m.structureType, targetHex: hex };
     }
 
     const newCommands = [...state.players.player.commands];
@@ -457,6 +502,16 @@ export default function GameView() {
           animation={animationRef.current}
           echoCommands={echoCommands}
           onHexClick={handleHexClick}
+          onCameraChange={setCameraSnapshot}
+          centerRequest={centerRequest}
+        />
+
+        <Minimap
+          gameState={gameState}
+          cameraSnapshot={cameraSnapshot}
+          isMobile={isMobile}
+          onRecenter={queueRecenter}
+          onSnapHome={handleSnapHome}
         />
 
         {/* Command picker floats above the tray */}
@@ -471,6 +526,46 @@ export default function GameView() {
             onSelect={handleCommandPick}
             onClose={() => setMode({ kind: 'idle' })}
           />
+        )}
+
+
+        {mode.kind === 'build_select' && !isExecuting && (
+          <div
+            role="dialog"
+            aria-label="Build structure picker"
+            className="absolute font-mono text-xs"
+            style={{
+              bottom: 84,
+              left: Math.min(mode.slotIndex * (slotDims.width + slotDims.gap) + 16, window.innerWidth - 188),
+              zIndex: 100,
+              background: '#0d1321',
+              border: '1px solid #334155',
+              borderRadius: 6,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+              minWidth: 180,
+              overflow: 'hidden',
+            }}
+          >
+            <div className="px-3 py-1.5" style={{ color: '#475569', borderBottom: '1px solid #1e293b', fontSize: '0.65rem', letterSpacing: '0.1em' }}>
+              CHOOSE STRUCTURE
+            </div>
+            {BUILD_OPTIONS.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                data-testid={`build-option-${opt}`}
+                onClick={() => handleBuildStructureSelect(opt)}
+                className="block w-full px-3 py-2 text-left"
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#e2e8f0',
+                }}
+              >
+                {opt.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase())}
+              </button>
+            ))}
+          </div>
         )}
 
         {/* Execution overlay */}
@@ -516,7 +611,7 @@ export default function GameView() {
         <CommandTray
           commands={gameState.players.player.commands}
           selectedSlot={
-            mode.kind === 'slot_selected' || mode.kind === 'picker_open'
+            mode.kind === 'slot_selected' || mode.kind === 'picker_open' || mode.kind === 'build_select' || mode.kind === 'build_targeting'
               ? mode.slotIndex
               : null
           }
