@@ -5,6 +5,7 @@ async function triggerGameOver(page: Page, winner: PlayerId): Promise<void> {
   await page.waitForFunction(() => {
     return typeof (window as Window & { __triggerGameOver?: unknown }).__triggerGameOver === 'function';
   });
+
   await page.evaluate((w) => {
     (window as Window & { __triggerGameOver?: (winner: PlayerId) => void }).__triggerGameOver?.(w);
   }, winner);

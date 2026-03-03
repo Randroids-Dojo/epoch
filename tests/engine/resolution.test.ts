@@ -287,6 +287,44 @@ describe('Build step', () => {
     expect(s.players.player.resources.cc).toBe(5); // 10 - 5
   });
 
+
+
+  it('fails to build on an occupied hex', () => {
+    const s = createInitialState(1);
+    s.players.player.resources.cc = 10;
+    const occupiedHex = [...s.units.values()].find((u) => u.owner === 'player')!.hex;
+
+    queueCommand(s, 'player', 0, {
+      type: 'build', targetHex: occupiedHex, structureType: 'watchtower',
+    });
+
+    resolveEpoch(s);
+
+    const watchtower = [...s.structures.values()].find(
+      (st) => st.type === 'watchtower' && st.owner === 'player',
+    );
+    expect(watchtower).toBeUndefined();
+    expect(s.players.player.resources.cc).toBe(10);
+  });
+
+  it('fails to build on impassable terrain', () => {
+    const s = createInitialState(1);
+    s.players.player.resources.cc = 10;
+    const impassable = [...s.map.cells.values()].find((cell) => cell.terrain === 'void_rift')!;
+
+    queueCommand(s, 'player', 0, {
+      type: 'build', targetHex: impassable.hex, structureType: 'watchtower',
+    });
+
+    resolveEpoch(s);
+
+    const watchtower = [...s.structures.values()].find(
+      (st) => st.type === 'watchtower' && st.owner === 'player',
+    );
+    expect(watchtower).toBeUndefined();
+    expect(s.players.player.resources.cc).toBe(10);
+  });
+
   it('fails to build when insufficient CC', () => {
     const s = createInitialState(1);
     s.players.player.resources.cc = 2; // not enough for barracks (5 CC)

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createInitialState, resetIdSeq } from '@/engine/state';
-import { computeEligibleHexes, getFirstEligibleUnit } from '@/engine/targeting';
+import { computeEligibleBuildHexes, computeEligibleHexes, getFirstEligibleUnit } from '@/engine/targeting';
 import { hexKey } from '@/engine/hex';
+import { TERRAIN } from '@/engine/terrain';
 
 beforeEach(() => resetIdSeq());
 
@@ -100,6 +101,28 @@ describe('computeEligibleHexes', () => {
       expect(cell.terrain).toBe('crystal_node');
       expect(cell.fog).toBe('visible');
     }
+  });
+
+
+
+  it('build: returns passable explored/visible unoccupied hexes', () => {
+    const state = createInitialState(1);
+    const result = computeEligibleBuildHexes(state);
+
+    for (const key of result) {
+      const cell = state.map.cells.get(key)!;
+      expect(cell.fog).not.toBe('unexplored');
+      expect(TERRAIN[cell.terrain].passable).toBe(true);
+
+      for (const unit of state.units.values()) {
+        expect(hexKey(unit.hex)).not.toBe(key);
+      }
+      for (const structure of state.structures.values()) {
+        expect(hexKey(structure.hex)).not.toBe(key);
+      }
+    }
+
+    expect(result.size).toBeGreaterThan(0);
   });
 
   it('returns empty set when no eligible unit could be found (defend type)', () => {

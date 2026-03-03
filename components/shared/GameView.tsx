@@ -6,7 +6,13 @@ import { resolveEpoch } from '@/engine/resolution';
 import { Hex, hexKey, hexToPixel } from '@/engine/hex';
 import { BASE_HEX_SIZE } from '@/renderer/drawHex';
 import { Command, TEMPORAL_ECHO_COST } from '@/engine/commands';
-import { getFirstEligibleUnit, computeEligibleHexes, TargetingCommandType } from '@/engine/targeting';
+import {
+  getFirstEligibleUnit,
+  computeEligibleHexes,
+  computeEligibleBuildHexes,
+  TargetingCommandType,
+  BuildStructureType,
+} from '@/engine/targeting';
 import { generateAICommands } from '@/engine/ai';
 import { PlayerId } from '@/engine/player';
 import { COLORS, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
@@ -27,6 +33,7 @@ import ExecutionOverlay from '../hud/ExecutionOverlay';
 import Minimap from '../hud/Minimap';
 
 const PLANNING_DURATION = GAME_CONSTANTS.PLANNING_PHASE_DURATION_MS / 1000;
+const BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks', 'tech_lab', 'watchtower'];
 
 export default function GameView() {
   const [gameState, setGameState]   = useState<GameState>(() => createInitialState(42));
@@ -342,6 +349,11 @@ export default function GameView() {
       return;
     }
 
+    if (type === 'build') {
+      setMode({ kind: 'build_select', slotIndex });
+      return;
+    }
+
     if (type === 'move' || type === 'attack' || type === 'gather') {
       const cmdType = type as TargetingCommandType;
       const unit    = getFirstEligibleUnit(state, cmdType);
@@ -360,10 +372,23 @@ export default function GameView() {
     setMode({ kind: 'idle' });
   }, []);
 
+  const handleBuildStructureSelect = useCallback((structureType: BuildStructureType) => {
+    const m = modeRef.current;
+    if (m.kind !== 'build_select') return;
+
+    const eligibleKeys = computeEligibleBuildHexes(gameStateRef.current);
+    setMode({
+      kind: 'build_targeting',
+      slotIndex: m.slotIndex,
+      structureType,
+      eligibleKeys,
+    });
+  }, []);
+
   // ── Hex click from canvas ─────────────────────────────────────────────────
   const handleHexClick = useCallback((hex: Hex) => {
     const m = modeRef.current;
-    if (m.kind !== 'targeting') return;
+    if (m.kind !== 'targeting' && m.kind !== 'build_targeting') return;
 
     const key   = hexKey(hex);
     const state = gameStateRef.current;
@@ -373,15 +398,20 @@ export default function GameView() {
       return;
     }
 
-    const { slotIndex, commandType, subjectUnitId } = m;
+    const { slotIndex } = m;
     let newCmd: Command;
 
-    if (commandType === 'move') {
-      newCmd = { type: 'move',   unitId: subjectUnitId, targetHex: hex };
-    } else if (commandType === 'attack') {
-      newCmd = { type: 'attack', unitId: subjectUnitId, targetHex: hex };
+    if (m.kind === 'targeting') {
+      const { commandType, subjectUnitId } = m;
+      if (commandType === 'move') {
+        newCmd = { type: 'move', unitId: subjectUnitId, targetHex: hex };
+      } else if (commandType === 'attack') {
+        newCmd = { type: 'attack', unitId: subjectUnitId, targetHex: hex };
+      } else {
+        newCmd = { type: 'gather', unitId: subjectUnitId, targetHex: hex };
+      }
     } else {
-      newCmd = { type: 'gather', unitId: subjectUnitId, targetHex: hex };
+      newCmd = { type: 'build', structureType: m.structureType, targetHex: hex };
     }
 
     const newCommands = [...state.players.player.commands];
@@ -498,6 +528,46 @@ export default function GameView() {
           />
         )}
 
+
+        {mode.kind === 'build_select' && !isExecuting && (
+          <div
+            role="dialog"
+            aria-label="Build structure picker"
+            className="absolute font-mono text-xs"
+            style={{
+              bottom: 84,
+              left: Math.min(mode.slotIndex * (slotDims.width + slotDims.gap) + 16, window.innerWidth - 188),
+              zIndex: 100,
+              background: '#0d1321',
+              border: '1px solid #334155',
+              borderRadius: 6,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+              minWidth: 180,
+              overflow: 'hidden',
+            }}
+          >
+            <div className="px-3 py-1.5" style={{ color: '#475569', borderBottom: '1px solid #1e293b', fontSize: '0.65rem', letterSpacing: '0.1em' }}>
+              CHOOSE STRUCTURE
+            </div>
+            {BUILD_OPTIONS.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                data-testid={`build-option-${opt}`}
+                onClick={() => handleBuildStructureSelect(opt)}
+                className="block w-full px-3 py-2 text-left"
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#e2e8f0',
+                }}
+              >
+                {opt.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase())}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Execution overlay */}
         {isExecuting && animationRef.current && (
           <ExecutionOverlay
@@ -541,7 +611,7 @@ export default function GameView() {
         <CommandTray
           commands={gameState.players.player.commands}
           selectedSlot={
-            mode.kind === 'slot_selected' || mode.kind === 'picker_open'
+            mode.kind === 'slot_selected' || mode.kind === 'picker_open' || mode.kind === 'build_select' || mode.kind === 'build_targeting'
               ? mode.slotIndex
               : null
           }

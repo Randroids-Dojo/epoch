@@ -1,5 +1,6 @@
 import { GAME_CONSTANTS } from './constants'
 import type { TargetingCommandType } from '../engine/targeting'
+import type { StructureType } from '../engine/structures'
 
 // ── Interaction Mode (Planning Phase UI) ──────────────────────────────────────
 
@@ -13,6 +14,16 @@ export type InteractionMode =
       commandType: TargetingCommandType;
       eligibleKeys: Set<string>;
       subjectUnitId: string;
+    }
+  | {
+      kind: 'build_select'
+      slotIndex: number
+    }
+  | {
+      kind: 'build_targeting'
+      slotIndex: number
+      structureType: Exclude<StructureType, 'command_nexus'>
+      eligibleKeys: Set<string>
     }
 
 export type Phase = 'planning' | 'temporal' | 'execution'
