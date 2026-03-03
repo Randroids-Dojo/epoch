@@ -37,7 +37,7 @@ function cmdLabel(cmd: Command): string {
     case 'build':
       return `BD`;
     case 'train':
-      return cmd.unitType.slice(0, 4);
+      return `${cmd.unitType}@${cmd.structureId.slice(-3)}`;
     case 'temporal':
       return 'ECHO';
   }

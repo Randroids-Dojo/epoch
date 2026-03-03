@@ -47,6 +47,32 @@ describe('CommandTray', () => {
     expect(screen.getByText('(2,-1)')).toBeInTheDocument();
   });
 
+
+  it('train command shows unit type and structure hint', () => {
+    const trainCommands: CommandQueue = [
+      { type: 'train', structureId: 's12345', unitType: 'arc_ranger' },
+      null,
+      null,
+      null,
+      null,
+    ];
+
+    render(
+      <CommandTray
+        commands={trainCommands}
+        selectedSlot={null}
+        lockedIn={false}
+        lockInFlash={false}
+        onSlotClick={() => {}}
+        onSlotClear={() => {}}
+        onLockIn={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('TR')).toBeInTheDocument();
+    expect(screen.getByText('arc_ranger@345')).toBeInTheDocument();
+  });
+
   it('clicking × calls onSlotClear with the correct index', () => {
     const onSlotClear = vi.fn();
     render(
