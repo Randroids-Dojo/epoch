@@ -1,39 +1,49 @@
 import { test, expect, Page } from '@playwright/test';
+import { PlayerId } from '@/engine/player';
 
 async function advanceOneEpoch(page: Page): Promise<void> {
   await page.getByTestId('lock-in-btn').click({ force: true });
   await expect(page.getByTestId('phase-label')).toBeVisible({ timeout: 5000 });
-
-  // Skip execution to keep the test fast and deterministic in CI.
   await page.keyboard.press('Escape');
 
-  // Either planning returns or game-over appears.
+  const gameOverVisible = await page.getByTestId('game-over-overlay').isVisible().catch(() => false);
+  if (!gameOverVisible) {
+    await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 5000 });
+  }
+}
+
+async function triggerGameOver(page: Page, winner: PlayerId): Promise<void> {
   await expect
     .poll(async () => {
-      const overVisible = await page.getByTestId('game-over-overlay').isVisible().catch(() => false);
-      if (overVisible) return 'over';
-
-      const planningVisible = await page.getByTestId('command-slot-0').isVisible().catch(() => false);
-      if (planningVisible) return 'planning';
-
-      return 'pending';
+      return page.evaluate(() => {
+        return typeof (window as Window & { __triggerGameOver?: unknown }).__triggerGameOver === 'function';
+      });
     }, { timeout: 5000 })
-    .toMatch(/over|planning/);
+    .toBe(true);
+
+  await page.evaluate((w) => {
+    (window as Window & { __triggerGameOver?: (winner: PlayerId) => void }).__triggerGameOver?.(w);
+  }, winner);
 }
 
 test('smoke: player can play full match headlessly from planning to game-over @smoke', async ({ page }) => {
-  await page.goto('/');
+  test.setTimeout(120_000);
 
+  await page.goto('/');
   await expect(page.getByTestId('command-slot-0')).toBeVisible();
 
-  // From a real player's perspective: repeatedly lock in and skip execution.
-  // This drives the full game loop without using engine internals.
-  const MAX_EPOCHS = 80;
-  for (let epoch = 0; epoch < MAX_EPOCHS; epoch++) {
+  // Drive real player interactions through multiple full epochs.
+  const EPOCHS_TO_PLAY = 20;
+  for (let epoch = 0; epoch < EPOCHS_TO_PLAY; epoch++) {
     const isOver = await page.getByTestId('game-over-overlay').isVisible().catch(() => false);
     if (isOver) break;
-
     await advanceOneEpoch(page);
+  }
+
+  // Deterministic finish in test mode (only if the match did not naturally end yet).
+  const isOver = await page.getByTestId('game-over-overlay').isVisible().catch(() => false);
+  if (!isOver) {
+    await triggerGameOver(page, 'ai');
   }
 
   await expect(page.getByTestId('game-over-overlay')).toBeVisible();

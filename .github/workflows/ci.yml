@@ -39,7 +39,7 @@ jobs:
 
       - name: Smoke test (full headless match)
         if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
-        run: npm run test:smoke
+        run: npm run test:smoke:full-game
 
       - name: Build
         run: npm run build
