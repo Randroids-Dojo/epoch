@@ -160,33 +160,35 @@ export default function Minimap({ gameState, cameraSnapshot, isMobile, onRecente
   return (
     <div
       data-testid="minimap"
-      className={`absolute z-10 ${isMobile ? 'bottom-16 left-3' : 'right-4 top-4'}`}
+      className={`absolute z-10 ${isMobile ? 'bottom-16 left-3' : 'right-4 top-8'}`}
     >
-      <div className="relative rounded border border-slate-700 bg-slate-950/85 p-2 shadow-lg backdrop-blur-sm">
-        <canvas
-          ref={canvasRef}
-          data-testid="minimap-canvas"
-          className="block h-[120px] w-[160px] cursor-pointer touch-none rounded-sm"
-          onClick={(e) => handleMiniPointer(e.clientX, e.clientY)}
-          onTouchStart={(e) => {
-            if (e.touches.length > 0) {
-              handleMiniPointer(e.touches[0].clientX, e.touches[0].clientY);
-            }
-          }}
-        />
-        {viewportRect && (
-          <div
-            data-testid="minimap-viewport"
-            className="pointer-events-none absolute border border-cyan-300/90"
-            style={{
-              left: `${viewportRect.left + 8}px`,
-              top: `${viewportRect.top + 8}px`,
-              width: `${Math.max(6, viewportRect.width)}px`,
-              height: `${Math.max(6, viewportRect.height)}px`,
-              boxShadow: '0 0 0 1px rgba(0,0,0,0.45) inset',
+      <div className="relative">
+        <div className="overflow-hidden rounded border border-slate-700 bg-slate-950/85 p-2 shadow-lg backdrop-blur-sm">
+          <canvas
+            ref={canvasRef}
+            data-testid="minimap-canvas"
+            className="block h-[120px] w-[160px] cursor-pointer touch-none rounded-sm"
+            onClick={(e) => handleMiniPointer(e.clientX, e.clientY)}
+            onTouchStart={(e) => {
+              if (e.touches.length > 0) {
+                handleMiniPointer(e.touches[0].clientX, e.touches[0].clientY);
+              }
             }}
           />
-        )}
+          {viewportRect && (
+            <div
+              data-testid="minimap-viewport"
+              className="pointer-events-none absolute border border-cyan-300/90"
+              style={{
+                left: `${viewportRect.left + 8}px`,
+                top: `${viewportRect.top + 8}px`,
+                width: `${Math.max(6, viewportRect.width)}px`,
+                height: `${Math.max(6, viewportRect.height)}px`,
+                boxShadow: '0 0 0 1px rgba(0,0,0,0.45) inset',
+              }}
+            />
+          )}
+        </div>
         <button
           type="button"
           data-testid="minimap-home"
