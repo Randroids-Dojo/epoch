@@ -442,8 +442,8 @@ export default function GameCanvas({
         </div>
       )}
 
-      {/* Controls hint — hidden on small screens */}
-      <div
+      {/* Controls hint — hidden on small screens and during execution */}
+      {!animation && <div
         className="pointer-events-none absolute left-4 top-4 hidden rounded border border-slate-700 px-3 py-2 font-mono text-xs sm:block"
         style={{ background: 'rgba(10,14,26,0.85)', color: '#475569' }}
       >
@@ -452,7 +452,7 @@ export default function GameCanvas({
         <div>Home — snap to base</div>
         {mode.kind === 'idle' && <div>Click hex — inspect</div>}
         {mode.kind === 'targeting' && <div style={{ color: '#00d4ff' }}>Tap target hex</div>}
-      </div>
+      </div>}
     </div>
   );
 }

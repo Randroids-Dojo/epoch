@@ -183,13 +183,57 @@ export default function GameView() {
 
   const slotDims = isMobile ? SLOT_LAYOUT.MOBILE : SLOT_LAYOUT.DESKTOP;
 
-  // ── Test hook used by Playwright win-condition specs ───────────────────────
+  // ── Test hooks used by Playwright specs ────────────────────────────────────
   useEffect(() => {
-    (window as Window & { __triggerGameOver?: (winner: PlayerId) => void }).__triggerGameOver =
-      (winner: PlayerId) => {
-        animationRef.current = null;
-        setGameState((s) => ({ ...s, phase: 'over', winner }));
+    type W = Window & {
+      __triggerGameOver?: (winner: PlayerId) => void;
+      __getEligibleTargets?: (type: string) => Array<{ q: number; r: number }>;
+      __getGameSnapshot?: () => {
+        phase: string; epoch: number; winner: string | null;
+        resources: { cc: number; fx: number; te: number };
+        playerStart: { q: number; r: number };
+        aiStart: { q: number; r: number };
+        playerStructureTypes: string[];
       };
+    };
+    const w = window as W;
+
+    w.__triggerGameOver = (winner) => {
+      animationRef.current = null;
+      setGameState((s) => ({ ...s, phase: 'over', winner }));
+    };
+
+    w.__getEligibleTargets = (type) => {
+      const s = gameStateRef.current;
+      if (type === 'build') {
+        return [...computeEligibleBuildHexes(s)].map(key => {
+          const h = s.map.cells.get(key)!.hex;
+          return { q: h.q, r: h.r };
+        });
+      }
+      if (['move', 'attack', 'gather'].includes(type)) {
+        return [...computeEligibleHexes(s, type as TargetingCommandType)].map(key => {
+          const h = s.map.cells.get(key)!.hex;
+          return { q: h.q, r: h.r };
+        });
+      }
+      return [];
+    };
+
+    w.__getGameSnapshot = () => {
+      const s = gameStateRef.current;
+      return {
+        phase: s.phase,
+        epoch: s.epoch,
+        winner: s.winner,
+        resources: { ...s.players.player.resources },
+        playerStart: { q: s.map.playerStart.q, r: s.map.playerStart.r },
+        aiStart: { q: s.map.aiStart.q, r: s.map.aiStart.r },
+        playerStructureTypes: [...s.structures.values()]
+          .filter(st => st.owner === 'player')
+          .map(st => st.type),
+      };
+    };
   }, []);
 
   // ── handleResolve ─────────────────────────────────────────────────────────
