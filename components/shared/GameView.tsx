@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GameState, createInitialState, findNexus } from '@/engine/state';
 import { resolveEpoch } from '@/engine/resolution';
-import { Hex, hexKey } from '@/engine/hex';
+import { Hex, hexKey, hexToPixel } from '@/engine/hex';
+import { BASE_HEX_SIZE } from '@/renderer/drawHex';
 import { Command, TEMPORAL_ECHO_COST } from '@/engine/commands';
 import {
   getFirstEligibleUnit,
@@ -24,10 +25,12 @@ import {
 } from '@/renderer/animation';
 import { audioEngine } from '@/audio/engine';
 import GameCanvas from './GameCanvas';
+import { CameraSnapshot } from './GameCanvas';
 import PlanningBar from '../hud/PlanningBar';
 import CommandTray from '../hud/CommandTray';
 import CommandPicker from '../hud/CommandPicker';
 import ExecutionOverlay from '../hud/ExecutionOverlay';
+import Minimap from '../hud/Minimap';
 
 const PLANNING_DURATION = GAME_CONSTANTS.PLANNING_PHASE_DURATION_MS / 1000;
 const BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks', 'tech_lab', 'watchtower'];
@@ -39,6 +42,9 @@ export default function GameView() {
   const [lockInFlash, setLockInFlash] = useState(false);
   const [animElapsed, setAnimElapsed] = useState(0);
   const [isMobile, setIsMobile] = useState(false); // default desktop; corrected after mount
+  const [cameraSnapshot, setCameraSnapshot] = useState<CameraSnapshot | null>(null);
+  const [centerRequest, setCenterRequest] = useState<{ nonce: number; worldX: number; worldY: number } | null>(null);
+  const centerNonceRef = useRef(0);
 
   // Stable refs so callbacks always see the latest values.
   const gameStateRef = useRef(gameState);
@@ -163,13 +169,11 @@ export default function GameView() {
 
   // ── Dev-only test hook ────────────────────────────────────────────────────
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      (window as Window & { __triggerGameOver?: (winner: PlayerId) => void }).__triggerGameOver =
-        (winner: PlayerId) => {
-          animationRef.current = null;
-          setGameState((s) => ({ ...s, phase: 'over', winner }));
-        };
-    }
+    (window as Window & { __triggerGameOver?: (winner: PlayerId) => void }).__triggerGameOver =
+      (winner: PlayerId) => {
+        animationRef.current = null;
+        setGameState((s) => ({ ...s, phase: 'over', winner }));
+      };
   }, []);
 
   // ── handleResolve ─────────────────────────────────────────────────────────
@@ -255,6 +259,17 @@ export default function GameView() {
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
   }, []);
+
+  const queueRecenter = useCallback((worldX: number, worldY: number) => {
+    centerNonceRef.current += 1;
+    setCenterRequest({ nonce: centerNonceRef.current, worldX, worldY });
+  }, []);
+
+  const handleSnapHome = useCallback(() => {
+    const home = gameStateRef.current.map.playerStart;
+    const wp = hexToPixel(home, BASE_HEX_SIZE);
+    queueRecenter(wp.x, wp.y);
+  }, [queueRecenter]);
 
   // ── Lock-in ───────────────────────────────────────────────────────────────
   const handleLockIn = useCallback(() => {
@@ -487,6 +502,16 @@ export default function GameView() {
           animation={animationRef.current}
           echoCommands={echoCommands}
           onHexClick={handleHexClick}
+          onCameraChange={setCameraSnapshot}
+          centerRequest={centerRequest}
+        />
+
+        <Minimap
+          gameState={gameState}
+          cameraSnapshot={cameraSnapshot}
+          isMobile={isMobile}
+          onRecenter={queueRecenter}
+          onSnapHome={handleSnapHome}
         />
 
         {/* Command picker floats above the tray */}
