@@ -91,7 +91,7 @@ test('build flow: choose structure, target hex, then clear command', async ({ pa
   const targetHex = eligibleHexes[0];
   expect(targetHex).toBeDefined();
 
-  const canvas = page.locator('canvas');
+  const canvas = page.getByTestId('game-canvas');
   await expect(canvas).toBeVisible();
   const box = await canvas.boundingBox();
   expect(box).not.toBeNull();

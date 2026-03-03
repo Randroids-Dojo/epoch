@@ -8,6 +8,14 @@ export type InteractionMode =
   | { kind: 'idle' }
   | { kind: 'slot_selected'; slotIndex: number }
   | { kind: 'picker_open'; slotIndex: number }
+
+  | {
+      kind: 'train_picker';
+      slotIndex: number;
+      structureId: string;
+      structureHex: { q: number; r: number };
+      failureFeedback: string | null;
+    }
   | {
       kind: 'targeting';
       slotIndex: number;

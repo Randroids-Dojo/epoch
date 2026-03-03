@@ -13,5 +13,7 @@ if (!existsSync('./node_modules')) {
   process.exit(0)
 }
 
-const cmd = process.argv.slice(2).join(' ')
+const cmd = process.argv.slice(2)
+  .map(arg => /\s/.test(arg) ? `'${arg.replace(/'/g, "'\\''")}'` : arg)
+  .join(' ')
 execSync(cmd, { stdio: 'inherit' })

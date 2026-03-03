@@ -5,7 +5,7 @@ import { GameState, createInitialState, findNexus } from '@/engine/state';
 import { resolveEpoch } from '@/engine/resolution';
 import { Hex, hexKey, hexToPixel } from '@/engine/hex';
 import { BASE_HEX_SIZE } from '@/renderer/drawHex';
-import { Command, TEMPORAL_ECHO_COST } from '@/engine/commands';
+import { Command, TEMPORAL_ECHO_COST, TrainCommand } from '@/engine/commands';
 import {
   getFirstEligibleUnit,
   computeEligibleHexes,
@@ -17,6 +17,8 @@ import { generateAICommands } from '@/engine/ai';
 import { PlayerId } from '@/engine/player';
 import { COLORS, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
 import { InteractionMode } from '@/lib/types';
+import { UnitType, UNIT_DEFS } from '@/engine/units';
+import { getPlayerTrainEligibility, getTrainFailureReason } from './trainFlow';
 import {
   ExecutionAnimation, UnitSnapshot, StructSnapshot,
   buildAnimationTimeline, TOTAL_DURATION,
@@ -34,6 +36,7 @@ import Minimap from '../hud/Minimap';
 
 const PLANNING_DURATION = GAME_CONSTANTS.PLANNING_PHASE_DURATION_MS / 1000;
 const BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks', 'tech_lab', 'watchtower'];
+
 
 export default function GameView() {
   const [gameState, setGameState]   = useState<GameState>(() => createInitialState(42));
@@ -55,6 +58,19 @@ export default function GameView() {
 
   const timeLeftRef = useRef(timeLeft);
   timeLeftRef.current = timeLeft;
+
+  useEffect(() => {
+    const testMutator = (window as Window & {
+      __EPOCH_TEST_MUTATOR__?: (state: GameState) => void;
+    }).__EPOCH_TEST_MUTATOR__;
+
+    if (!testMutator) return;
+
+    const patchedState = createInitialState(42);
+    testMutator(patchedState);
+    setGameState({ ...patchedState });
+    setMode({ kind: 'idle' });
+  }, []);
 
   const lockedIn = gameState.players.player.lockedIn;
   const playerNexusHp = useMemo(() => findNexus(gameState, 'player')?.hp ?? 0, [gameState]);
@@ -167,7 +183,7 @@ export default function GameView() {
 
   const slotDims = isMobile ? SLOT_LAYOUT.MOBILE : SLOT_LAYOUT.DESKTOP;
 
-  // ── Dev-only test hook ────────────────────────────────────────────────────
+  // ── Test hook used by Playwright win-condition specs ───────────────────────
   useEffect(() => {
     (window as Window & { __triggerGameOver?: (winner: PlayerId) => void }).__triggerGameOver =
       (winner: PlayerId) => {
@@ -369,6 +385,45 @@ export default function GameView() {
       return;
     }
 
+    if (type === 'train') {
+      const eligible = getPlayerTrainEligibility(state);
+      if (eligible.length === 0) {
+        setMode({
+          kind: 'train_picker',
+          slotIndex,
+          structureId: '',
+          structureHex: { q: 0, r: 0 },
+          failureFeedback: 'Train requires a completed Barracks.',
+        });
+        return;
+      }
+
+      const withSpawn = eligible.find((entry) => entry.hasSpawnSpace) ?? eligible[0];
+      const selectedStructure = state.structures.get(withSpawn.structureId);
+      if (!selectedStructure) {
+        setMode({ kind: 'idle' });
+        return;
+      }
+
+      const minTrainCost = Math.min(
+        UNIT_DEFS.drone.costCC,
+        UNIT_DEFS.pulse_sentry.costCC,
+        UNIT_DEFS.arc_ranger.costCC,
+      );
+      const lowResourceFeedback = state.players.player.resources.cc < minTrainCost
+        ? 'Not enough CC to train any unit.'
+        : null;
+
+      setMode({
+        kind: 'train_picker',
+        slotIndex,
+        structureId: selectedStructure.id,
+        structureHex: selectedStructure.hex,
+        failureFeedback: withSpawn.hasSpawnSpace ? lowResourceFeedback : 'Train failed: barracks spawn is blocked.',
+      });
+      return;
+    }
+
     setMode({ kind: 'idle' });
   }, []);
 
@@ -383,6 +438,31 @@ export default function GameView() {
       structureType,
       eligibleKeys,
     });
+  }, []);
+
+  const handleTrainPick = useCallback((unitType: UnitType) => {
+    const m = modeRef.current;
+    if (m.kind !== 'train_picker') return;
+
+    const state = gameStateRef.current;
+    const failureFeedback = getTrainFailureReason(state, unitType);
+    if (failureFeedback) {
+      setMode({ ...m, failureFeedback });
+      return;
+    }
+
+    const newCmd: TrainCommand = {
+      type: 'train',
+      structureId: m.structureId,
+      unitType,
+    };
+
+    const newCommands = [...state.players.player.commands];
+    newCommands[m.slotIndex] = newCmd;
+    state.players.player.commands = newCommands;
+    setGameState({ ...state });
+    setMode({ kind: 'idle' });
+    audioEngine.playFillSlot(m.slotIndex);
   }, []);
 
   // ── Hex click from canvas ─────────────────────────────────────────────────
@@ -483,6 +563,11 @@ export default function GameView() {
   const hasEcho = gameState.players.player.commands.some((c) => c?.type === 'temporal');
   const echoCommands = hasEcho ? gameState.prevEpochCommands.ai : null;
 
+  const getTrainStructureLabel = useCallback((modeValue: InteractionMode): string | undefined => {
+    if (modeValue.kind !== 'train_picker') return undefined;
+    return `Barracks (${modeValue.structureHex.q},${modeValue.structureHex.r})`;
+  }, []);
+
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden">
       {gameState.phase !== 'over' && (
@@ -515,7 +600,7 @@ export default function GameView() {
         />
 
         {/* Command picker floats above the tray */}
-        {mode.kind === 'picker_open' && !isExecuting && (
+        {(mode.kind === 'picker_open' || mode.kind === 'train_picker') && !isExecuting && (
           <CommandPicker
             slotIndex={mode.slotIndex}
             left={Math.min(
@@ -523,7 +608,12 @@ export default function GameView() {
               window.innerWidth - 148,
             )}
             playerTE={gameState.players.player.resources.te}
+            playerCC={gameState.players.player.resources.cc}
+            mode={mode.kind === 'train_picker' ? 'train' : 'command'}
+            trainStructureLabel={getTrainStructureLabel(mode)}
+            feedback={mode.kind === 'train_picker' ? mode.failureFeedback : null}
             onSelect={handleCommandPick}
+            onTrainSelect={handleTrainPick}
             onClose={() => setMode({ kind: 'idle' })}
           />
         )}
@@ -611,7 +701,7 @@ export default function GameView() {
         <CommandTray
           commands={gameState.players.player.commands}
           selectedSlot={
-            mode.kind === 'slot_selected' || mode.kind === 'picker_open' || mode.kind === 'build_select' || mode.kind === 'build_targeting'
+            mode.kind === 'slot_selected' || mode.kind === 'picker_open' || mode.kind === 'build_select' || mode.kind === 'build_targeting' || mode.kind === 'train_picker'
               ? mode.slotIndex
               : null
           }

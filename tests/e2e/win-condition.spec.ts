@@ -2,13 +2,9 @@ import { test, expect, Page } from '@playwright/test';
 import { PlayerId } from '@/engine/player';
 
 async function triggerGameOver(page: Page, winner: PlayerId): Promise<void> {
-  await expect
-    .poll(async () => {
-      return page.evaluate(() => {
-        return typeof (window as Window & { __triggerGameOver?: unknown }).__triggerGameOver === 'function';
-      });
-    }, { timeout: 5000 })
-    .toBe(true);
+  await page.waitForFunction(() => {
+    return typeof (window as Window & { __triggerGameOver?: unknown }).__triggerGameOver === 'function';
+  });
 
   await page.evaluate((w) => {
     (window as Window & { __triggerGameOver?: (winner: PlayerId) => void }).__triggerGameOver?.(w);
