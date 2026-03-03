@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { GameState, createInitialState } from '@/engine/state';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { GameState, createInitialState, findNexus } from '@/engine/state';
 import { resolveEpoch } from '@/engine/resolution';
 import { Hex, hexKey } from '@/engine/hex';
 import { Command, TEMPORAL_ECHO_COST } from '@/engine/commands';
@@ -13,7 +13,10 @@ import { InteractionMode } from '@/lib/types';
 import {
   ExecutionAnimation, UnitSnapshot, StructSnapshot,
   buildAnimationTimeline, TOTAL_DURATION,
+  PHASE_MOVE, PHASE_ATTACK, PHASE_BUILD,
+  categorizeLogEntry,
 } from '@/renderer/animation';
+import { audioEngine } from '@/audio/engine';
 import GameCanvas from './GameCanvas';
 import PlanningBar from '../hud/PlanningBar';
 import CommandTray from '../hud/CommandTray';
@@ -37,7 +40,11 @@ export default function GameView() {
   const modeRef = useRef<InteractionMode>(mode);
   modeRef.current = mode;
 
+  const timeLeftRef = useRef(timeLeft);
+  timeLeftRef.current = timeLeft;
+
   const lockedIn = gameState.players.player.lockedIn;
+  const playerNexusHp = useMemo(() => findNexus(gameState, 'player')?.hp ?? 0, [gameState]);
 
   // ── Execution animation ref ───────────────────────────────────────────────
   const animationRef = useRef<ExecutionAnimation | null>(null);
@@ -59,6 +66,83 @@ export default function GameView() {
   }, []);
 
   finishExecutionRef.current = finishExecution;
+
+  // ── Audio ─────────────────────────────────────────────────────────────────
+  // Track which execution-phase sounds have fired for the current animation.
+  const execSoundsRef = useRef({ move: false, attack: false, build: false });
+
+  // Init AudioContext on first user interaction (browser policy requirement).
+  useEffect(() => {
+    const init = () => audioEngine.init();
+    window.addEventListener('click', init, { once: true });
+    window.addEventListener('touchstart', init, { once: true });
+    return () => {
+      window.removeEventListener('click', init);
+      window.removeEventListener('touchstart', init);
+    };
+  }, []);
+
+  // Update ambient drone based on game state.
+  useEffect(() => {
+    if (gameState.phase === 'execution') {
+      audioEngine.setAmbient('execution');
+    } else if (playerNexusHp > 0 && playerNexusHp < 50) {
+      audioEngine.setAmbient('late');
+    } else if (timeLeft <= 10 && !lockedIn && gameState.phase === 'planning') {
+      audioEngine.setAmbient('tense');
+    } else {
+      audioEngine.setAmbient('planning');
+    }
+  }, [gameState.phase, playerNexusHp, timeLeft, lockedIn]);
+
+  // Timer warning and critical sounds.
+  useEffect(() => {
+    if (gameState.phase !== 'planning' || lockedIn) return;
+    if (timeLeft === 5) audioEngine.playTimerWarning();
+    if (timeLeft >= 1 && timeLeft <= 3) audioEngine.playTimerCritical(timeLeft);
+  }, [timeLeft, gameState.phase, lockedIn]);
+
+  // Execution-phase sounds — fire once per animation phase.
+  useEffect(() => {
+    const anim = animationRef.current;
+    if (!anim) return;
+    const sounds = execSoundsRef.current;
+
+    if (animElapsed >= PHASE_MOVE.start && !sounds.move) {
+      sounds.move = true;
+      let moves = 0;
+      for (const u of anim.units.values()) {
+        if (u.fromPixel.x !== u.toPixel.x || u.fromPixel.y !== u.toPixel.y) moves++;
+      }
+      for (let i = 0; i < Math.min(moves, 3); i++) {
+        setTimeout(() => audioEngine.playMoveTick(), i * 180);
+      }
+    }
+
+    if (animElapsed >= PHASE_ATTACK.start && !sounds.attack) {
+      sounds.attack = true;
+      const hasAttack = anim.eventLog.some((e) => categorizeLogEntry(e) === 'attack');
+      let hasDamage = false;
+      for (const u of anim.units.values()) {
+        if (u.newHp < u.oldHp) { hasDamage = true; break; }
+      }
+      const hasDestroy = anim.destroyedUnits.length > 0;
+      if (hasAttack) audioEngine.playMeleeAttack();
+      if (hasDamage) setTimeout(() => audioEngine.playDamageTaken(), 100);
+      if (hasDestroy) setTimeout(() => audioEngine.playUnitDestroyed(), 200);
+    }
+
+    if (animElapsed >= PHASE_BUILD.start && !sounds.build) {
+      sounds.build = true;
+      let hasBuilt = false;
+      for (const s of anim.structures.values()) {
+        if (s.wasBuilt) { hasBuilt = true; break; }
+      }
+      const hasGather = anim.eventLog.some((e) => e.includes('yields'));
+      if (hasBuilt) audioEngine.playStructureCompleted();
+      if (hasGather) setTimeout(() => audioEngine.playResourceGathered(), 80);
+    }
+  }, [animElapsed]);
 
   // ── Viewport tracking for responsive layout ───────────────────────────────
   useEffect(() => {
@@ -107,6 +191,10 @@ export default function GameView() {
     // Build animation timeline from diff.
     const anim = buildAnimationTimeline(unitSnaps, structSnaps, state);
     animationRef.current = anim;
+
+    // Reset per-animation sound flags and fire transition sound.
+    execSoundsRef.current = { move: false, attack: false, build: false };
+    audioEngine.playEpochTransition();
 
     setMode({ kind: 'idle' });
     setGameState({ ...state });
@@ -165,10 +253,12 @@ export default function GameView() {
   const handleLockIn = useCallback(() => {
     const state = gameStateRef.current;
     if (state.players.player.lockedIn) return;
+    const earlyBonus = timeLeftRef.current > 0;
     state.players.player.lockedIn = true;
     setGameState({ ...state });
     setLockInFlash(true);
     setTimeout(() => setLockInFlash(false), 500);
+    audioEngine.playLockIn(earlyBonus);
     // Brief delay so the LOCKED state renders before resolution.
     setTimeout(() => handleResolveRef.current(), 800);
   }, []);
@@ -203,6 +293,7 @@ export default function GameView() {
     state.players.player.commands = newCommands;
     setGameState({ ...state });
     setMode({ kind: 'idle' });
+    audioEngine.playClearSlot();
   }, []);
 
   // ── Command picker selection ──────────────────────────────────────────────
@@ -219,6 +310,7 @@ export default function GameView() {
       state.players.player.commands = newCommands;
       setGameState({ ...state });
       setMode({ kind: 'idle' });
+      audioEngine.playTemporalEcho();
       return;
     }
 
@@ -231,6 +323,7 @@ export default function GameView() {
       state.players.player.commands = newCommands;
       setGameState({ ...state });
       setMode({ kind: 'idle' });
+      audioEngine.playFillSlot(slotIndex);
       return;
     }
 
@@ -281,6 +374,7 @@ export default function GameView() {
     state.players.player.commands = newCommands;
     setGameState({ ...state });
     setMode({ kind: 'idle' });
+    audioEngine.playFillSlot(slotIndex);
   }, []);
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
