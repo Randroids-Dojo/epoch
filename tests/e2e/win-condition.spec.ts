@@ -2,9 +2,13 @@ import { test, expect, Page } from '@playwright/test';
 import { PlayerId } from '@/engine/player';
 
 async function triggerGameOver(page: Page, winner: PlayerId): Promise<void> {
-  await page.waitForFunction(() => {
-    return typeof (window as Window & { __triggerGameOver?: unknown }).__triggerGameOver === 'function';
-  });
+  await expect
+    .poll(async () => {
+      return page.evaluate(() => {
+        return typeof (window as Window & { __triggerGameOver?: unknown }).__triggerGameOver === 'function';
+      });
+    }, { timeout: 5000 })
+    .toBe(true);
 
   await page.evaluate((w) => {
     (window as Window & { __triggerGameOver?: (winner: PlayerId) => void }).__triggerGameOver?.(w);
@@ -42,9 +46,11 @@ test('command tray is hidden when game is over', async ({ page }) => {
 
 test('Play Again resets to planning phase', async ({ page }) => {
   await page.goto('/');
-  await triggerGameOver(page, 'player');
+  await triggerGameOver(page, 'ai');
   await expect(page.getByTestId('game-over-overlay')).toBeVisible();
+
   await page.getByTestId('play-again-btn').click();
+
   await expect(page.getByTestId('game-over-overlay')).not.toBeVisible();
   await expect(page.getByTestId('command-slot-0')).toBeVisible();
 });
