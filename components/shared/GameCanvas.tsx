@@ -107,7 +107,7 @@ export default function GameCanvas({ gameState, mode, animation, echoCommands, o
     }
 
     // ── Targeting overlay ────────────────────────────────────────────────────
-    if (m.kind === 'targeting') {
+    if (m.kind === 'targeting' || m.kind === 'build_targeting') {
       drawTargetingOverlay(ctx, map.cells, m.eligibleKeys, cam);
     }
 
