@@ -64,4 +64,6 @@ export interface Unit {
   isDefending: boolean;
   /** ID of the Crystal Extractor this Drone is assigned to, if any. */
   assignedExtractorId: string | null;
+  /** True if this unit has a Chrono Shift damage shield (absorbs all damage this epoch). */
+  damageShield: boolean;
 }

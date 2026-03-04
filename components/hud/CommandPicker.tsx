@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { CommandType, TEMPORAL_ECHO_COST } from '@/engine/commands';
+import { CommandType, CHRONO_SHIFT_COST, TEMPORAL_ECHO_COST } from '@/engine/commands';
 import { UnitType, UNIT_DEFS } from '@/engine/units';
 import { TRAINABLE_UNIT_TYPES } from '@/components/shared/trainFlow';
 
@@ -14,6 +14,8 @@ interface CommandPickerProps {
   playerTechTier: number;
   researchEpochsLeft: number;
   hasCompletedTechLab: boolean;
+  /** True if at least one player unit has a 2-epoch snapshot (Chrono Shift target available). */
+  canChronoShift: boolean;
   mode?: 'command' | 'train';
   trainStructureLabel?: string;
   feedback?: string | null;
@@ -61,6 +63,7 @@ export default function CommandPicker(props: CommandPickerProps) {
     playerTechTier,
     researchEpochsLeft,
     hasCompletedTechLab,
+    canChronoShift,
     mode = 'command',
     trainStructureLabel,
     feedback,
@@ -79,6 +82,15 @@ export default function CommandPicker(props: CommandPickerProps) {
         ? `Researching… ${researchEpochsLeft} ep left`
         : undefined;
 
+  const chronoShiftEnabled = playerTechTier >= 1 && playerTE >= CHRONO_SHIFT_COST && canChronoShift;
+  const chronoShiftDisabledReason: string | undefined = playerTechTier < 1
+    ? 'Requires Tech Tier 1'
+    : playerTE < CHRONO_SHIFT_COST
+      ? `Need ${CHRONO_SHIFT_COST} TE`
+      : !canChronoShift
+        ? 'No unit has 2-epoch history'
+        : undefined;
+
   const entries: PickerEntry[] = [
     { type: 'move',     label: 'Move',     shortcut: 'M', enabled: true },
     { type: 'attack',   label: 'Attack',   shortcut: 'A', enabled: true },
@@ -92,6 +104,14 @@ export default function CommandPicker(props: CommandPickerProps) {
       shortcut: 'E',
       cost: `${TEMPORAL_ECHO_COST}TE`,
       enabled: playerTE >= TEMPORAL_ECHO_COST,
+    },
+    {
+      type: 'chrono_shift',
+      label: 'Shift',
+      shortcut: 'S',
+      cost: `${CHRONO_SHIFT_COST}TE`,
+      enabled: chronoShiftEnabled,
+      disabledReason: chronoShiftDisabledReason,
     },
     {
       type: 'research',

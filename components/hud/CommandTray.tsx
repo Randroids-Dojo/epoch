@@ -16,14 +16,15 @@ interface CommandTrayProps {
 
 /** Two-letter code shown on a filled command slot. */
 const TYPE_CODE: Record<string, string> = {
-  move:     'MV',
-  attack:   'AT',
-  gather:   'GR',
-  defend:   'DF',
-  build:    'BD',
-  train:    'TR',
-  temporal: 'TM',
-  research: 'RS',
+  move:          'MV',
+  attack:        'AT',
+  gather:        'GR',
+  defend:        'DF',
+  build:         'BD',
+  train:         'TR',
+  temporal:      'TM',
+  chrono_shift:  'SH',
+  research:      'RS',
 };
 
 /** Short description of the command target. */
@@ -41,6 +42,8 @@ function cmdLabel(cmd: Command): string {
       return `${cmd.unitType}@${cmd.structureId.slice(-3)}`;
     case 'temporal':
       return 'ECHO';
+    case 'chrono_shift':
+      return 'SHIFT';
     case 'research':
       return 'TECH';
   }

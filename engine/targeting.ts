@@ -1,10 +1,10 @@
-import { GameState } from './state';
+import { GameState, getOldestSnapshot } from './state';
 import { Unit, UNIT_DEFS } from './units';
 import { hexKey } from './hex';
 import { TERRAIN } from './terrain';
 import { StructureType, isComplete, isHarvestable } from './structures';
 
-export type TargetingCommandType = 'move' | 'attack' | 'gather' | 'defend';
+export type TargetingCommandType = 'move' | 'attack' | 'gather' | 'defend' | 'chrono_shift';
 export type BuildStructureType = Exclude<StructureType, 'command_nexus'>;
 
 /** Returns the first player-owned unit eligible for the given command type. */
@@ -16,6 +16,10 @@ export function getFirstEligibleUnit(
     if (unit.owner !== 'player') continue;
     if (type === 'attack' && UNIT_DEFS[unit.type].range === 0) continue;
     if (type === 'gather' && unit.type !== 'drone') continue;
+    if (type === 'chrono_shift') {
+      // Only units that have a snapshot from 2 epochs ago can be shifted.
+      if (!getOldestSnapshot(state)?.has(unit.id)) continue;
+    }
     return unit;
   }
   return undefined;
@@ -52,6 +56,19 @@ export function computeEligibleHexes(
         harvestableByHex.add(hexKey(s.hex));
       }
     }
+  }
+
+  // Chrono Shift: eligible hexes are the current hexes of player units that have a 2-epoch snapshot.
+  if (type === 'chrono_shift') {
+    const oldestSnapshot = getOldestSnapshot(state);
+    if (oldestSnapshot) {
+      for (const unit of state.units.values()) {
+        if (unit.owner === 'player' && oldestSnapshot.has(unit.id)) {
+          eligible.add(hexKey(unit.hex));
+        }
+      }
+    }
+    return eligible;
   }
 
   for (const [key, cell] of state.map.cells) {

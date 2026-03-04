@@ -95,6 +95,137 @@ describe('Temporal Echo — resolution', () => {
   });
 });
 
+describe('Chrono Shift — resolution', () => {
+  /** Run N epochs with no commands so unitHistory accumulates. Returns state in planning phase. */
+  function runIdleEpochs(n: number) {
+    const state = createInitialState(1);
+    state.players.player.resources.te = 10;
+    for (let i = 0; i < n; i++) {
+      state.phase = 'planning';
+      resolveEpoch(state);
+    }
+    state.phase = 'planning';
+    return state;
+  }
+
+  function getPlayerUnit(state: ReturnType<typeof createInitialState>) {
+    for (const u of state.units.values()) {
+      if (u.owner === 'player') return u;
+    }
+    return undefined;
+  }
+
+  it('unitHistory is empty before any epoch resolves', () => {
+    const state = createInitialState(1);
+    expect(state.unitHistory).toHaveLength(0);
+  });
+
+  it('unitHistory has 1 entry after 1 epoch', () => {
+    const state = runIdleEpochs(1);
+    expect(state.unitHistory).toHaveLength(1);
+  });
+
+  it('unitHistory has at most 2 entries after many epochs', () => {
+    const state = runIdleEpochs(5);
+    expect(state.unitHistory).toHaveLength(2);
+  });
+
+  it('deducts TE on successful shift', () => {
+    const state = runIdleEpochs(2);
+    state.players.player.resources.te = 8;
+    const unit = getPlayerUnit(state)!;
+
+    queueCommand(state, 'player', 0, {
+      type: 'chrono_shift',
+      unitId: unit.id,
+    });
+
+    resolveEpoch(state);
+
+    // 8 - 3 (cost) + 1 regen = 6
+    expect(state.players.player.resources.te).toBe(6);
+  });
+
+  it('restores unit to 2-epoch-ago position and HP on success', () => {
+    const state = createInitialState(1);
+    state.players.player.resources.te = 10;
+
+    // Epoch 1: idle, snapshots unit at initial hex.
+    resolveEpoch(state);
+    state.phase = 'planning';
+
+    const unit = getPlayerUnit(state)!;
+    const snapHex = { ...unit.hex };
+    const snapHp = unit.hp;
+
+    // Epoch 2: mutate unit state so Chrono Shift has something to revert.
+    unit.hex = { q: unit.hex.q + 1, r: unit.hex.r };
+    unit.hp = Math.max(1, unit.hp - 5);
+    resolveEpoch(state);
+    state.phase = 'planning';
+
+    // Epoch 3: queue Chrono Shift — should snap back to epoch-1 position.
+    queueCommand(state, 'player', 0, {
+      type: 'chrono_shift',
+      unitId: unit.id,
+    });
+
+    resolveEpoch(state);
+
+    const unitAfter = state.units.get(unit.id);
+    expect(unitAfter?.hex).toEqual(snapHex);
+    expect(unitAfter?.hp).toBe(snapHp);
+  });
+
+  it('fails and does not deduct TE when insufficient', () => {
+    const state = runIdleEpochs(2);
+    state.players.player.resources.te = 1; // below CHRONO_SHIFT_COST
+    const unit = getPlayerUnit(state)!;
+
+    queueCommand(state, 'player', 0, {
+      type: 'chrono_shift',
+      unitId: unit.id,
+    });
+
+    const log = resolveEpoch(state);
+
+    expect(log.some((l) => l.includes('Chrono Shift failed'))).toBe(true);
+    // TE: 1 (no deduction) + 1 regen = 2
+    expect(state.players.player.resources.te).toBe(2);
+  });
+
+  it('fails when unit has no 2-epoch history', () => {
+    const state = createInitialState(1);
+    state.players.player.resources.te = 10;
+    const unit = getPlayerUnit(state)!;
+
+    queueCommand(state, 'player', 0, {
+      type: 'chrono_shift',
+      unitId: unit.id,
+    });
+
+    const log = resolveEpoch(state);
+    expect(log.some((l) => l.includes('Chrono Shift failed'))).toBe(true);
+  });
+
+  it('damage shield is cleared at end of epoch (no attack)', () => {
+    const state = runIdleEpochs(2);
+    state.players.player.resources.te = 10;
+    const unit = getPlayerUnit(state)!;
+
+    queueCommand(state, 'player', 0, {
+      type: 'chrono_shift',
+      unitId: unit.id,
+    });
+
+    resolveEpoch(state);
+
+    // Post-resolution clears shield when no attack consumed it.
+    const unitAfter = state.units.get(unit.id);
+    expect(unitAfter?.damageShield).toBe(false);
+  });
+});
+
 describe('Temporal Echo — prevEpochCommands', () => {
   it('saves this epoch commands to prevEpochCommands after resolution', () => {
     const state = createInitialState(1);

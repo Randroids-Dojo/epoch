@@ -5,6 +5,12 @@ import { Unit, UNIT_DEFS } from './units';
 import { Structure, STRUCTURE_DEFS } from './structures';
 import { Command, CommandQueue, MAX_COMMAND_SLOTS } from './commands';
 
+/** Snapshot of a unit's hex and hp at the end of an epoch (for Chrono Shift). */
+export interface ChronoSnapshot {
+  hex: Hex;
+  hp: number;
+}
+
 export type GamePhase = 'planning' | 'execution' | 'transition' | 'over';
 
 export interface Resources {
@@ -38,6 +44,19 @@ export interface GameState {
   eventLog: string[];
   /** Commands each player queued in the previous epoch (for Temporal Echo). */
   prevEpochCommands: Record<PlayerId, Command[]>;
+  /**
+   * Rolling 2-epoch history of unit snapshots for Chrono Shift.
+   * Index 0 = oldest (2 epochs ago), index 1 = most recent (1 epoch ago).
+   * Empty until the second completed epoch.
+   */
+  unitHistory: Array<Map<string, ChronoSnapshot>>;
+}
+
+// ── Chrono Shift helpers ──────────────────────────────────────────────────────
+
+/** Returns the 2-epochs-ago snapshot map used by Chrono Shift, or undefined if unavailable. */
+export function getOldestSnapshot(state: GameState): Map<string, ChronoSnapshot> | undefined {
+  return state.unitHistory[0];
 }
 
 // ── ID generator ─────────────────────────────────────────────────────────────
@@ -91,6 +110,7 @@ export function createInitialState(seed?: number): GameState {
       hp:                  droneDef.maxHp,
       isDefending:         false,
       assignedExtractorId: null,
+      damageShield:        false,
     });
   }
 
@@ -103,6 +123,7 @@ export function createInitialState(seed?: number): GameState {
     winner: null,
     eventLog: [],
     prevEpochCommands: { player: [], ai: [] },
+    unitHistory: [],
     units,
     structures,
     players: {

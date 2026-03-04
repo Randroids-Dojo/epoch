@@ -20,11 +20,12 @@ import {
 } from './hex';
 import { TERRAIN } from './terrain';
 import {
-  GameState, findNexus, findUnitAt, findStructureAt, newId,
+  GameState, ChronoSnapshot, getOldestSnapshot, findNexus, findUnitAt, findStructureAt, newId,
 } from './state';
 import {
-  AttackCommand, BuildCommand, Command, DefendCommand,
-  GatherCommand, MoveCommand, ResearchCommand, TemporalCommand, TrainCommand,
+  AttackCommand, BuildCommand, ChronoShiftCommand, CHRONO_SHIFT_COST,
+  Command, DefendCommand, GatherCommand, MoveCommand, ResearchCommand,
+  TemporalCommand, TrainCommand,
 } from './commands';
 import { PlayerId, PLAYER_IDS, opponent } from './player';
 import { UNIT_DEFS } from './units';
@@ -137,9 +138,39 @@ function stepTemporal(state: GameState, commands: CommandEntry[], log: string[])
     player.resources.te -= command.teCost;
 
     if (command.ability === 'echo') {
-      // MVP: Temporal Echo effect is surfaced to the UI layer; resolution just logs it.
+      // Temporal Echo effect is surfaced to the UI layer; resolution just logs it.
       log.push(`${owner} used Temporal Echo (-${command.teCost} TE)`);
     }
+  }
+
+  const chronoShifts = commands.filter(
+    (e): e is { owner: PlayerId; command: ChronoShiftCommand } => e.command.type === 'chrono_shift',
+  );
+
+  for (const { owner, command } of chronoShifts) {
+    const player = state.players[owner];
+    if (player.resources.te < CHRONO_SHIFT_COST) {
+      log.push(`${owner} Chrono Shift failed — insufficient TE`);
+      continue;
+    }
+
+    const unit = state.units.get(command.unitId);
+    if (!unit || unit.owner !== owner) {
+      log.push(`${owner} Chrono Shift failed — unit not found`);
+      continue;
+    }
+
+    const snapshot = getOldestSnapshot(state)?.get(command.unitId);
+    if (!snapshot) {
+      log.push(`${owner} Chrono Shift failed — no history for unit`);
+      continue;
+    }
+
+    player.resources.te -= CHRONO_SHIFT_COST;
+    unit.hex = snapshot.hex;
+    unit.hp  = snapshot.hp;
+    unit.damageShield = true;
+    log.push(`${owner} ${unit.type} Chrono Shifted to (${snapshot.hex.q},${snapshot.hex.r}) (-${CHRONO_SHIFT_COST} TE) [shield active]`);
   }
 }
 
@@ -230,6 +261,11 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
   for (const [id, dmg] of unitDamage) {
     const unit = state.units.get(id);
     if (!unit) continue;
+    if (unit.damageShield) {
+      unit.damageShield = false;
+      log.push(`${unit.owner} ${unit.type} damage shield absorbed ${dmg} damage`);
+      continue;
+    }
     unit.hp -= dmg;
     if (unit.hp <= 0) {
       state.units.delete(id);
@@ -487,6 +523,7 @@ function stepTrain(state: GameState, commands: CommandEntry[], log: string[]): v
       hp:                  unitDef.maxHp,
       isDefending:         false,
       assignedExtractorId: null,
+      damageShield:        false,
     });
     log.push(`${owner} trained ${unitDef.label}`);
   }
@@ -506,6 +543,21 @@ function findSpawnHex(state: GameState, barracksHex: Hex): Hex | null {
 // ── Post-resolution ───────────────────────────────────────────────────────────
 
 function stepPostResolution(state: GameState): void {
+  // Single pass over all units: snapshot for Chrono Shift, clear damage shields, collect vision.
+  const snapshot = new Map<string, ChronoSnapshot>();
+  const visionSources: Array<{ hex: Hex; radius: number }> = [];
+  for (const unit of state.units.values()) {
+    snapshot.set(unit.id, { hex: unit.hex, hp: unit.hp });
+    unit.damageShield = false;
+    if (unit.owner === 'player') {
+      visionSources.push({ hex: unit.hex, radius: UNIT_DEFS[unit.type].visionRadius });
+    }
+  }
+
+  // Rolling 2-epoch window — push/shift avoids creating a spread+slice each epoch.
+  if (state.unitHistory.length >= 2) state.unitHistory.shift();
+  state.unitHistory.push(snapshot);
+
   for (const pid of PLAYER_IDS) {
     const p = state.players[pid];
     // Snapshot commands before clearing — used by Temporal Echo next epoch.
@@ -521,13 +573,7 @@ function stepPostResolution(state: GameState): void {
     p.lockedIn = false;
   }
 
-  // Recompute fog of war based on current unit + structure vision.
-  const visionSources: Array<{ hex: Hex; radius: number }> = [];
-  for (const unit of state.units.values()) {
-    if (unit.owner === 'player') {
-      visionSources.push({ hex: unit.hex, radius: UNIT_DEFS[unit.type].visionRadius });
-    }
-  }
+  // Recompute fog of war based on unit vision (collected above) + structure vision.
   for (const s of state.structures.values()) {
     if (s.owner === 'player' && isComplete(s)) {
       const def = STRUCTURE_DEFS[s.type];

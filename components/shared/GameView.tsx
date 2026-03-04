@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GameState, createInitialState, findNexus } from '@/engine/state';
+import { GameState, createInitialState, findNexus, getOldestSnapshot } from '@/engine/state';
 import { resolveEpoch } from '@/engine/resolution';
 import { Hex, hexKey, hexToPixel } from '@/engine/hex';
 import { BASE_HEX_SIZE } from '@/renderer/drawHex';
@@ -18,7 +18,7 @@ import { isComplete } from '@/engine/structures';
 import { PlayerId } from '@/engine/player';
 import { COLORS, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
 import { InteractionMode } from '@/lib/types';
-import { UnitType, UNIT_DEFS } from '@/engine/units';
+import { Unit, UnitType, UNIT_DEFS } from '@/engine/units';
 import { getPlayerTrainEligibility, getTrainFailureReason } from './trainFlow';
 import {
   ExecutionAnimation, UnitSnapshot, StructSnapshot,
@@ -85,6 +85,10 @@ export default function GameView() {
     return false;
   }, [gameState]);
   const buildOptions = playerTechTier >= 1 ? TIER1_BUILD_OPTIONS : BASE_BUILD_OPTIONS;
+  const canChronoShift = useMemo(
+    () => getFirstEligibleUnit(gameState, 'chrono_shift') !== undefined,
+    [gameState],
+  );
 
   // ── Execution animation ref ───────────────────────────────────────────────
   const animationRef = useRef<ExecutionAnimation | null>(null);
@@ -427,7 +431,7 @@ export default function GameView() {
       return;
     }
 
-    if (type === 'move' || type === 'attack' || type === 'gather') {
+    if (type === 'move' || type === 'attack' || type === 'gather' || type === 'chrono_shift') {
       const cmdType = type as TargetingCommandType;
       const unit    = getFirstEligibleUnit(state, cmdType);
       if (!unit) { setMode({ kind: 'idle' }); return; }
@@ -540,6 +544,18 @@ export default function GameView() {
         newCmd = { type: 'move', unitId: subjectUnitId, targetHex: hex };
       } else if (commandType === 'attack') {
         newCmd = { type: 'attack', unitId: subjectUnitId, targetHex: hex };
+      } else if (commandType === 'chrono_shift') {
+        // Find the specific player unit at this hex that has a 2-epoch snapshot.
+        // findUnitAt would return the wrong unit if two player units share a hex.
+        const snap = getOldestSnapshot(state);
+        let shiftTarget: Unit | undefined;
+        for (const u of state.units.values()) {
+          if (u.owner === 'player' && hexKey(u.hex) === key && snap?.has(u.id)) {
+            shiftTarget = u; break;
+          }
+        }
+        if (!shiftTarget) { setMode({ kind: 'idle' }); return; }
+        newCmd = { type: 'chrono_shift', unitId: shiftTarget.id };
       } else {
         newCmd = { type: 'gather', unitId: subjectUnitId, targetHex: hex };
       }
@@ -663,6 +679,7 @@ export default function GameView() {
             playerTechTier={playerTechTier}
             researchEpochsLeft={researchEpochsLeft}
             hasCompletedTechLab={hasCompletedTechLab}
+            canChronoShift={canChronoShift}
             mode={mode.kind === 'train_picker' ? 'train' : 'command'}
             trainStructureLabel={
               mode.kind === 'train_picker'

@@ -49,13 +49,24 @@ export interface DefendCommand {
 }
 
 export const TEMPORAL_ECHO_COST = 2;
+export const CHRONO_SHIFT_COST = 3;
 
-/** Activate a temporal ability (MVP: Temporal Echo only). */
+/** Activate a temporal ability (Echo or Chrono Shift). */
 export interface TemporalCommand {
   readonly type: 'temporal';
   readonly ability: 'echo';
   /** Cost deducted from TE at resolution time. */
   readonly teCost: number;
+}
+
+/**
+ * Rewind a selected unit to its position and HP from 2 epochs ago.
+ * The unit gains a damage shield (absorbs all damage this epoch) after shifting.
+ * Requires Tech Tier 1. Cost is always CHRONO_SHIFT_COST.
+ */
+export interface ChronoShiftCommand {
+  readonly type: 'chrono_shift';
+  readonly unitId: string;
 }
 
 /** Research the next tech tier at a completed Tech Lab. Takes 3 epochs. */
@@ -71,6 +82,7 @@ export type Command =
   | AttackCommand
   | DefendCommand
   | TemporalCommand
+  | ChronoShiftCommand
   | ResearchCommand;
 
 export type CommandType = Command['type'];

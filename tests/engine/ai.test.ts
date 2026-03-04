@@ -211,6 +211,7 @@ describe('generateAICommands — military', () => {
       hp: UNIT_DEFS.arc_ranger.maxHp,
       isDefending: false,
       assignedExtractorId: null,
+      damageShield: false,
     });
 
     // Place a player unit within range (3 hexes) and within AI vision.
@@ -224,6 +225,7 @@ describe('generateAICommands — military', () => {
       hp: UNIT_DEFS.drone.maxHp,
       isDefending: false,
       assignedExtractorId: null,
+      damageShield: false,
     });
 
     generateAICommands(state);
@@ -252,6 +254,7 @@ describe('generateAICommands — military', () => {
       hp: UNIT_DEFS.pulse_sentry.maxHp,
       isDefending: false,
       assignedExtractorId: null,
+      damageShield: false,
     });
 
     generateAICommands(state);
@@ -284,6 +287,7 @@ describe('generateAICommands — constraints', () => {
         hp: UNIT_DEFS.drone.maxHp,
         isDefending: false,
         assignedExtractorId: null,
+        damageShield: false,
       });
     }
 
