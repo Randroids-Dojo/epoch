@@ -23,6 +23,7 @@ const TYPE_CODE: Record<string, string> = {
   build:    'BD',
   train:    'TR',
   temporal: 'TM',
+  research: 'RS',
 };
 
 /** Short description of the command target. */
@@ -40,6 +41,8 @@ function cmdLabel(cmd: Command): string {
       return `${cmd.unitType}@${cmd.structureId.slice(-3)}`;
     case 'temporal':
       return 'ECHO';
+    case 'research':
+      return 'TECH';
   }
 }
 

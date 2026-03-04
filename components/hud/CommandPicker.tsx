@@ -1,14 +1,19 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { CommandType, TEMPORAL_ECHO_COST } from '@/engine/commands';
 import { UnitType, UNIT_DEFS } from '@/engine/units';
+import { TRAINABLE_UNIT_TYPES } from '@/components/shared/trainFlow';
 
 interface CommandPickerProps {
   slotIndex: number;
   left: number;
   playerTE: number;
   playerCC: number;
+  playerFX: number;
+  playerTechTier: number;
+  researchEpochsLeft: number;
+  hasCompletedTechLab: boolean;
   mode?: 'command' | 'train';
   trainStructureLabel?: string;
   feedback?: string | null;
@@ -23,9 +28,30 @@ interface PickerEntry {
   shortcut: string;
   cost?: string;
   enabled: boolean;
+  disabledReason?: string;
 }
 
 const TRAY_HEIGHT = 76;
+
+function pickerButtonStyle(enabled: boolean) {
+  return {
+    background: 'transparent',
+    border: 'none',
+    cursor: enabled ? 'pointer' : 'not-allowed',
+    color: enabled ? '#e2e8f0' : '#334155',
+    textAlign: 'left' as const,
+    fontFamily: 'inherit',
+    fontSize: 'inherit',
+    transition: 'background 0.12s ease',
+  };
+}
+
+function onPickerMouseEnter(e: React.MouseEvent<HTMLButtonElement>) {
+  if (!e.currentTarget.disabled) e.currentTarget.style.background = 'rgba(0,212,255,0.08)';
+}
+function onPickerMouseLeave(e: React.MouseEvent<HTMLButtonElement>) {
+  e.currentTarget.style.background = 'transparent';
+}
 
 export default function CommandPicker(props: CommandPickerProps) {
   const {
@@ -33,6 +59,10 @@ export default function CommandPicker(props: CommandPickerProps) {
     left,
     playerTE,
     playerCC,
+    playerFX,
+    playerTechTier,
+    researchEpochsLeft,
+    hasCompletedTechLab,
     mode = 'command',
     trainStructureLabel,
     feedback,
@@ -41,13 +71,23 @@ export default function CommandPicker(props: CommandPickerProps) {
     onClose,
   } = props;
 
+  const researchEnabled =
+    hasCompletedTechLab && playerTechTier < 3 && researchEpochsLeft === 0;
+  const researchDisabledReason = !hasCompletedTechLab
+    ? 'Requires a completed Tech Lab'
+    : playerTechTier >= 3
+      ? 'Already at max Tech Tier'
+      : researchEpochsLeft > 0
+        ? `Researching… ${researchEpochsLeft} ep left`
+        : undefined;
+
   const entries: PickerEntry[] = [
-    { type: 'move',     label: 'Move',         shortcut: 'M', enabled: true  },
-    { type: 'attack',   label: 'Attack',       shortcut: 'A', enabled: true  },
-    { type: 'gather',   label: 'Gather',       shortcut: 'G', enabled: true  },
-    { type: 'defend',   label: 'Defend',       shortcut: 'D', enabled: true  },
-    { type: 'build',    label: 'Build',        shortcut: 'B', enabled: true  },
-    { type: 'train',    label: 'Train',        shortcut: 'T', enabled: true  },
+    { type: 'move',     label: 'Move',     shortcut: 'M', enabled: true },
+    { type: 'attack',   label: 'Attack',   shortcut: 'A', enabled: true },
+    { type: 'gather',   label: 'Gather',   shortcut: 'G', enabled: true },
+    { type: 'defend',   label: 'Defend',   shortcut: 'D', enabled: true },
+    { type: 'build',    label: 'Build',    shortcut: 'B', enabled: true },
+    { type: 'train',    label: 'Train',    shortcut: 'T', enabled: true },
     {
       type: 'temporal',
       label: 'Echo',
@@ -55,12 +95,14 @@ export default function CommandPicker(props: CommandPickerProps) {
       cost: `${TEMPORAL_ECHO_COST}TE`,
       enabled: playerTE >= TEMPORAL_ECHO_COST,
     },
-  ];
-
-  const trainEntries: Array<{ type: UnitType; shortcut: string }> = [
-    { type: 'drone', shortcut: 'D' },
-    { type: 'pulse_sentry', shortcut: 'P' },
-    { type: 'arc_ranger', shortcut: 'R' },
+    {
+      type: 'research',
+      label: 'Research',
+      shortcut: 'R',
+      cost: playerTechTier < 3 ? `T${playerTechTier + 1}` : undefined,
+      enabled: researchEnabled,
+      disabledReason: researchDisabledReason,
+    },
   ];
 
   const ref = useRef<HTMLDivElement>(null);
@@ -93,7 +135,7 @@ export default function CommandPicker(props: CommandPickerProps) {
         border: '1px solid #334155',
         borderRadius: 6,
         boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-        minWidth: 140,
+        minWidth: 160,
         overflow: 'hidden',
       }}
       role="menu"
@@ -111,24 +153,12 @@ export default function CommandPicker(props: CommandPickerProps) {
           key={entry.type}
           role="menuitem"
           disabled={!entry.enabled}
+          title={entry.disabledReason}
           onClick={() => entry.enabled && onSelect(entry.type)}
           className="flex w-full items-center justify-between px-3 py-2"
-          style={{
-            background: 'transparent',
-            border: 'none',
-            cursor: entry.enabled ? 'pointer' : 'not-allowed',
-            color: entry.enabled ? '#e2e8f0' : '#334155',
-            textAlign: 'left',
-            fontFamily: 'inherit',
-            fontSize: 'inherit',
-            transition: 'background 0.12s ease',
-          }}
-          onMouseEnter={(e) => {
-            if (entry.enabled) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,212,255,0.08)';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-          }}
+          style={pickerButtonStyle(entry.enabled)}
+          onMouseEnter={onPickerMouseEnter}
+          onMouseLeave={onPickerMouseLeave}
         >
           <span>{entry.label}</span>
           <span style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 16 }}>
@@ -142,38 +172,36 @@ export default function CommandPicker(props: CommandPickerProps) {
         </button>
       ))}
 
-      {mode === 'train' && trainEntries.map((entry) => {
-        const isEnabled = playerCC >= UNIT_DEFS[entry.type].costCC;
+      {mode === 'train' && TRAINABLE_UNIT_TYPES.map((unitType) => {
+        const def = UNIT_DEFS[unitType];
+        const tierLocked = def.techTierRequired > playerTechTier;
+        const ccAffordable = playerCC >= def.costCC;
+        const fxAffordable = playerFX >= def.costFX;
+        const isEnabled = !tierLocked && ccAffordable && fxAffordable;
+
+        const costLabel = def.costFX > 0 ? `${def.costCC}CC ${def.costFX}FX` : `${def.costCC}CC`;
+        const disabledLabel = tierLocked
+          ? `T${def.techTierRequired}`
+          : !ccAffordable ? 'no CC'
+          : !fxAffordable ? 'no FX'
+          : undefined;
+
         return (
           <button
-            key={entry.type}
+            key={unitType}
             role="menuitem"
             disabled={!isEnabled}
-            onClick={() => isEnabled && onTrainSelect?.(entry.type)}
+            onClick={() => isEnabled && onTrainSelect?.(unitType)}
             className="flex w-full items-center justify-between px-3 py-2"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: isEnabled ? 'pointer' : 'not-allowed',
-              color: isEnabled ? '#e2e8f0' : '#334155',
-              textAlign: 'left',
-              fontFamily: 'inherit',
-              fontSize: 'inherit',
-              transition: 'background 0.12s ease',
-            }}
-            onMouseEnter={(e) => {
-              if (isEnabled) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,212,255,0.08)';
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-            }}
+            style={pickerButtonStyle(isEnabled)}
+            onMouseEnter={onPickerMouseEnter}
+            onMouseLeave={onPickerMouseLeave}
           >
-            <span>{UNIT_DEFS[entry.type].label}</span>
+            <span>{def.label}</span>
             <span style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 16 }}>
               <span style={{ color: isEnabled ? '#fbbf24' : '#334155', fontSize: '0.6rem' }}>
-                {UNIT_DEFS[entry.type].costCC}CC
+                {disabledLabel ?? costLabel}
               </span>
-              <span style={{ color: '#334155' }}>{entry.shortcut}</span>
             </span>
           </button>
         );

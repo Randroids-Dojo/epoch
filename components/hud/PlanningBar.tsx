@@ -7,6 +7,8 @@ interface PlanningBarProps {
   resources: Resources;
   timeLeft: number;
   lockedIn: boolean;
+  techTier: number;
+  researchEpochsLeft: number;
 }
 
 function timerColor(t: number): string {
@@ -15,9 +17,14 @@ function timerColor(t: number): string {
   return '#ef4444';
 }
 
-export default function PlanningBar({ epoch, resources, timeLeft, lockedIn }: PlanningBarProps) {
+export default function PlanningBar({ epoch, resources, timeLeft, lockedIn, techTier, researchEpochsLeft }: PlanningBarProps) {
   const color = timerColor(timeLeft);
   const pct   = Math.round((timeLeft / 30) * 100);
+
+  const techLabel = techTier >= 3 ? 'T3 MAX' : `T${techTier}`;
+  const researchLabel = researchEpochsLeft > 0
+    ? `↑${researchEpochsLeft}ep`
+    : techTier < 3 ? '···' : null;
 
   return (
     <div
@@ -38,7 +45,7 @@ export default function PlanningBar({ epoch, resources, timeLeft, lockedIn }: Pl
           <span style={{ color: '#64748b' }}>PLANNING</span>
         </div>
 
-        {/* Centre: resources */}
+        {/* Centre: resources + tech tier */}
         <div className="flex items-center gap-4" style={{ color: '#94a3b8' }}>
           <span>
             <span style={{ color: '#7dd3fc' }}>CC</span>{' '}
@@ -51,6 +58,22 @@ export default function PlanningBar({ epoch, resources, timeLeft, lockedIn }: Pl
           <span>
             <span style={{ color: '#fbbf24' }}>TE</span>{' '}
             <span style={{ color: '#e2e8f0' }}>{resources.te}</span>
+          </span>
+          <span style={{ color: '#334155' }}>|</span>
+          <span data-testid="tech-tier">
+            <span style={{ color: '#34d399' }}>TECH</span>{' '}
+            <span style={{ color: '#e2e8f0' }}>{techLabel}</span>
+            {researchLabel && (
+              <span
+                style={{
+                  color: researchEpochsLeft > 0 ? '#fbbf24' : '#334155',
+                  marginLeft: 4,
+                  fontSize: '0.6rem',
+                }}
+              >
+                {researchLabel}
+              </span>
+            )}
           </span>
         </div>
 

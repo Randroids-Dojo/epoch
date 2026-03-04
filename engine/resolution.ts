@@ -24,15 +24,21 @@ import {
 } from './state';
 import {
   AttackCommand, BuildCommand, Command, DefendCommand,
-  GatherCommand, MAX_COMMAND_SLOTS, MoveCommand, TemporalCommand, TrainCommand,
+  GatherCommand, MoveCommand, ResearchCommand, TemporalCommand, TrainCommand,
 } from './commands';
 import { PlayerId, PLAYER_IDS, opponent } from './player';
 import { UNIT_DEFS } from './units';
-import { STRUCTURE_DEFS, isComplete } from './structures';
+import { STRUCTURE_DEFS, isComplete, isHarvestable } from './structures';
 import { computeFog } from './map';
 
 /** CC per epoch from a staffed Crystal Extractor. */
 const EXTRACTOR_YIELD_CC = 3;
+
+/** FX per epoch from a staffed Flux Conduit. */
+const FLUX_CONDUIT_YIELD_FX = 2;
+
+/** Command slots granted at each tech tier (index = tier). */
+const SLOTS_BY_TIER = [5, 6, 7, 8];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -265,9 +271,19 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
     const player = state.players[owner];
     const def    = STRUCTURE_DEFS[command.structureType];
 
-    // Cost check.
+    // Tech tier check.
+    if (def.techTierRequired > player.techTier) {
+      log.push(`${owner} Build ${command.structureType} failed — requires Tech Tier ${def.techTierRequired}`);
+      continue;
+    }
+    // CC cost check.
     if (player.resources.cc < def.costCC) {
       log.push(`${owner} Build ${command.structureType} failed — insufficient CC`);
+      continue;
+    }
+    // FX cost check.
+    if (player.resources.fx < def.costFX) {
+      log.push(`${owner} Build ${command.structureType} failed — insufficient FX`);
       continue;
     }
     // Hex must be empty (no unit, no structure).
@@ -284,8 +300,21 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
       log.push(`${owner} Build ${command.structureType} failed — impassable hex`);
       continue;
     }
+    // Flux Conduit must be on or adjacent to a Flux Vent.
+    if (command.structureType === 'flux_conduit') {
+      const onVent = cell.terrain === 'flux_vent';
+      const adjToVent = hexNeighbors(command.targetHex).some((nb) => {
+        const nbCell = state.map.cells.get(hexKey(nb));
+        return nbCell?.terrain === 'flux_vent';
+      });
+      if (!onVent && !adjToVent) {
+        log.push(`${owner} Build flux_conduit failed — must be on or adjacent to a Flux Vent`);
+        continue;
+      }
+    }
 
     player.resources.cc -= def.costCC;
+    player.resources.fx -= def.costFX;
     const id = newId('s');
     state.structures.set(id, {
       id,
@@ -300,6 +329,52 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
   }
 }
 
+// ── Step 6: Upgrade (Tech Tree Research) ─────────────────────────────────────
+
+function stepUpgrade(state: GameState, commands: CommandEntry[], log: string[]): void {
+  for (const pid of PLAYER_IDS) {
+    const player = state.players[pid];
+
+    // Check for a Research command this epoch.
+    const hasResearch = commands.some(
+      (e): e is { owner: PlayerId; command: ResearchCommand } =>
+        e.owner === pid && e.command.type === 'research',
+    );
+
+    if (hasResearch) {
+      if (player.techTier >= 3) {
+        log.push(`${pid} Research failed — already at max Tech Tier`);
+      } else if (player.researchEpochsLeft > 0) {
+        log.push(`${pid} Research failed — already researching`);
+      } else {
+        let hasLab = false;
+        for (const s of state.structures.values()) {
+          if (s.owner === pid && s.type === 'tech_lab' && isComplete(s)) {
+            hasLab = true;
+            break;
+          }
+        }
+        if (!hasLab) {
+          log.push(`${pid} Research failed — no completed Tech Lab`);
+        } else {
+          player.researchEpochsLeft = 3;
+          log.push(`${pid} began researching Tech Tier ${player.techTier + 1} (3 epochs)`);
+        }
+      }
+    }
+
+    // Tick active research.
+    if (player.researchEpochsLeft > 0) {
+      player.researchEpochsLeft -= 1;
+      if (player.researchEpochsLeft === 0) {
+        player.techTier += 1;
+        player.commandSlots = SLOTS_BY_TIER[Math.min(player.techTier, SLOTS_BY_TIER.length - 1)];
+        log.push(`${pid} reached Tech Tier ${player.techTier} — +1 command slot (now ${player.commandSlots})`);
+      }
+    }
+  }
+}
+
 // ── Step 7: Gather ────────────────────────────────────────────────────────────
 
 function stepGather(state: GameState, commands: CommandEntry[], log: string[]): void {
@@ -311,15 +386,16 @@ function stepGather(state: GameState, commands: CommandEntry[], log: string[]): 
   const blocked = new Set<string>();
   for (const u of state.units.values()) blocked.add(hexKey(u.hex));
 
-  // Assign drones to their extractors.
+  // Assign drones to their extractors / flux conduits.
   for (const { owner, command } of gathers) {
     const unit = state.units.get(command.unitId);
     if (!unit || unit.owner !== owner || unit.type !== 'drone') continue;
 
-    // Find a completed Crystal Extractor owned by this player at the target hex.
-    const extractor = findStructureAt(state, command.targetHex, owner);
-    if (!extractor || extractor.type !== 'crystal_extractor' || !isComplete(extractor)) {
-      log.push(`${owner} Drone Gather failed — no completed Crystal Extractor at target`);
+    // Find a completed Crystal Extractor or Flux Conduit owned by this player at the target hex.
+    const building = findStructureAt(state, command.targetHex, owner);
+    const extractor = (building && isHarvestable(building) && isComplete(building)) ? building : null;
+    if (!extractor) {
+      log.push(`${owner} Drone Gather failed — no completed extractor/conduit at target`);
       continue;
     }
 
@@ -341,16 +417,22 @@ function stepGather(state: GameState, commands: CommandEntry[], log: string[]): 
     unit.assignedExtractorId  = extractor.id;
   }
 
-  // Harvest: each staffed, complete Crystal Extractor yields CC.
+  // Harvest: staffed Crystal Extractors yield CC; staffed Flux Conduits yield FX.
   for (const s of state.structures.values()) {
-    if (s.type !== 'crystal_extractor' || !isComplete(s) || !s.assignedDroneId) continue;
+    if (!isComplete(s) || !s.assignedDroneId) continue;
+    if (!isHarvestable(s)) continue;
     const drone = state.units.get(s.assignedDroneId);
     if (!drone || drone.owner !== s.owner) {
       s.assignedDroneId = null;
       continue;
     }
-    state.players[s.owner].resources.cc += EXTRACTOR_YIELD_CC;
-    log.push(`${s.owner} Crystal Extractor yields +${EXTRACTOR_YIELD_CC} CC`);
+    if (s.type === 'crystal_extractor') {
+      state.players[s.owner].resources.cc += EXTRACTOR_YIELD_CC;
+      log.push(`${s.owner} Crystal Extractor yields +${EXTRACTOR_YIELD_CC} CC`);
+    } else {
+      state.players[s.owner].resources.fx += FLUX_CONDUIT_YIELD_FX;
+      log.push(`${s.owner} Flux Conduit yields +${FLUX_CONDUIT_YIELD_FX} FX`);
+    }
   }
 }
 
@@ -375,8 +457,16 @@ function stepTrain(state: GameState, commands: CommandEntry[], log: string[]): v
       log.push(`${owner} Train failed — Barracks not ready`);
       continue;
     }
+    if (unitDef.techTierRequired > player.techTier) {
+      log.push(`${owner} Train ${command.unitType} failed — requires Tech Tier ${unitDef.techTierRequired}`);
+      continue;
+    }
     if (player.resources.cc < unitDef.costCC) {
       log.push(`${owner} Train ${command.unitType} failed — insufficient CC`);
+      continue;
+    }
+    if (player.resources.fx < unitDef.costFX) {
+      log.push(`${owner} Train ${command.unitType} failed — insufficient FX`);
       continue;
     }
     // Spawn at the barracks hex (if unoccupied) or an adjacent open hex.
@@ -387,6 +477,7 @@ function stepTrain(state: GameState, commands: CommandEntry[], log: string[]): v
     }
 
     player.resources.cc -= unitDef.costCC;
+    player.resources.fx -= unitDef.costFX;
     const id = newId('u');
     state.units.set(id, {
       id,
@@ -425,8 +516,8 @@ function stepPostResolution(state: GameState): void {
     if (p.lockedIn) {
       p.resources.te = Math.min(p.resources.te + 1, 10);
     }
-    // Clear commands and lock-in for the new planning phase.
-    p.commands = Array(MAX_COMMAND_SLOTS).fill(null);
+    // Clear commands and lock-in for the new planning phase (size = current commandSlots).
+    p.commands = Array(p.commandSlots).fill(null);
     p.lockedIn = false;
   }
 
@@ -481,7 +572,7 @@ export function resolveEpoch(state: GameState): string[] {
   stepMove(state, commands, log);
   stepAttack(state, commands, log);
   stepBuild(state, commands, log);
-  // stepUpgrade — deferred (no tech tree in MVP)
+  stepUpgrade(state, commands, log);
   stepGather(state, commands, log);
   stepTrain(state, commands, log);
 

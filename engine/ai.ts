@@ -17,10 +17,10 @@
  */
 
 import { GameState, findUnitAt, findStructureAt, findNexus } from './state';
-import { Hex, hexKey, hexDistance, hexesInRange, hexNeighbors } from './hex';
-import { Command, MAX_COMMAND_SLOTS } from './commands';
+import { Hex, hexKey, hexDistance, hexEqual, hexesInRange, hexNeighbors } from './hex';
+import { Command } from './commands';
 import { Unit, UNIT_DEFS, UnitType } from './units';
-import { Structure, STRUCTURE_DEFS, isComplete } from './structures';
+import { Structure, STRUCTURE_DEFS, isComplete, isHarvestable } from './structures';
 import { TERRAIN } from './terrain';
 import { PlayerId } from './player';
 
@@ -127,9 +127,10 @@ function findNearestCrystalNode(state: GameState, from: Hex): Hex | null {
 
 // ── Command generation ──────────────────────────────────────────────────────
 
-/** Fill state.players.ai.commands with up to MAX_COMMAND_SLOTS commands. */
+/** Fill state.players.ai.commands with up to commandSlots commands. */
 export function generateAICommands(state: GameState): void {
-  const commands: Array<Command | null> = Array(MAX_COMMAND_SLOTS).fill(null);
+  const ai = state.players.ai;
+  const commands: Array<Command | null> = Array(ai.commandSlots).fill(null);
   let slot = 0;
   let budget = state.players.ai.resources.cc;
 
@@ -145,14 +146,14 @@ export function generateAICommands(state: GameState): void {
   // ── 1. Gather: assign idle drones to completed, unstaffed extractors ────
 
   const completedExtractors = aiStructures.filter(
-    (s) => s.type === 'crystal_extractor' && isComplete(s) && !s.assignedDroneId,
+    (s) => isHarvestable(s) && isComplete(s) && !s.assignedDroneId,
   );
   const idleDrones = aiUnits.filter(
     (u) => u.type === 'drone' && !u.assignedExtractorId && !assignedUnits.has(u.id),
   );
 
   for (const extractor of completedExtractors) {
-    if (slot >= MAX_COMMAND_SLOTS) break;
+    if (slot >= ai.commandSlots) break;
     const drone = idleDrones.shift();
     if (!drone) break;
 
@@ -166,7 +167,7 @@ export function generateAICommands(state: GameState): void {
   const extractorCost = STRUCTURE_DEFS.crystal_extractor.costCC;
 
   for (const nodeHex of crystalNodes) {
-    if (slot >= MAX_COMMAND_SLOTS) break;
+    if (slot >= ai.commandSlots) break;
     if (budget < extractorCost) break;
 
     // Skip if there's already an extractor here (any owner).
@@ -184,20 +185,20 @@ export function generateAICommands(state: GameState): void {
     plannedBuilds.add(hexKey(buildHex));
   }
 
-  // ── 3. Build Barracks if none exists ────────────────────────────────────
+  // ── 3. Build Barracks and Tech Lab if absent ────────────────────────────
 
-  const hasBarracks = aiStructures.some((s) => s.type === 'barracks');
-  const barracksCost = STRUCTURE_DEFS.barracks.costCC;
-
-  if (!hasBarracks && slot < MAX_COMMAND_SLOTS && budget >= barracksCost) {
-    const nexus = findNexus(state, 'ai');
-    if (nexus) {
-      const buildHex = findEmptyPassableHex(state, nexus.hex);
-      if (buildHex && !plannedBuilds.has(hexKey(buildHex))) {
-        commands[slot++] = { type: 'build', targetHex: buildHex, structureType: 'barracks' };
-        budget -= barracksCost;
-        plannedBuilds.add(hexKey(buildHex));
-      }
+  const nexusForBuilding = findNexus(state, 'ai');
+  if (nexusForBuilding) {
+    for (const structureType of ['barracks', 'tech_lab'] as const) {
+      if (slot >= ai.commandSlots) break;
+      const cost = STRUCTURE_DEFS[structureType].costCC;
+      if (budget < cost) continue;
+      if (aiStructures.some((s) => s.type === structureType)) continue;
+      const buildHex = findEmptyPassableHex(state, nexusForBuilding.hex);
+      if (!buildHex || plannedBuilds.has(hexKey(buildHex))) continue;
+      commands[slot++] = { type: 'build', targetHex: buildHex, structureType };
+      budget -= cost;
+      plannedBuilds.add(hexKey(buildHex));
     }
   }
 
@@ -205,7 +206,7 @@ export function generateAICommands(state: GameState): void {
 
   const barracks = aiStructures.find((s) => s.type === 'barracks' && isComplete(s));
 
-  if (barracks && slot < MAX_COMMAND_SLOTS) {
+  if (barracks && slot < ai.commandSlots) {
     // Count how many extractors need drones.
     const unstaffedExtractors = aiStructures.filter(
       (s) =>
@@ -249,7 +250,7 @@ export function generateAICommands(state: GameState): void {
   );
 
   for (const unit of combatUnits) {
-    if (slot >= MAX_COMMAND_SLOTS) break;
+    if (slot >= ai.commandSlots) break;
 
     const def = UNIT_DEFS[unit.type];
     let bestTarget: Hex | null = null;
@@ -284,7 +285,7 @@ export function generateAICommands(state: GameState): void {
   // ── 6. Move idle units ─────────────────────────────────────────────────
 
   for (const unit of aiUnits) {
-    if (slot >= MAX_COMMAND_SLOTS) break;
+    if (slot >= ai.commandSlots) break;
     if (assignedUnits.has(unit.id)) continue;
 
     let targetHex: Hex | null = null;
@@ -313,7 +314,7 @@ export function generateAICommands(state: GameState): void {
   // ── 7. Defend units near nexus if threats nearby ────────────────────────
 
   const nexus = findNexus(state, 'ai');
-  if (nexus && slot < MAX_COMMAND_SLOTS) {
+  if (nexus && slot < ai.commandSlots) {
     // Check for visible player units near nexus.
     const threatNearby = [...visibility].some((vKey) => {
       const enemy = findUnitAt(state, hexKeyToHex(vKey), 'player');
@@ -323,7 +324,7 @@ export function generateAICommands(state: GameState): void {
     if (threatNearby) {
       // Find an unassigned unit near nexus to defend.
       for (const unit of aiUnits) {
-        if (slot >= MAX_COMMAND_SLOTS) break;
+        if (slot >= ai.commandSlots) break;
         if (assignedUnits.has(unit.id)) continue;
         if (hexDistance(unit.hex, nexus.hex) <= 3) {
           commands[slot++] = { type: 'defend', unitId: unit.id };
@@ -331,6 +332,16 @@ export function generateAICommands(state: GameState): void {
         }
       }
     }
+  }
+
+  // ── Research: start research when Tech Lab is ready and not already researching ──
+  if (
+    slot < ai.commandSlots &&
+    ai.techTier < 3 &&
+    ai.researchEpochsLeft === 0 &&
+    aiStructures.some((s) => s.type === 'tech_lab' && isComplete(s))
+  ) {
+    commands[slot++] = { type: 'research' };
   }
 
   state.players.ai.commands = commands;
@@ -341,8 +352,4 @@ export function generateAICommands(state: GameState): void {
 function hexKeyToHex(key: string): Hex {
   const [q, r] = key.split(',').map(Number);
   return { q, r };
-}
-
-function hexEqual(a: Hex, b: Hex): boolean {
-  return a.q === b.q && a.r === b.r;
 }

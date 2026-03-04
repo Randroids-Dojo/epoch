@@ -5,7 +5,7 @@ import { GameState, createInitialState, findNexus } from '@/engine/state';
 import { resolveEpoch } from '@/engine/resolution';
 import { Hex, hexKey, hexToPixel } from '@/engine/hex';
 import { BASE_HEX_SIZE } from '@/renderer/drawHex';
-import { Command, TEMPORAL_ECHO_COST, TrainCommand } from '@/engine/commands';
+import { Command, ResearchCommand, TEMPORAL_ECHO_COST, TrainCommand } from '@/engine/commands';
 import {
   getFirstEligibleUnit,
   computeEligibleHexes,
@@ -14,6 +14,7 @@ import {
   BuildStructureType,
 } from '@/engine/targeting';
 import { generateAICommands } from '@/engine/ai';
+import { isComplete } from '@/engine/structures';
 import { PlayerId } from '@/engine/player';
 import { COLORS, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
 import { InteractionMode } from '@/lib/types';
@@ -35,7 +36,8 @@ import ExecutionOverlay from '../hud/ExecutionOverlay';
 import Minimap from '../hud/Minimap';
 
 const PLANNING_DURATION = GAME_CONSTANTS.PLANNING_PHASE_DURATION_MS / 1000;
-const BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks', 'tech_lab', 'watchtower'];
+const BASE_BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks', 'tech_lab', 'watchtower'];
+const TIER1_BUILD_OPTIONS: BuildStructureType[] = [...BASE_BUILD_OPTIONS, 'flux_conduit'];
 
 
 export default function GameView() {
@@ -74,6 +76,15 @@ export default function GameView() {
 
   const lockedIn = gameState.players.player.lockedIn;
   const playerNexusHp = useMemo(() => findNexus(gameState, 'player')?.hp ?? 0, [gameState]);
+  const playerTechTier = gameState.players.player.techTier;
+  const researchEpochsLeft = gameState.players.player.researchEpochsLeft;
+  const hasCompletedTechLab = useMemo(() => {
+    for (const s of gameState.structures.values()) {
+      if (s.owner === 'player' && s.type === 'tech_lab' && isComplete(s)) return true;
+    }
+    return false;
+  }, [gameState]);
+  const buildOptions = playerTechTier >= 1 ? TIER1_BUILD_OPTIONS : BASE_BUILD_OPTIONS;
 
   // ── Execution animation ref ───────────────────────────────────────────────
   const animationRef = useRef<ExecutionAnimation | null>(null);
@@ -396,6 +407,17 @@ export default function GameView() {
       return;
     }
 
+    if (type === 'research') {
+      const newCmd: ResearchCommand = { type: 'research' };
+      const newCommands = [...state.players.player.commands];
+      newCommands[slotIndex] = newCmd;
+      state.players.player.commands = newCommands;
+      setGameState({ ...state });
+      setMode({ kind: 'idle' });
+      audioEngine.playFillSlot(slotIndex);
+      return;
+    }
+
     if (type === 'defend') {
       const unit = getFirstEligibleUnit(state, 'defend');
       if (!unit) { setMode({ kind: 'idle' }); return; }
@@ -449,11 +471,7 @@ export default function GameView() {
         return;
       }
 
-      const minTrainCost = Math.min(
-        UNIT_DEFS.drone.costCC,
-        UNIT_DEFS.pulse_sentry.costCC,
-        UNIT_DEFS.arc_ranger.costCC,
-      );
+      const minTrainCost = UNIT_DEFS.drone.costCC; // Drone is always the cheapest
       const lowResourceFeedback = state.players.player.resources.cc < minTrainCost
         ? 'Not enough CC to train any unit.'
         : null;
@@ -620,6 +638,8 @@ export default function GameView() {
           resources={gameState.players.player.resources}
           timeLeft={timeLeft}
           lockedIn={lockedIn}
+          techTier={playerTechTier}
+          researchEpochsLeft={researchEpochsLeft}
         />
       )}
 
@@ -649,10 +669,14 @@ export default function GameView() {
             slotIndex={mode.slotIndex}
             left={Math.min(
               mode.slotIndex * (slotDims.width + slotDims.gap) + 16,
-              window.innerWidth - 148,
+              window.innerWidth - 168,
             )}
             playerTE={gameState.players.player.resources.te}
             playerCC={gameState.players.player.resources.cc}
+            playerFX={gameState.players.player.resources.fx}
+            playerTechTier={playerTechTier}
+            researchEpochsLeft={researchEpochsLeft}
+            hasCompletedTechLab={hasCompletedTechLab}
             mode={mode.kind === 'train_picker' ? 'train' : 'command'}
             trainStructureLabel={getTrainStructureLabel(mode)}
             feedback={mode.kind === 'train_picker' ? mode.failureFeedback : null}
@@ -683,7 +707,7 @@ export default function GameView() {
             <div className="px-3 py-1.5" style={{ color: '#475569', borderBottom: '1px solid #1e293b', fontSize: '0.65rem', letterSpacing: '0.1em' }}>
               CHOOSE STRUCTURE
             </div>
-            {BUILD_OPTIONS.map((opt) => (
+            {buildOptions.map((opt) => (
               <button
                 key={opt}
                 type="button"

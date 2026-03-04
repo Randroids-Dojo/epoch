@@ -2,7 +2,7 @@ import { GameState } from './state';
 import { Unit, UNIT_DEFS } from './units';
 import { hexKey } from './hex';
 import { TERRAIN } from './terrain';
-import { StructureType } from './structures';
+import { StructureType, isComplete, isHarvestable } from './structures';
 
 export type TargetingCommandType = 'move' | 'attack' | 'gather' | 'defend';
 export type BuildStructureType = Exclude<StructureType, 'command_nexus'>;
@@ -29,14 +29,29 @@ export function computeEligibleHexes(
   const eligible = new Set<string>();
   if (type === 'defend') return eligible;
 
-  // Build quick lookup: hex key → owner
+  // Build lookups only for the types that need them.
   const unitOwnerByHex = new Map<string, string>();
-  for (const unit of state.units.values()) {
-    unitOwnerByHex.set(hexKey(unit.hex), unit.owner);
+  if (type !== 'gather') {
+    for (const unit of state.units.values()) {
+      unitOwnerByHex.set(hexKey(unit.hex), unit.owner);
+    }
   }
   const structOwnerByHex = new Map<string, string>();
-  for (const s of state.structures.values()) {
-    structOwnerByHex.set(hexKey(s.hex), s.owner);
+  if (type === 'attack') {
+    for (const s of state.structures.values()) {
+      structOwnerByHex.set(hexKey(s.hex), s.owner);
+    }
+  }
+
+  // Gather lookup: only built when needed.
+  let harvestableByHex: Set<string> | null = null;
+  if (type === 'gather') {
+    harvestableByHex = new Set<string>();
+    for (const s of state.structures.values()) {
+      if (s.owner === 'player' && isHarvestable(s) && isComplete(s)) {
+        harvestableByHex.add(hexKey(s.hex));
+      }
+    }
   }
 
   for (const [key, cell] of state.map.cells) {
@@ -59,9 +74,9 @@ export function computeEligibleHexes(
         break;
 
       case 'gather':
-        // All visible hexes with crystal_node terrain.
+        // Visible hexes with a completed player-owned extractor or flux conduit.
         if (cell.fog !== 'visible') continue;
-        if (cell.terrain === 'crystal_node') eligible.add(key);
+        if (harvestableByHex?.has(key)) eligible.add(key);
         break;
     }
   }

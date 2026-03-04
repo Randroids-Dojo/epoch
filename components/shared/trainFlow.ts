@@ -5,7 +5,14 @@ import { TERRAIN } from '@/engine/terrain';
 import { findUnitAt } from '@/engine/state';
 import { UnitType, UNIT_DEFS } from '@/engine/units';
 
-export const TRAINABLE_UNIT_TYPES: readonly UnitType[] = ['drone', 'pulse_sentry', 'arc_ranger'];
+/** All unit types the player can train (Barracks handles Tier 0–2). */
+export const TRAINABLE_UNIT_TYPES: readonly UnitType[] = [
+  'drone',
+  'pulse_sentry',
+  'arc_ranger',
+  'phase_walker',
+  'temporal_warden',
+];
 
 export interface TrainEligibility {
   structureId: string;
@@ -41,8 +48,18 @@ export function getTrainFailureReason(state: GameState, unitType: UnitType): str
   const barracks = getPlayerTrainEligibility(state);
   if (barracks.length === 0) return 'Train requires a completed Barracks.';
 
-  if (state.players.player.resources.cc < UNIT_DEFS[unitType].costCC) {
-    return `Not enough CC for ${UNIT_DEFS[unitType].label}.`;
+  const def = UNIT_DEFS[unitType];
+
+  if (def.techTierRequired > state.players.player.techTier) {
+    return `Requires Tech Tier ${def.techTierRequired}.`;
+  }
+
+  if (state.players.player.resources.cc < def.costCC) {
+    return `Not enough CC for ${def.label}.`;
+  }
+
+  if (state.players.player.resources.fx < def.costFX) {
+    return `Not enough FX for ${def.label}.`;
   }
 
   if (!barracks.some((entry) => entry.hasSpawnSpace)) {

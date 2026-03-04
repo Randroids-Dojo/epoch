@@ -78,6 +78,20 @@ export function generateMap(seed: number = Date.now()): GameMap {
     setMirror({ q, r }, 'crystal_node');
   }
 
+  // Flux Vent pairs — in contested mid-map zones, never near starting bases.
+  // Always place 2 fixed pairs for predictable mid-map contest points.
+  const fluxVentOffsets: Array<[number, number]> = [
+    [3, -3],
+    [2,  3],
+  ];
+  for (const [dq, dr] of fluxVentOffsets) {
+    setMirror({ q: dq, r: dr }, 'flux_vent');
+  }
+  // One random additional pair near the center.
+  const fvQ = Math.floor(rng() * 3) - 1;
+  const fvR = Math.floor(rng() * 5) - 2;
+  setMirror({ q: fvQ, r: fvR }, 'flux_vent');
+
   // Void Rift clusters, avoiding the starting hexes.
   const numRiftClusters = 2 + Math.floor(rng() * 3);
   const protectedKeys = new Set([hexKey(playerStart), hexKey(aiStart)]);

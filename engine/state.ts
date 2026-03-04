@@ -9,7 +9,7 @@ export type GamePhase = 'planning' | 'execution' | 'transition' | 'over';
 
 export interface Resources {
   cc: number; // Chrono Crystals
-  fx: number; // Flux (always 0 in MVP)
+  fx: number; // Flux — harvested via Flux Conduit
   te: number; // Temporal Energy
 }
 
@@ -18,6 +18,10 @@ export interface PlayerState {
   resources: Resources;
   commandSlots: number;
   commands: CommandQueue;
+  /** Current tech tier (0–3). Increases when research completes. */
+  techTier: number;
+  /** Epochs of research remaining. 0 = not researching. */
+  researchEpochsLeft: number;
   /** Whether the player locked in early this epoch (earns +1 TE). */
   lockedIn: boolean;
 }
@@ -103,18 +107,22 @@ export function createInitialState(seed?: number): GameState {
     structures,
     players: {
       player: {
-        id:           'player',
-        resources:    { cc: 10, fx: 0, te: 3 },
-        commandSlots: MAX_COMMAND_SLOTS,
-        commands:     emptyQueue(),
-        lockedIn:     false,
+        id:                 'player',
+        resources:          { cc: 10, fx: 0, te: 3 },
+        commandSlots:       MAX_COMMAND_SLOTS,
+        commands:           emptyQueue(),
+        techTier:           0,
+        researchEpochsLeft: 0,
+        lockedIn:           false,
       },
       ai: {
-        id:           'ai',
-        resources:    { cc: 10, fx: 0, te: 3 },
-        commandSlots: MAX_COMMAND_SLOTS,
-        commands:     emptyQueue(),
-        lockedIn:     false,
+        id:                 'ai',
+        resources:          { cc: 10, fx: 0, te: 3 },
+        commandSlots:       MAX_COMMAND_SLOTS,
+        commands:           emptyQueue(),
+        techTier:           0,
+        researchEpochsLeft: 0,
+        lockedIn:           false,
       },
     },
   };

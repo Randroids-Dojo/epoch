@@ -58,6 +58,11 @@ export interface TemporalCommand {
   readonly teCost: number;
 }
 
+/** Research the next tech tier at a completed Tech Lab. Takes 3 epochs. */
+export interface ResearchCommand {
+  readonly type: 'research';
+}
+
 export type Command =
   | GatherCommand
   | BuildCommand
@@ -65,7 +70,8 @@ export type Command =
   | MoveCommand
   | AttackCommand
   | DefendCommand
-  | TemporalCommand;
+  | TemporalCommand
+  | ResearchCommand;
 
 export type CommandType = Command['type'];
 
