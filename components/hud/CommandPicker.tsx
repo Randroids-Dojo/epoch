@@ -33,18 +33,16 @@ interface PickerEntry {
 
 const TRAY_HEIGHT = 76;
 
-function pickerButtonStyle(enabled: boolean) {
-  return {
-    background: 'transparent',
-    border: 'none',
-    cursor: enabled ? 'pointer' : 'not-allowed',
-    color: enabled ? '#e2e8f0' : '#334155',
-    textAlign: 'left' as const,
-    fontFamily: 'inherit',
-    fontSize: 'inherit',
-    transition: 'background 0.12s ease',
-  };
-}
+const PICKER_BTN_ENABLED: React.CSSProperties = {
+  background: 'transparent', border: 'none', cursor: 'pointer',
+  color: '#e2e8f0', textAlign: 'left', fontFamily: 'inherit',
+  fontSize: 'inherit', transition: 'background 0.12s ease',
+};
+const PICKER_BTN_DISABLED: React.CSSProperties = {
+  background: 'transparent', border: 'none', cursor: 'not-allowed',
+  color: '#334155', textAlign: 'left', fontFamily: 'inherit',
+  fontSize: 'inherit', transition: 'background 0.12s ease',
+};
 
 function onPickerMouseEnter(e: React.MouseEvent<HTMLButtonElement>) {
   if (!e.currentTarget.disabled) e.currentTarget.style.background = 'rgba(0,212,255,0.08)';
@@ -156,7 +154,7 @@ export default function CommandPicker(props: CommandPickerProps) {
           title={entry.disabledReason}
           onClick={() => entry.enabled && onSelect(entry.type)}
           className="flex w-full items-center justify-between px-3 py-2"
-          style={pickerButtonStyle(entry.enabled)}
+          style={entry.enabled ? PICKER_BTN_ENABLED : PICKER_BTN_DISABLED}
           onMouseEnter={onPickerMouseEnter}
           onMouseLeave={onPickerMouseLeave}
         >
@@ -193,7 +191,7 @@ export default function CommandPicker(props: CommandPickerProps) {
             disabled={!isEnabled}
             onClick={() => isEnabled && onTrainSelect?.(unitType)}
             className="flex w-full items-center justify-between px-3 py-2"
-            style={pickerButtonStyle(isEnabled)}
+            style={isEnabled ? PICKER_BTN_ENABLED : PICKER_BTN_DISABLED}
             onMouseEnter={onPickerMouseEnter}
             onMouseLeave={onPickerMouseLeave}
           >

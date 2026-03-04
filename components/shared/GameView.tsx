@@ -5,7 +5,7 @@ import { GameState, createInitialState, findNexus } from '@/engine/state';
 import { resolveEpoch } from '@/engine/resolution';
 import { Hex, hexKey, hexToPixel } from '@/engine/hex';
 import { BASE_HEX_SIZE } from '@/renderer/drawHex';
-import { Command, ResearchCommand, TEMPORAL_ECHO_COST, TrainCommand } from '@/engine/commands';
+import { Command, TEMPORAL_ECHO_COST, TrainCommand } from '@/engine/commands';
 import {
   getFirstEligibleUnit,
   computeEligibleHexes,
@@ -396,38 +396,29 @@ export default function GameView() {
     const { slotIndex } = m;
     const state = gameStateRef.current;
 
-    if (type === 'temporal') {
-      const newCmd: Command = { type: 'temporal', ability: 'echo', teCost: TEMPORAL_ECHO_COST };
+    const commitCmd = (cmd: Command, audio: () => void) => {
       const newCommands = [...state.players.player.commands];
-      newCommands[slotIndex] = newCmd;
+      newCommands[slotIndex] = cmd;
       state.players.player.commands = newCommands;
       setGameState({ ...state });
       setMode({ kind: 'idle' });
-      audioEngine.playTemporalEcho();
+      audio();
+    };
+
+    if (type === 'temporal') {
+      commitCmd({ type: 'temporal', ability: 'echo', teCost: TEMPORAL_ECHO_COST }, () => audioEngine.playTemporalEcho());
       return;
     }
 
     if (type === 'research') {
-      const newCmd: ResearchCommand = { type: 'research' };
-      const newCommands = [...state.players.player.commands];
-      newCommands[slotIndex] = newCmd;
-      state.players.player.commands = newCommands;
-      setGameState({ ...state });
-      setMode({ kind: 'idle' });
-      audioEngine.playFillSlot(slotIndex);
+      commitCmd({ type: 'research' }, () => audioEngine.playFillSlot(slotIndex));
       return;
     }
 
     if (type === 'defend') {
       const unit = getFirstEligibleUnit(state, 'defend');
       if (!unit) { setMode({ kind: 'idle' }); return; }
-      const newCmd: Command = { type: 'defend', unitId: unit.id };
-      const newCommands = [...state.players.player.commands];
-      newCommands[slotIndex] = newCmd;
-      state.players.player.commands = newCommands;
-      setGameState({ ...state });
-      setMode({ kind: 'idle' });
-      audioEngine.playFillSlot(slotIndex);
+      commitCmd({ type: 'defend', unitId: unit.id }, () => audioEngine.playFillSlot(slotIndex));
       return;
     }
 
@@ -625,11 +616,6 @@ export default function GameView() {
   const hasEcho = gameState.players.player.commands.some((c) => c?.type === 'temporal');
   const echoCommands = hasEcho ? gameState.prevEpochCommands.ai : null;
 
-  const getTrainStructureLabel = useCallback((modeValue: InteractionMode): string | undefined => {
-    if (modeValue.kind !== 'train_picker') return undefined;
-    return `Barracks (${modeValue.structureHex.q},${modeValue.structureHex.r})`;
-  }, []);
-
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden">
       {gameState.phase !== 'over' && (
@@ -678,7 +664,11 @@ export default function GameView() {
             researchEpochsLeft={researchEpochsLeft}
             hasCompletedTechLab={hasCompletedTechLab}
             mode={mode.kind === 'train_picker' ? 'train' : 'command'}
-            trainStructureLabel={getTrainStructureLabel(mode)}
+            trainStructureLabel={
+              mode.kind === 'train_picker'
+                ? `Barracks (${mode.structureHex.q},${mode.structureHex.r})`
+                : undefined
+            }
             feedback={mode.kind === 'train_picker' ? mode.failureFeedback : null}
             onSelect={handleCommandPick}
             onTrainSelect={handleTrainPick}

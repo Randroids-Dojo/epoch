@@ -245,6 +245,17 @@ export function generateAICommands(state: GameState): void {
 
   // ── 5. Attack visible enemies ───────────────────────────────────────────
 
+  // Precompute enemy entity positions so the inner loop uses O(1) lookups
+  // instead of scanning all units/structures per visible hex.
+  const enemyUnitByHex = new Map<string, Unit>();
+  const enemyStructByHex = new Map<string, Structure>();
+  for (const u of state.units.values()) {
+    if (u.owner === 'player') enemyUnitByHex.set(hexKey(u.hex), u);
+  }
+  for (const s of state.structures.values()) {
+    if (s.owner === 'player') enemyStructByHex.set(hexKey(s.hex), s);
+  }
+
   const combatUnits = aiUnits.filter(
     (u) => UNIT_DEFS[u.type].range > 0 && !assignedUnits.has(u.id),
   );
@@ -258,7 +269,7 @@ export function generateAICommands(state: GameState): void {
 
     // Look for enemy units/structures within vision that are in attack range.
     for (const vKey of visibility) {
-      const enemyUnit = findUnitAt(state, hexKeyToHex(vKey), 'player');
+      const enemyUnit = enemyUnitByHex.get(vKey);
       if (enemyUnit) {
         const d = hexDistance(unit.hex, enemyUnit.hex);
         if (d <= def.range && d < bestDist) {
@@ -266,7 +277,7 @@ export function generateAICommands(state: GameState): void {
           bestTarget = enemyUnit.hex;
         }
       }
-      const enemyStruct = findStructureAt(state, hexKeyToHex(vKey), 'player');
+      const enemyStruct = enemyStructByHex.get(vKey);
       if (enemyStruct) {
         const d = hexDistance(unit.hex, enemyStruct.hex);
         if (d <= def.range && d < bestDist) {
@@ -317,7 +328,7 @@ export function generateAICommands(state: GameState): void {
   if (nexus && slot < ai.commandSlots) {
     // Check for visible player units near nexus.
     const threatNearby = [...visibility].some((vKey) => {
-      const enemy = findUnitAt(state, hexKeyToHex(vKey), 'player');
+      const enemy = enemyUnitByHex.get(vKey);
       return enemy && hexDistance(enemy.hex, nexus.hex) <= 4;
     });
 
@@ -345,11 +356,4 @@ export function generateAICommands(state: GameState): void {
   }
 
   state.players.ai.commands = commands;
-}
-
-// ── Utility ─────────────────────────────────────────────────────────────────
-
-function hexKeyToHex(key: string): Hex {
-  const [q, r] = key.split(',').map(Number);
-  return { q, r };
 }
