@@ -1,7 +1,10 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { CommandType, CHRONO_SHIFT_COST, TEMPORAL_ECHO_COST } from '@/engine/commands';
+import {
+  CommandType, CHRONO_SHIFT_COST, EPOCH_ANCHOR_ACTIVATE_COST,
+  EPOCH_ANCHOR_SET_COST, TEMPORAL_ECHO_COST,
+} from '@/engine/commands';
 import { UnitType, UNIT_DEFS } from '@/engine/units';
 import { TRAINABLE_UNIT_TYPES } from '@/components/shared/trainFlow';
 
@@ -18,10 +21,13 @@ interface CommandPickerProps {
   canChronoShift: boolean;
   /** True if the player has a completed War Foundry (enables Tier 2-3 unit training). */
   hasWarFoundry: boolean;
+  /** True if the player has an active Epoch Anchor set. */
+  hasEpochAnchor: boolean;
   mode?: 'command' | 'train';
   trainStructureLabel?: string;
   feedback?: string | null;
   onSelect(type: CommandType): void;
+  onEpochAnchorAction(action: 'set' | 'activate'): void;
   onTrainSelect?(unitType: UnitType): void;
   onClose(): void;
 }
@@ -29,10 +35,12 @@ interface CommandPickerProps {
 interface PickerEntry {
   type: CommandType;
   label: string;
-  shortcut: string;
+  shortcut?: string;
   cost?: string;
   enabled: boolean;
   disabledReason?: string;
+  /** Override the default onSelect(type) action. */
+  onClick?: () => void;
 }
 
 const TRAY_HEIGHT = 76;
@@ -67,10 +75,12 @@ export default function CommandPicker(props: CommandPickerProps) {
     hasCompletedTechLab,
     canChronoShift,
     hasWarFoundry,
+    hasEpochAnchor,
     mode = 'command',
     trainStructureLabel,
     feedback,
     onSelect,
+    onEpochAnchorAction,
     onTrainSelect,
     onClose,
   } = props;
@@ -94,6 +104,20 @@ export default function CommandPicker(props: CommandPickerProps) {
         ? 'No unit has 2-epoch history'
         : undefined;
 
+  const anchorSetEnabled = playerTechTier >= 3 && playerTE >= EPOCH_ANCHOR_SET_COST;
+  const anchorSetDisabledReason: string | undefined = playerTechTier < 3
+    ? 'Requires Tech Tier 3'
+    : playerTE < EPOCH_ANCHOR_SET_COST
+      ? `Need ${EPOCH_ANCHOR_SET_COST} TE`
+      : undefined;
+
+  const anchorActivateEnabled = hasEpochAnchor && playerTE >= EPOCH_ANCHOR_ACTIVATE_COST;
+  const anchorActivateDisabledReason: string | undefined = !hasEpochAnchor
+    ? 'No anchor set'
+    : playerTE < EPOCH_ANCHOR_ACTIVATE_COST
+      ? `Need ${EPOCH_ANCHOR_ACTIVATE_COST} TE`
+      : undefined;
+
   const entries: PickerEntry[] = [
     { type: 'move',     label: 'Move',     shortcut: 'M', enabled: true },
     { type: 'attack',   label: 'Attack',   shortcut: 'A', enabled: true },
@@ -115,6 +139,22 @@ export default function CommandPicker(props: CommandPickerProps) {
       cost: `${CHRONO_SHIFT_COST}TE`,
       enabled: chronoShiftEnabled,
       disabledReason: chronoShiftDisabledReason,
+    },
+    {
+      type: 'epoch_anchor',
+      label: 'Anchor Set',
+      cost: `${EPOCH_ANCHOR_SET_COST}TE`,
+      enabled: anchorSetEnabled,
+      disabledReason: anchorSetDisabledReason,
+      onClick: () => onEpochAnchorAction('set'),
+    },
+    {
+      type: 'epoch_anchor',
+      label: 'Anchor Recall',
+      cost: `${EPOCH_ANCHOR_ACTIVATE_COST}TE`,
+      enabled: anchorActivateEnabled,
+      disabledReason: anchorActivateDisabledReason,
+      onClick: () => onEpochAnchorAction('activate'),
     },
     {
       type: 'research',
@@ -171,11 +211,11 @@ export default function CommandPicker(props: CommandPickerProps) {
 
       {mode === 'command' && entries.map((entry) => (
         <button
-          key={entry.type}
+          key={entry.label}
           role="menuitem"
           disabled={!entry.enabled}
           title={entry.disabledReason}
-          onClick={() => entry.enabled && onSelect(entry.type)}
+          onClick={() => entry.enabled && (entry.onClick ? entry.onClick() : onSelect(entry.type))}
           className="flex w-full items-center justify-between px-3 py-2"
           style={entry.enabled ? PICKER_BTN_ENABLED : PICKER_BTN_DISABLED}
           onMouseEnter={onPickerMouseEnter}
@@ -188,7 +228,7 @@ export default function CommandPicker(props: CommandPickerProps) {
                 {entry.cost}
               </span>
             )}
-            <span style={{ color: '#334155' }}>{entry.shortcut}</span>
+            {entry.shortcut && <span style={{ color: '#334155' }}>{entry.shortcut}</span>}
           </span>
         </button>
       ))}

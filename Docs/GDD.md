@@ -1350,10 +1350,10 @@ Vercel's edge CDN ensures fast global delivery. Additional measures:
 | Tech tree research / command slot upgrades | ✅ v1.1 |
 | Chrono Shift | ✅ v1.1 |
 | Timeline Fork, Epoch Anchor, Chrono Scout | v1.1 |
-| Paradox Risk / Temporal Instability | v1.1 |
-| AI archetypes (Aggressor, Technologist, Fortress) | v1.1 |
-| AI difficulty levels (Novice, Commander, Epoch Master) | v1.1 |
-| Temporal Singularity + Resource Dominance win conditions | v1.1 |
+| Paradox Risk / Temporal Instability | ✅ v1.1 |
+| AI archetypes (Aggressor, Technologist, Fortress) | ✅ v1.1 |
+| AI difficulty levels (Novice, Commander, Epoch Master) | ✅ v1.1 |
+| Temporal Singularity + Resource Dominance win conditions | ✅ v1.1 |
 | Execution speed controls (0.5x, 2x, skip) | v1.2 |
 | Tutorial / onboarding | v1.2 |
 | Settings panel (audio, accessibility) | v1.2 |
@@ -1386,12 +1386,13 @@ Vercel's edge CDN ensures fast global delivery. Additional measures:
 - ✅ Flux resource + Flux Vents + Flux Conduit
 - ✅ Temporal Echo + Chrono Shift
 - ✅ Annihilation win condition (carried from v1.0)
-- ⬜ Timeline Fork, Epoch Anchor, Chrono Scout temporal abilities
-- ⬜ Paradox Risk / Temporal Instability system
+- ✅ Epoch Anchor temporal ability (Tier 3, 5TE set / 3TE activate)
+- ✅ Paradox Risk / Temporal Instability system (Tier 1 & 2 debuffs)
+- ✅ Temporal Singularity + Resource Dominance win conditions
+- ⬜ Timeline Fork, Chrono Scout temporal abilities
 - ⬜ All 4 AI archetypes with blending
 - ⬜ All 4 difficulty levels (Novice → Epoch Master)
 - ⬜ AI adaptation system (pattern tracking over 5 epochs)
-- ⬜ Temporal Singularity + Resource Dominance win conditions
 - ⬜ Ridge and Energy Field terrain types
 - ⬜ Map size options (Small, Medium, Large)
 

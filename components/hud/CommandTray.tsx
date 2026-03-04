@@ -24,6 +24,7 @@ const TYPE_CODE: Record<string, string> = {
   train:         'TR',
   temporal:      'TM',
   chrono_shift:  'SH',
+  epoch_anchor:  'AN',
   research:      'RS',
 };
 
@@ -44,6 +45,8 @@ function cmdLabel(cmd: Command): string {
       return 'ECHO';
     case 'chrono_shift':
       return 'SHIFT';
+    case 'epoch_anchor':
+      return cmd.action === 'set' ? 'ANCHOR' : 'RECALL';
     case 'research':
       return 'TECH';
   }

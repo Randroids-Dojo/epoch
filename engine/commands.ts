@@ -50,6 +50,8 @@ export interface DefendCommand {
 
 export const TEMPORAL_ECHO_COST = 2;
 export const CHRONO_SHIFT_COST = 3;
+export const EPOCH_ANCHOR_SET_COST = 5;
+export const EPOCH_ANCHOR_ACTIVATE_COST = 3;
 
 /** Activate a temporal ability (Echo or Chrono Shift). */
 export interface TemporalCommand {
@@ -69,6 +71,16 @@ export interface ChronoShiftCommand {
   readonly unitId: string;
 }
 
+/**
+ * Epoch Anchor — bookmark or restore all friendly unit positions/HP.
+ * 'set': Bookmark current state (costs EPOCH_ANCHOR_SET_COST TE). Requires Tech Tier 3.
+ * 'activate': Revert all friendly units to anchored state (costs EPOCH_ANCHOR_ACTIVATE_COST TE).
+ */
+export interface EpochAnchorCommand {
+  readonly type: 'epoch_anchor';
+  readonly action: 'set' | 'activate';
+}
+
 /** Research the next tech tier at a completed Tech Lab. Takes 3 epochs. */
 export interface ResearchCommand {
   readonly type: 'research';
@@ -83,6 +95,7 @@ export type Command =
   | DefendCommand
   | TemporalCommand
   | ChronoShiftCommand
+  | EpochAnchorCommand
   | ResearchCommand;
 
 export type CommandType = Command['type'];

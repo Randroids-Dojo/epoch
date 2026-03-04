@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GameState, createInitialState, findNexus, getOldestSnapshot } from '@/engine/state';
+import { GameState, createInitialState, findNexus, getOldestSnapshot, AIDifficulty } from '@/engine/state';
 import { resolveEpoch } from '@/engine/resolution';
 import { Hex, hexKey, hexToPixel } from '@/engine/hex';
 import { BASE_HEX_SIZE } from '@/renderer/drawHex';
-import { Command, TEMPORAL_ECHO_COST, TrainCommand } from '@/engine/commands';
+import { Command, EpochAnchorCommand, TEMPORAL_ECHO_COST, TrainCommand } from '@/engine/commands';
 import {
   getFirstEligibleUnit,
   computeEligibleHexes,
@@ -41,7 +41,16 @@ const TIER1_BUILD_OPTIONS: BuildStructureType[] = [...BASE_BUILD_OPTIONS, 'flux_
 const TIER2_BUILD_OPTIONS: BuildStructureType[] = [...TIER1_BUILD_OPTIONS, 'war_foundry', 'chrono_spire'];
 
 
+const DIFFICULTY_OPTIONS: { value: AIDifficulty; label: string; desc: string }[] = [
+  { value: 'novice',       label: 'Novice',       desc: '4 command slots · Expander archetype · No temporal abilities' },
+  { value: 'adept',        label: 'Adept',         desc: '5 command slots · Expander archetype · Adapts mildly' },
+  { value: 'commander',    label: 'Commander',     desc: '5 command slots · Blended archetypes · Uses Chrono Shift' },
+  { value: 'epoch_master', label: 'Epoch Master',  desc: '6 command slots · Full archetype blend · All abilities' },
+];
+
 export default function GameView() {
+  const [showSetup, setShowSetup]   = useState(true);
+  const [difficulty, setDifficulty] = useState<AIDifficulty>('adept');
   const [gameState, setGameState]   = useState<GameState>(() => createInitialState(42));
   const [mode, setMode]             = useState<InteractionMode>({ kind: 'idle' });
   const [timeLeft, setTimeLeft]     = useState(PLANNING_DURATION);
@@ -96,6 +105,9 @@ export default function GameView() {
     () => getFirstEligibleUnit(gameState, 'chrono_shift') !== undefined,
     [gameState],
   );
+  const hasEpochAnchor = gameState.players.player.epochAnchor !== null;
+  const instabilityTier = gameState.players.player.instabilityTier;
+  const instabilityEpochsLeft = gameState.players.player.instabilityEpochsLeft;
 
   // ── Execution animation ref ───────────────────────────────────────────────
   const animationRef = useRef<ExecutionAnimation | null>(null);
@@ -320,26 +332,34 @@ export default function GameView() {
 
   // ── Countdown timer ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (lockedIn || gameState.phase !== 'planning') return;
+    if (lockedIn || gameState.phase !== 'planning' || showSetup) return;
 
     const id = setInterval(() => {
       setTimeLeft((t) => Math.max(0, t - 1));
     }, 1000);
     return () => clearInterval(id);
-  }, [lockedIn, gameState.phase]);
+  }, [lockedIn, gameState.phase, showSetup]);
 
   // Trigger resolution when the timer reaches zero.
   useEffect(() => {
-    if (timeLeft === 0 && gameState.phase === 'planning' && !lockedIn) {
+    if (timeLeft === 0 && gameState.phase === 'planning' && !lockedIn && !showSetup) {
       handleResolveRef.current();
     }
-  }, [timeLeft, gameState.phase, lockedIn]);
+  }, [timeLeft, gameState.phase, lockedIn, showSetup]);
 
   // ── Play Again ────────────────────────────────────────────────────────────
   const handlePlayAgain = useCallback(() => {
-    setGameState(createInitialState(Date.now()));
+    setShowSetup(true);
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
+  }, []);
+
+  const handleStartGame = useCallback((diff: AIDifficulty) => {
+    setDifficulty(diff);
+    setGameState(createInitialState(Date.now(), diff));
+    setMode({ kind: 'idle' });
+    setTimeLeft(PLANNING_DURATION);
+    setShowSetup(false);
   }, []);
 
   const queueRecenter = useCallback((worldX: number, worldY: number) => {
@@ -492,6 +512,20 @@ export default function GameView() {
     }
 
     setMode({ kind: 'idle' });
+  }, []);
+
+  const handleEpochAnchorAction = useCallback((action: 'set' | 'activate') => {
+    const m = modeRef.current;
+    if (m.kind !== 'picker_open') return;
+    const { slotIndex } = m;
+    const state = gameStateRef.current;
+    const cmd: EpochAnchorCommand = { type: 'epoch_anchor', action };
+    const newCommands = [...state.players.player.commands];
+    newCommands[slotIndex] = cmd;
+    state.players.player.commands = newCommands;
+    setGameState({ ...state });
+    setMode({ kind: 'idle' });
+    audioEngine.playFillSlot(slotIndex);
   }, []);
 
   const handleBuildStructureSelect = useCallback((structureType: BuildStructureType) => {
@@ -659,6 +693,9 @@ export default function GameView() {
           lockedIn={lockedIn}
           techTier={playerTechTier}
           researchEpochsLeft={researchEpochsLeft}
+          instabilityTier={instabilityTier}
+          instabilityEpochsLeft={instabilityEpochsLeft}
+          hasEpochAnchor={hasEpochAnchor}
         />
       )}
 
@@ -698,6 +735,7 @@ export default function GameView() {
             hasCompletedTechLab={hasCompletedTechLab}
             canChronoShift={canChronoShift}
             hasWarFoundry={hasWarFoundry}
+            hasEpochAnchor={hasEpochAnchor}
             mode={mode.kind === 'train_picker' ? 'train' : 'command'}
             trainStructureLabel={
               mode.kind === 'train_picker' && mode.structureId
@@ -710,6 +748,7 @@ export default function GameView() {
             }
             feedback={mode.kind === 'train_picker' ? mode.failureFeedback : null}
             onSelect={handleCommandPick}
+            onEpochAnchorAction={handleEpochAnchorAction}
             onTrainSelect={handleTrainPick}
             onClose={() => setMode({ kind: 'idle' })}
           />
@@ -762,6 +801,45 @@ export default function GameView() {
             elapsed={animElapsed}
             onSkip={handleSkip}
           />
+        )}
+
+        {/* Difficulty picker overlay */}
+        {showSetup && (
+          <div
+            data-testid="difficulty-picker"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-6"
+            style={{ background: 'rgba(10,14,26,0.92)', zIndex: 50 }}
+          >
+            <div className="font-mono text-xl font-bold tracking-widest uppercase" style={{ color: COLORS.CYAN }}>
+              SELECT DIFFICULTY
+            </div>
+            <div className="flex flex-col gap-3 w-72">
+              {DIFFICULTY_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  data-testid={`difficulty-${opt.value}`}
+                  className="text-left px-4 py-3 border font-mono transition-colors"
+                  style={{
+                    color: difficulty === opt.value ? COLORS.CYAN : '#94a3b8',
+                    borderColor: difficulty === opt.value ? COLORS.CYAN : '#334155',
+                    background: difficulty === opt.value ? 'rgba(0,229,255,0.06)' : 'transparent',
+                  }}
+                  onClick={() => setDifficulty(opt.value)}
+                >
+                  <div className="text-sm font-bold tracking-wider">{opt.label}</div>
+                  <div className="text-xs mt-0.5" style={{ color: '#64748b' }}>{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+            <button
+              data-testid="start-game-btn"
+              className="mt-2 font-mono text-sm tracking-widest uppercase px-8 py-2 border"
+              style={{ color: COLORS.CYAN, borderColor: COLORS.CYAN, background: 'rgba(0,229,255,0.08)' }}
+              onClick={() => handleStartGame(difficulty)}
+            >
+              BEGIN
+            </button>
+          </div>
         )}
 
         {/* Game-over overlay */}

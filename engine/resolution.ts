@@ -21,11 +21,13 @@ import {
 } from './hex';
 import { TERRAIN } from './terrain';
 import {
-  GameState, ChronoSnapshot, getOldestSnapshot, findNexus, findUnitAt, findStructureAt, newId,
+  GameState, ChronoSnapshot, AnchorSnapshot, getOldestSnapshot, findNexus, findUnitAt,
+  findStructureAt, newId,
 } from './state';
 import {
   AttackCommand, BuildCommand, ChronoShiftCommand, CHRONO_SHIFT_COST,
-  Command, DefendCommand, GatherCommand, MoveCommand, ResearchCommand,
+  Command, DefendCommand, EpochAnchorCommand, EPOCH_ANCHOR_ACTIVATE_COST,
+  EPOCH_ANCHOR_SET_COST, GatherCommand, MoveCommand, ResearchCommand,
   TemporalCommand, TrainCommand,
 } from './commands';
 import { PlayerId, PLAYER_IDS, opponent } from './player';
@@ -173,6 +175,56 @@ function stepTemporal(state: GameState, commands: CommandEntry[], log: string[])
     unit.damageShield = true;
     log.push(`${owner} ${unit.type} Chrono Shifted to (${snapshot.hex.q},${snapshot.hex.r}) (-${CHRONO_SHIFT_COST} TE) [shield active]`);
   }
+
+  // ── Epoch Anchor ─────────────────────────────────────────────────────────────
+  const anchorCommands = commands.filter(
+    (e): e is { owner: PlayerId; command: EpochAnchorCommand } => e.command.type === 'epoch_anchor',
+  );
+
+  for (const { owner, command } of anchorCommands) {
+    const player = state.players[owner];
+
+    if (command.action === 'set') {
+      if (player.techTier < 3) {
+        log.push(`${owner} Epoch Anchor failed — requires Tech Tier 3`);
+        continue;
+      }
+      if (player.resources.te < EPOCH_ANCHOR_SET_COST) {
+        log.push(`${owner} Epoch Anchor (Set) failed — insufficient TE`);
+        continue;
+      }
+      player.resources.te -= EPOCH_ANCHOR_SET_COST;
+      const snapshot = new Map<string, ChronoSnapshot>();
+      for (const unit of state.units.values()) {
+        if (unit.owner === owner) snapshot.set(unit.id, { hex: unit.hex, hp: unit.hp });
+      }
+      const anchor: AnchorSnapshot = { unitSnapshots: snapshot, epochsLeft: 5 };
+      player.epochAnchor = anchor;
+      log.push(`${owner} Epoch Anchor set — ${snapshot.size} units bookmarked (-${EPOCH_ANCHOR_SET_COST} TE)`);
+
+    } else if (command.action === 'activate') {
+      if (!player.epochAnchor) {
+        log.push(`${owner} Epoch Anchor (Activate) failed — no anchor set`);
+        continue;
+      }
+      if (player.resources.te < EPOCH_ANCHOR_ACTIVATE_COST) {
+        log.push(`${owner} Epoch Anchor (Activate) failed — insufficient TE`);
+        continue;
+      }
+      player.resources.te -= EPOCH_ANCHOR_ACTIVATE_COST;
+      let revived = 0;
+      for (const [unitId, snap] of player.epochAnchor.unitSnapshots) {
+        const unit = state.units.get(unitId);
+        if (unit && unit.owner === owner) {
+          unit.hex = snap.hex;
+          unit.hp  = snap.hp;
+          revived++;
+        }
+      }
+      player.epochAnchor = null;
+      log.push(`${owner} Epoch Anchor activated — ${revived} units restored (-${EPOCH_ANCHOR_ACTIVATE_COST} TE)`);
+    }
+  }
 }
 
 // ── Step 3: Move ─────────────────────────────────────────────────────────────
@@ -200,8 +252,12 @@ function stepMove(state: GameState, commands: CommandEntry[], log: string[]): vo
     const ownKey = hexKey(unit.hex);
     blocked.delete(ownKey); // Allow the unit to leave its current hex.
 
+    // Temporal Instability: -25% movement speed (Tier 1+).
+    const instability = state.players[owner].instabilityTier;
+    const effectiveSpeed = instability > 0 ? Math.max(1, Math.floor(def.speed * 0.75)) : def.speed;
+
     const path  = bfsPath(unit.hex, command.targetHex, state, blocked);
-    const steps = path.slice(0, def.speed);
+    const steps = path.slice(0, effectiveSpeed);
     if (steps.length > 0) {
       const dest = steps[steps.length - 1];
       unit.hex = dest;
@@ -236,6 +292,10 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
     const def = UNIT_DEFS[attacker.type];
     if (def.range === 0) continue; // Drones and Flux Weavers cannot attack.
 
+    // Temporal Instability: -15% damage (Tier 1+).
+    const instability = state.players[owner].instabilityTier;
+    const attackMult  = instability > 0 ? 0.85 : 1.0;
+
     const foe = opponent(owner);
 
     // Find enemy unit at target hex first; else enemy structure.
@@ -246,15 +306,16 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
     if (hexDistance(attacker.hex, command.targetHex) > def.range) continue;
 
     if (targetUnit) {
-      const dmg = targetUnit.isDefending
+      const baseDmg = targetUnit.isDefending
         ? Math.ceil(def.attack * 0.5)
         : def.attack;
+      const dmg = Math.max(1, Math.ceil(baseDmg * attackMult));
       unitDamage.set(targetUnit.id, (unitDamage.get(targetUnit.id) ?? 0) + dmg);
       log.push(`${owner} ${attacker.type} attacks ${foe} ${targetUnit.type} for ${dmg}`);
 
       // Void Striker splash: 50% damage to all adjacent hexes.
       if (attacker.type === 'void_striker') {
-        const splashDmg = Math.ceil(def.attack * 0.5);
+        const splashDmg = Math.max(1, Math.ceil(def.attack * 0.5 * attackMult));
         for (const adjHex of hexNeighbors(command.targetHex)) {
           const splashUnit = findUnitAt(state, adjHex, foe);
           if (splashUnit && splashUnit.id !== targetUnit.id) {
@@ -264,7 +325,7 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
         }
       }
     } else if (targetStruct) {
-      const dmg = def.attack;
+      const dmg = Math.max(1, Math.ceil(def.attack * attackMult));
       structDamage.set(targetStruct.id, (structDamage.get(targetStruct.id) ?? 0) + dmg);
       log.push(`${owner} ${attacker.type} attacks ${foe} ${targetStruct.type} for ${dmg}`);
     }
@@ -534,12 +595,18 @@ function stepGather(state: GameState, commands: CommandEntry[], log: string[]): 
       s.assignedDroneId = null;
       continue;
     }
+    // Temporal Instability Tier 2: structures produce -50% resources.
+    const instabilityTier = state.players[s.owner].instabilityTier;
+    const harvestMult = instabilityTier >= 2 ? 0.5 : 1.0;
+
     if (s.type === 'crystal_extractor') {
-      state.players[s.owner].resources.cc += EXTRACTOR_YIELD_CC;
-      log.push(`${s.owner} Crystal Extractor yields +${EXTRACTOR_YIELD_CC} CC`);
+      const cc = Math.max(1, Math.floor(EXTRACTOR_YIELD_CC * harvestMult));
+      state.players[s.owner].resources.cc += cc;
+      log.push(`${s.owner} Crystal Extractor yields +${cc} CC${instabilityTier >= 2 ? ' [instability]' : ''}`);
     } else {
-      state.players[s.owner].resources.fx += FLUX_CONDUIT_YIELD_FX;
-      log.push(`${s.owner} Flux Conduit yields +${FLUX_CONDUIT_YIELD_FX} FX`);
+      const fx = Math.max(1, Math.floor(FLUX_CONDUIT_YIELD_FX * harvestMult));
+      state.players[s.owner].resources.fx += fx;
+      log.push(`${s.owner} Flux Conduit yields +${fx} FX${instabilityTier >= 2 ? ' [instability]' : ''}`);
     }
   }
 }
@@ -622,7 +689,37 @@ function findSpawnHex(state: GameState, barracksHex: Hex): Hex | null {
 
 // ── Post-resolution ───────────────────────────────────────────────────────────
 
-function stepPostResolution(state: GameState): void {
+/** Count the temporal abilities used by a player in a given command list. */
+function countTemporalAbilities(commands: CommandEntry[], owner: PlayerId): number {
+  let count = 0;
+  for (const e of commands) {
+    if (e.owner === owner && (
+      e.command.type === 'temporal' ||
+      e.command.type === 'chrono_shift' ||
+      e.command.type === 'epoch_anchor'
+    )) count++;
+  }
+  return count;
+}
+
+/** Check Resource Dominance: does `owner` have a structure on every crystal_node hex? */
+function controlsAllCrystalNodes(state: GameState, owner: PlayerId): boolean {
+  const ownedStructureHexes = new Set<string>();
+  for (const s of state.structures.values()) {
+    if (s.owner === owner) ownedStructureHexes.add(hexKey(s.hex));
+  }
+
+  let nodeCount = 0;
+  for (const [key, cell] of state.map.cells) {
+    if (cell.terrain === 'crystal_node') {
+      nodeCount++;
+      if (!ownedStructureHexes.has(key)) return false;
+    }
+  }
+  return nodeCount > 0;
+}
+
+function stepPostResolution(state: GameState, commands: CommandEntry[]): void {
   // Single pass over all units: snapshot for Chrono Shift, clear damage shields, collect vision.
   const snapshot = new Map<string, ChronoSnapshot>();
   const visionSources: Array<{ hex: Hex; radius: number }> = [];
@@ -640,8 +737,80 @@ function stepPostResolution(state: GameState): void {
 
   for (const pid of PLAYER_IDS) {
     const p = state.players[pid];
+
+    // ── Resource Dominance streak update ──────────────────────────────────────
+    if (controlsAllCrystalNodes(state, pid)) {
+      state.crystalNodeStreak[pid] += 1;
+    } else {
+      state.crystalNodeStreak[pid] = 0;
+    }
+
+    // ── Paradox Risk: track temporal ability count this epoch ──────────────────
+    const temporalCount = countTemporalAbilities(commands, pid);
+
+    // Maintain rolling 3-epoch window.
+    if (p.temporalEpochCounts.length >= 3) p.temporalEpochCounts.shift();
+    p.temporalEpochCounts.push(temporalCount);
+
+    // Check instability thresholds (only if not already debuffed).
+    if (p.instabilityEpochsLeft === 0) {
+      const counts = p.temporalEpochCounts;
+      const last3Sum = counts.reduce((a, b) => a + b, 0);
+      // Inline last-2 sum to avoid allocating a slice.
+      const last2Sum = (counts[counts.length - 2] ?? 0) + (counts[counts.length - 1] ?? 0);
+
+      if (counts.length >= 3 && last3Sum >= 5) {
+        // Tier 2: 5+ temporal abilities in 3 consecutive epochs.
+        // Initialise to 3 so the debuff is active for 2 full gameplay epochs
+        // (this epoch's tick brings it to 2; the debuff then applies in epochs N+1 and N+2).
+        p.instabilityTier = 2;
+        p.instabilityEpochsLeft = 3;
+      } else if (counts.length >= 2 && last2Sum >= 3) {
+        // Tier 1: 3+ temporal abilities in 2 consecutive epochs.
+        p.instabilityTier = 1;
+        p.instabilityEpochsLeft = 3;
+      }
+    }
+
+    // Tick instability debuff countdown.
+    if (p.instabilityEpochsLeft > 0) {
+      p.instabilityEpochsLeft -= 1;
+      if (p.instabilityEpochsLeft === 0) {
+        p.instabilityTier = 0;
+      }
+    }
+
+    // Tick Epoch Anchor expiry.
+    if (p.epochAnchor !== null) {
+      p.epochAnchor.epochsLeft -= 1;
+      if (p.epochAnchor.epochsLeft <= 0) {
+        p.epochAnchor = null;
+      }
+    }
+
     // Snapshot commands before clearing — used by Temporal Echo next epoch.
-    state.prevEpochCommands[pid] = p.commands.filter((c): c is Command => c !== null);
+    const filledCmds = p.commands.filter((c): c is Command => c !== null);
+    state.prevEpochCommands[pid] = filledCmds;
+
+    // Track player command distribution for AI adaptation (GDD §9.3).
+    if (pid === 'player') {
+      const counts = { gather: 0, build: 0, train: 0, move: 0, attack: 0, temporal: 0 };
+      for (const cmd of filledCmds) {
+        if (cmd.type === 'gather') counts.gather++;
+        else if (cmd.type === 'build') counts.build++;
+        else if (cmd.type === 'train') counts.train++;
+        else if (cmd.type === 'move') counts.move++;
+        else if (cmd.type === 'attack') counts.attack++;
+        else if (cmd.type === 'temporal' || cmd.type === 'chrono_shift' || cmd.type === 'epoch_anchor') {
+          counts.temporal++;
+        }
+      }
+      state.aiConfig.playerCommandHistory.push(counts);
+      if (state.aiConfig.playerCommandHistory.length > 5) {
+        state.aiConfig.playerCommandHistory.shift();
+      }
+    }
+
     // Passive TE regeneration (+1 per epoch, capped at 10).
     p.resources.te = Math.min(p.resources.te + 1, 10);
     // Early lock-in bonus.
@@ -675,8 +844,26 @@ function checkWinConditions(state: GameState): void {
   if (!playerNexus) {
     // Also covers mutual destruction — treat as player defeat.
     state.winner = 'ai';
+    return;
   } else if (!aiNexus) {
     state.winner = 'player';
+    return;
+  }
+
+  // Temporal Singularity: complete the entire tech tree (Tech Tier 3).
+  for (const pid of PLAYER_IDS) {
+    if (state.players[pid].techTier >= 3) {
+      state.winner = pid;
+      return;
+    }
+  }
+
+  // Resource Dominance: control all Crystal Node hexes for 5 consecutive epochs.
+  for (const pid of PLAYER_IDS) {
+    if (state.crystalNodeStreak[pid] >= 5) {
+      state.winner = pid;
+      return;
+    }
   }
 }
 
@@ -703,7 +890,7 @@ export function resolveEpoch(state: GameState): string[] {
   stepGather(state, commands, log);
   stepTrain(state, commands, log);
 
-  stepPostResolution(state);
+  stepPostResolution(state, commands);
   checkWinConditions(state);
 
   state.eventLog = log;

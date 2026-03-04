@@ -9,6 +9,9 @@ interface PlanningBarProps {
   lockedIn: boolean;
   techTier: number;
   researchEpochsLeft: number;
+  instabilityTier?: 0 | 1 | 2;
+  instabilityEpochsLeft?: number;
+  hasEpochAnchor?: boolean;
 }
 
 function timerColor(t: number): string {
@@ -17,7 +20,10 @@ function timerColor(t: number): string {
   return '#ef4444';
 }
 
-export default function PlanningBar({ epoch, resources, timeLeft, lockedIn, techTier, researchEpochsLeft }: PlanningBarProps) {
+export default function PlanningBar({
+  epoch, resources, timeLeft, lockedIn, techTier, researchEpochsLeft,
+  instabilityTier = 0, instabilityEpochsLeft = 0, hasEpochAnchor = false,
+}: PlanningBarProps) {
   const color = timerColor(timeLeft);
   const pct   = Math.round((timeLeft / 30) * 100);
 
@@ -59,6 +65,29 @@ export default function PlanningBar({ epoch, resources, timeLeft, lockedIn, tech
             <span style={{ color: '#fbbf24' }}>TE</span>{' '}
             <span style={{ color: '#e2e8f0' }}>{resources.te}</span>
           </span>
+          {hasEpochAnchor && (
+            <>
+              <span style={{ color: '#334155' }}>|</span>
+              <span data-testid="epoch-anchor-indicator" title="Epoch Anchor active" style={{ color: '#a78bfa' }}>
+                ⚓
+              </span>
+            </>
+          )}
+          {instabilityTier > 0 && (
+            <>
+              <span style={{ color: '#334155' }}>|</span>
+              <span
+                data-testid="instability-indicator"
+                title={`Temporal Instability T${instabilityTier} — ${instabilityEpochsLeft} ep left`}
+                style={{ color: instabilityTier >= 2 ? '#ef4444' : '#f97316' }}
+              >
+                {instabilityTier >= 2 ? 'UNSTABLE T2' : 'UNSTABLE T1'}
+                <span style={{ color: '#94a3b8', marginLeft: 4, fontSize: '0.6rem' }}>
+                  {instabilityEpochsLeft}ep
+                </span>
+              </span>
+            </>
+          )}
           <span style={{ color: '#334155' }}>|</span>
           <span data-testid="tech-tier">
             <span style={{ color: '#34d399' }}>TECH</span>{' '}
