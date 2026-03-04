@@ -1344,11 +1344,12 @@ Vercel's edge CDN ensures fast global delivery. Additional measures:
 
 | Feature | Deferred To |
 |---------|-------------|
-| Flux resource + Flux Conduit | v1.1 |
-| Tier 2–4 units | v1.1 |
-| War Foundry, Chrono Spire, Shield Pylon | v1.1 |
-| Tech tree research / command slot upgrades | v1.1 |
-| Chrono Shift, Timeline Fork, Epoch Anchor, Chrono Scout | v1.1 |
+| Flux resource + Flux Conduit | ✅ v1.1 |
+| Tier 2–4 units | ✅ v1.1 |
+| War Foundry, Chrono Spire, Shield Pylon | ✅ v1.1 |
+| Tech tree research / command slot upgrades | ✅ v1.1 |
+| Chrono Shift | ✅ v1.1 |
+| Timeline Fork, Epoch Anchor, Chrono Scout | v1.1 |
 | Paradox Risk / Temporal Instability | v1.1 |
 | AI archetypes (Aggressor, Technologist, Fortress) | v1.1 |
 | AI difficulty levels (Novice, Commander, Epoch Master) | v1.1 |
@@ -1379,18 +1380,20 @@ Vercel's edge CDN ensures fast global delivery. Additional measures:
 
 ### v1.1 — Full Strategic Depth
 
-- Full tech tree (4 tiers) with command slot upgrades (5 → 8)
-- All 8 unit types (Tier 0–4)
-- All 9 structure types
-- Flux resource + Flux Vents + Flux Conduit
-- All 5 temporal abilities (Echo, Chrono Shift, Timeline Fork, Epoch Anchor, Chrono Scout)
-- Paradox Risk / Temporal Instability system
-- All 4 AI archetypes with blending
-- All 4 difficulty levels (Novice → Epoch Master)
-- AI adaptation system (pattern tracking over 5 epochs)
-- All 3 win conditions (Annihilation, Temporal Singularity, Resource Dominance)
-- Ridge and Energy Field terrain types
-- Map size options (Small, Medium, Large)
+- ✅ Full tech tree (4 tiers) with command slot upgrades (5 → 8)
+- ✅ All 8 unit types (Tier 0–4)
+- ✅ All 9 structure types
+- ✅ Flux resource + Flux Vents + Flux Conduit
+- ✅ Temporal Echo + Chrono Shift
+- ✅ Annihilation win condition (carried from v1.0)
+- ⬜ Timeline Fork, Epoch Anchor, Chrono Scout temporal abilities
+- ⬜ Paradox Risk / Temporal Instability system
+- ⬜ All 4 AI archetypes with blending
+- ⬜ All 4 difficulty levels (Novice → Epoch Master)
+- ⬜ AI adaptation system (pattern tracking over 5 epochs)
+- ⬜ Temporal Singularity + Resource Dominance win conditions
+- ⬜ Ridge and Energy Field terrain types
+- ⬜ Map size options (Small, Medium, Large)
 
 ### v1.2 — Polish & Accessibility
 
