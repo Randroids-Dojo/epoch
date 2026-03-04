@@ -3,13 +3,14 @@
  *
  * Resolution order:
  *   1. Defend    — damage resistance flags set
- *   2. Temporal  — time abilities (MVP: Echo only)
+ *   2. Temporal  — time abilities (Echo, Chrono Shift)
  *   3. Move      — all movement, in map order
- *   4. Attack    — all damage computed simultaneously, then applied
+ *   4. Attack    — all damage computed simultaneously, then applied (incl. splash)
+ *   4.5. Heal    — Flux Weavers auto-heal nearby allies
  *   5. Build     — construction progress ticks
- *   6. Upgrade   — research progress (deferred: no tech tree in MVP)
+ *   6. Upgrade   — research progress / tech tier advancement
  *   7. Gather    — resource harvesting
- *   8. Train     — new units spawned
+ *   8. Train     — new units spawned at Barracks or War Foundry
  *
  * Within each tier, commands are processed in map order:
  * sort by source hex (r ascending, then q ascending).
@@ -233,7 +234,7 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
     if (!attacker || attacker.owner !== owner) continue;
 
     const def = UNIT_DEFS[attacker.type];
-    if (def.range === 0) continue; // Drones cannot attack.
+    if (def.range === 0) continue; // Drones and Flux Weavers cannot attack.
 
     const foe = opponent(owner);
 
@@ -250,6 +251,18 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
         : def.attack;
       unitDamage.set(targetUnit.id, (unitDamage.get(targetUnit.id) ?? 0) + dmg);
       log.push(`${owner} ${attacker.type} attacks ${foe} ${targetUnit.type} for ${dmg}`);
+
+      // Void Striker splash: 50% damage to all adjacent hexes.
+      if (attacker.type === 'void_striker') {
+        const splashDmg = Math.ceil(def.attack * 0.5);
+        for (const adjHex of hexNeighbors(command.targetHex)) {
+          const splashUnit = findUnitAt(state, adjHex, foe);
+          if (splashUnit && splashUnit.id !== targetUnit.id) {
+            unitDamage.set(splashUnit.id, (unitDamage.get(splashUnit.id) ?? 0) + splashDmg);
+            log.push(`${owner} void_striker splash hits ${foe} ${splashUnit.type} for ${splashDmg}`);
+          }
+        }
+      }
     } else if (targetStruct) {
       const dmg = def.attack;
       structDamage.set(targetStruct.id, (structDamage.get(targetStruct.id) ?? 0) + dmg);
@@ -266,8 +279,24 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
       log.push(`${unit.owner} ${unit.type} damage shield absorbed ${dmg} damage`);
       continue;
     }
-    unit.hp -= dmg;
+
+    // Shield Pylon: 20% damage reduction for units within 2 hexes of a friendly completed pylon.
+    const shieldedDmg = hasShieldPylonCoverage(state, unit.hex, unit.owner)
+      ? Math.ceil(dmg * 0.8)
+      : dmg;
+
+    unit.hp -= shieldedDmg;
     if (unit.hp <= 0) {
+      // Chrono Titan on-death: grant damageShield to all nearby friendly units.
+      if (unit.type === 'chrono_titan') {
+        const titanHex = unit.hex;
+        for (const ally of state.units.values()) {
+          if (ally.owner === unit.owner && hexDistance(ally.hex, titanHex) <= 2) {
+            ally.damageShield = true;
+          }
+        }
+        log.push(`${unit.owner} Chrono Titan on-death: shielded nearby allies`);
+      }
       state.units.delete(id);
       log.push(`${unit.owner} ${unit.type} destroyed`);
     }
@@ -282,6 +311,49 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
       state.structures.delete(id);
       log.push(`${s.owner} ${s.type} destroyed`);
     }
+  }
+}
+
+/** Returns true if there is a completed friendly Shield Pylon within 2 hexes of `hex`. */
+function hasShieldPylonCoverage(state: GameState, hex: Hex, owner: PlayerId): boolean {
+  for (const s of state.structures.values()) {
+    if (s.type === 'shield_pylon' && s.owner === owner && isComplete(s)) {
+      if (hexDistance(s.hex, hex) <= 2) return true;
+    }
+  }
+  return false;
+}
+
+// ── Step 4.5: Heal ────────────────────────────────────────────────────────────
+
+/** Flux Weavers auto-heal the lowest-HP friendly unit within 2 hexes by 12 HP/epoch. */
+function stepHeal(state: GameState, log: string[]): void {
+  const FLUX_WEAVER_HEAL = 12;
+  const FLUX_WEAVER_RANGE = 2;
+
+  for (const weaver of state.units.values()) {
+    if (weaver.type !== 'flux_weaver') continue;
+
+    const def = UNIT_DEFS.flux_weaver;
+    // Find the lowest-HP ally within range (excluding self if full HP, but self is valid).
+    let bestTarget = null as (typeof weaver) | null;
+    let bestHpFrac = 1.0;
+
+    for (const ally of state.units.values()) {
+      if (ally.owner !== weaver.owner) continue;
+      if (hexDistance(ally.hex, weaver.hex) > FLUX_WEAVER_RANGE) continue;
+      const maxHp = UNIT_DEFS[ally.type].maxHp;
+      if (ally.hp >= maxHp) continue; // Already at full HP.
+      const frac = ally.hp / maxHp;
+      if (frac < bestHpFrac) { bestHpFrac = frac; bestTarget = ally; }
+    }
+
+    if (!bestTarget) continue;
+    const maxHp = UNIT_DEFS[bestTarget.type].maxHp;
+    const healed = Math.min(FLUX_WEAVER_HEAL, maxHp - bestTarget.hp);
+    bestTarget.hp += healed;
+    log.push(`${weaver.owner} flux_weaver heals ${bestTarget.type} for ${healed} HP`);
+    void def; // suppress unused warning
   }
 }
 
@@ -481,18 +553,26 @@ function stepTrain(state: GameState, commands: CommandEntry[], log: string[]): v
 
   for (const { owner, command } of trains) {
     const player    = state.players[owner];
-    const barracks  = state.structures.get(command.structureId);
+    const building  = state.structures.get(command.structureId);
     const unitDef   = UNIT_DEFS[command.unitType];
 
-    if (!barracks || barracks.owner !== owner) continue;
-    if (barracks.type !== 'barracks') {
-      log.push(`${owner} Train failed — structure is not a Barracks`);
+    if (!building || building.owner !== owner) continue;
+    const validBuilding = building.type === 'barracks' || building.type === 'war_foundry';
+    if (!validBuilding) {
+      log.push(`${owner} Train failed — structure is not a Barracks or War Foundry`);
       continue;
     }
-    if (!isComplete(barracks)) {
-      log.push(`${owner} Train failed — Barracks not ready`);
+    if (!isComplete(building)) {
+      log.push(`${owner} Train failed — ${building.type} not ready`);
       continue;
     }
+    // Validate unit is produced at the correct building type.
+    if (unitDef.producedAt !== building.type) {
+      log.push(`${owner} Train ${command.unitType} failed — requires ${unitDef.producedAt === 'war_foundry' ? 'War Foundry' : 'Barracks'}`);
+      continue;
+    }
+    // Rename local variable for readability in rest of loop.
+    const barracks = building;
     if (unitDef.techTierRequired > player.techTier) {
       log.push(`${owner} Train ${command.unitType} failed — requires Tech Tier ${unitDef.techTierRequired}`);
       continue;
@@ -617,6 +697,7 @@ export function resolveEpoch(state: GameState): string[] {
   stepTemporal(state, commands, log);
   stepMove(state, commands, log);
   stepAttack(state, commands, log);
+  stepHeal(state, log);
   stepBuild(state, commands, log);
   stepUpgrade(state, commands, log);
   stepGather(state, commands, log);

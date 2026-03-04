@@ -185,10 +185,11 @@ export function generateAICommands(state: GameState): void {
     plannedBuilds.add(hexKey(buildHex));
   }
 
-  // ── 3. Build Barracks and Tech Lab if absent ────────────────────────────
+  // ── 3. Build Barracks, Tech Lab, and Tier 2+ structures if absent ────────
 
   const nexusForBuilding = findNexus(state, 'ai');
   if (nexusForBuilding) {
+    // Always build Barracks + Tech Lab first.
     for (const structureType of ['barracks', 'tech_lab'] as const) {
       if (slot >= ai.commandSlots) break;
       const cost = STRUCTURE_DEFS[structureType].costCC;
@@ -200,11 +201,66 @@ export function generateAICommands(state: GameState): void {
       budget -= cost;
       plannedBuilds.add(hexKey(buildHex));
     }
+
+    // Build Shield Pylon at Tier 1+.
+    if (ai.techTier >= 1 && !aiStructures.some((s) => s.type === 'shield_pylon')) {
+      const def = STRUCTURE_DEFS.shield_pylon;
+      const totalCost = def.costCC + def.costFX;
+      if (slot < ai.commandSlots && budget >= totalCost && ai.resources.fx >= def.costFX) {
+        const buildHex = findEmptyPassableHex(state, nexusForBuilding.hex);
+        if (buildHex && !plannedBuilds.has(hexKey(buildHex))) {
+          commands[slot++] = { type: 'build', targetHex: buildHex, structureType: 'shield_pylon' };
+          budget -= def.costCC;
+          plannedBuilds.add(hexKey(buildHex));
+        }
+      }
+    }
+
+    // Build War Foundry at Tier 2+.
+    if (ai.techTier >= 2 && !aiStructures.some((s) => s.type === 'war_foundry')) {
+      const def = STRUCTURE_DEFS.war_foundry;
+      if (slot < ai.commandSlots && budget >= def.costCC && ai.resources.fx >= def.costFX) {
+        const buildHex = findEmptyPassableHex(state, nexusForBuilding.hex);
+        if (buildHex && !plannedBuilds.has(hexKey(buildHex))) {
+          commands[slot++] = { type: 'build', targetHex: buildHex, structureType: 'war_foundry' };
+          budget -= def.costCC;
+          plannedBuilds.add(hexKey(buildHex));
+        }
+      }
+    }
   }
 
   // ── 4. Train units ──────────────────────────────────────────────────────
 
   const barracks = aiStructures.find((s) => s.type === 'barracks' && isComplete(s));
+  const warFoundry = aiStructures.find((s) => s.type === 'war_foundry' && isComplete(s));
+
+  // Train from War Foundry if available and Tier 2+.
+  if (warFoundry && ai.techTier >= 2 && slot < ai.commandSlots) {
+    let trainType: UnitType | null = null;
+    let trainCostCC = 0;
+    let trainCostFX = 0;
+
+    if (ai.techTier >= 3 && budget >= UNIT_DEFS.chrono_titan.costCC && ai.resources.fx >= UNIT_DEFS.chrono_titan.costFX) {
+      trainType = 'chrono_titan';
+      trainCostCC = UNIT_DEFS.chrono_titan.costCC;
+      trainCostFX = UNIT_DEFS.chrono_titan.costFX;
+    } else if (budget >= UNIT_DEFS.void_striker.costCC && ai.resources.fx >= UNIT_DEFS.void_striker.costFX) {
+      trainType = 'void_striker';
+      trainCostCC = UNIT_DEFS.void_striker.costCC;
+      trainCostFX = UNIT_DEFS.void_striker.costFX;
+    } else if (budget >= UNIT_DEFS.flux_weaver.costCC && ai.resources.fx >= UNIT_DEFS.flux_weaver.costFX) {
+      trainType = 'flux_weaver';
+      trainCostCC = UNIT_DEFS.flux_weaver.costCC;
+      trainCostFX = UNIT_DEFS.flux_weaver.costFX;
+    }
+
+    if (trainType) {
+      commands[slot++] = { type: 'train', structureId: warFoundry.id, unitType: trainType };
+      budget -= trainCostCC;
+      void trainCostFX; // FX deducted at resolution
+    }
+  }
 
   if (barracks && slot < ai.commandSlots) {
     // Count how many extractors need drones.
@@ -226,6 +282,9 @@ export function generateAICommands(state: GameState): void {
     if (needMoreDrones) {
       trainType = 'drone';
       trainCost = UNIT_DEFS.drone.costCC;
+    } else if (ai.techTier >= 1 && budget >= UNIT_DEFS.phase_walker.costCC && ai.resources.fx >= UNIT_DEFS.phase_walker.costFX) {
+      trainType = 'phase_walker';
+      trainCost = UNIT_DEFS.phase_walker.costCC;
     } else if (budget >= UNIT_DEFS.arc_ranger.costCC) {
       trainType = 'arc_ranger';
       trainCost = UNIT_DEFS.arc_ranger.costCC;

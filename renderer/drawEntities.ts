@@ -106,15 +106,111 @@ function paintArcRanger(
   ctx.stroke();
 }
 
+// Phase Walker: upward triangle with dashed outline effect (phases through enemies).
+function paintPhaseWalker(
+  ctx: CanvasRenderingContext2D,
+  sx: number, sy: number, r: number, color: string,
+): void {
+  regularPolygon(ctx, sx, sy, r, 3, -Math.PI / 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  // Dashed inner border suggesting phase effect.
+  ctx.save();
+  ctx.setLineDash([2, 2]);
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.lineWidth = 1.5;
+  regularPolygon(ctx, sx, sy, r * 0.6, 3, -Math.PI / 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+// Temporal Warden: hexagon with triple-ring vision aura.
+function paintTemporalWarden(
+  ctx: CanvasRenderingContext2D,
+  sx: number, sy: number, r: number, color: string,
+): void {
+  regularPolygon(ctx, sx, sy, r, 6, 0);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  ctx.lineWidth = 1;
+  regularPolygon(ctx, sx, sy, r * 0.55, 6, 0);
+  ctx.stroke();
+}
+
+// Void Striker: octagon (heavy DPS, splash).
+function paintVoidStriker(
+  ctx: CanvasRenderingContext2D,
+  sx: number, sy: number, r: number, color: string,
+): void {
+  regularPolygon(ctx, sx, sy, r, 8, Math.PI / 8);
+  ctx.fillStyle = color;
+  ctx.fill();
+  // Cross inside to suggest artillery.
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(sx - r * 0.6, sy); ctx.lineTo(sx + r * 0.6, sy);
+  ctx.moveTo(sx, sy - r * 0.6); ctx.lineTo(sx, sy + r * 0.6);
+  ctx.stroke();
+}
+
+// Flux Weaver: 6-pointed star (healer).
+function paintFluxWeaver(
+  ctx: CanvasRenderingContext2D,
+  sx: number, sy: number, r: number, color: string,
+): void {
+  // Draw two overlapping triangles to form a star.
+  ctx.fillStyle = color;
+  for (let t = 0; t < 2; t++) {
+    regularPolygon(ctx, sx, sy, r, 3, -Math.PI / 2 + t * Math.PI);
+    ctx.fill();
+  }
+  // Small circle center.
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.arc(sx, sy, r * 0.28, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Chrono Titan: double-ring circle (massive unit).
+function paintChronoTitan(
+  ctx: CanvasRenderingContext2D,
+  sx: number, sy: number, r: number, color: string,
+): void {
+  // Outer ring.
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(sx, sy, r, 0, Math.PI * 2);
+  ctx.stroke();
+  // Inner filled circle.
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(sx, sy, r * 0.6, 0, Math.PI * 2);
+  ctx.fill();
+  // Center dot.
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath();
+  ctx.arc(sx, sy, r * 0.22, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 function paintUnit(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number,
   unitType: UnitType, color: string,
 ): void {
   switch (unitType) {
-    case 'drone':        paintDrone(ctx, sx, sy, r, color);        break;
-    case 'pulse_sentry': paintPulseSentry(ctx, sx, sy, r, color);  break;
-    case 'arc_ranger':   paintArcRanger(ctx, sx, sy, r, color);    break;
+    case 'drone':           paintDrone(ctx, sx, sy, r, color);           break;
+    case 'pulse_sentry':    paintPulseSentry(ctx, sx, sy, r, color);     break;
+    case 'arc_ranger':      paintArcRanger(ctx, sx, sy, r, color);       break;
+    case 'phase_walker':    paintPhaseWalker(ctx, sx, sy, r, color);     break;
+    case 'temporal_warden': paintTemporalWarden(ctx, sx, sy, r, color);  break;
+    case 'void_striker':    paintVoidStriker(ctx, sx, sy, r, color);     break;
+    case 'flux_weaver':     paintFluxWeaver(ctx, sx, sy, r, color);      break;
+    case 'chrono_titan':    paintChronoTitan(ctx, sx, sy, r, color);     break;
   }
 }
 
@@ -219,6 +315,99 @@ function paintWatchtower(
   ctx.stroke();
 }
 
+// Flux Conduit: diamond shape (resource harvester).
+function paintFluxConduit(
+  ctx: CanvasRenderingContext2D,
+  sx: number, sy: number, r: number, color: string,
+): void {
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(Math.PI / 4);
+  ctx.fillStyle = color;
+  ctx.fillRect(-r * 0.85, -r * 0.85, r * 1.7, r * 1.7);
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(-r * 0.5, -r * 0.5, r, r);
+  ctx.restore();
+}
+
+// War Foundry: wide rectangle with gear-like notches.
+function paintWarFoundry(
+  ctx: CanvasRenderingContext2D,
+  sx: number, sy: number, r: number, color: string,
+): void {
+  const w = r * 2.4;
+  const h = r * 1.8;
+  ctx.fillStyle = color;
+  ctx.fillRect(sx - w / 2, sy - h / 2, w, h);
+  // Gear notches on sides.
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  const notchW = r * 0.3;
+  const notchH = r * 0.5;
+  ctx.fillRect(sx - w / 2 - notchW, sy - notchH / 2, notchW, notchH);
+  ctx.fillRect(sx + w / 2, sy - notchH / 2, notchW, notchH);
+  // Inner grid.
+  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(sx - w * 0.25, sy - h / 2); ctx.lineTo(sx - w * 0.25, sy + h / 2);
+  ctx.moveTo(sx + w * 0.25, sy - h / 2); ctx.lineTo(sx + w * 0.25, sy + h / 2);
+  ctx.moveTo(sx - w / 2, sy); ctx.lineTo(sx + w / 2, sy);
+  ctx.stroke();
+}
+
+// Shield Pylon: shield shape (defensive aura).
+function paintShieldPylon(
+  ctx: CanvasRenderingContext2D,
+  sx: number, sy: number, r: number, color: string,
+): void {
+  // Shield outline: rounded pentagon-like.
+  ctx.beginPath();
+  ctx.moveTo(sx - r, sy - r * 0.6);
+  ctx.lineTo(sx, sy - r);
+  ctx.lineTo(sx + r, sy - r * 0.6);
+  ctx.lineTo(sx + r, sy + r * 0.2);
+  ctx.lineTo(sx, sy + r);
+  ctx.lineTo(sx - r, sy + r * 0.2);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  // Inner highlight.
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy - r * 0.6);
+  ctx.lineTo(sx, sy + r * 0.5);
+  ctx.stroke();
+}
+
+// Chrono Spire: tall spire with rings (temporal structure).
+function paintChronoSpire(
+  ctx: CanvasRenderingContext2D,
+  sx: number, sy: number, r: number, color: string,
+): void {
+  // Central pillar.
+  ctx.fillStyle = color;
+  ctx.fillRect(sx - r * 0.25, sy - r, r * 0.5, r * 2);
+  // Two orbital rings.
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 2; i++) {
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(i * Math.PI / 2);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r, r * 0.4, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+  // Top crystal.
+  ctx.fillStyle = '#fbbf24';
+  ctx.beginPath();
+  ctx.arc(sx, sy - r, r * 0.22, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 function paintStructure(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number,
@@ -230,6 +419,10 @@ function paintStructure(
     case 'barracks':          paintBarracks(ctx, sx, sy, r, color);         break;
     case 'tech_lab':          paintTechLab(ctx, sx, sy, r, color);          break;
     case 'watchtower':        paintWatchtower(ctx, sx, sy, r, color);       break;
+    case 'flux_conduit':      paintFluxConduit(ctx, sx, sy, r, color);      break;
+    case 'war_foundry':       paintWarFoundry(ctx, sx, sy, r, color);       break;
+    case 'shield_pylon':      paintShieldPylon(ctx, sx, sy, r, color);      break;
+    case 'chrono_spire':      paintChronoSpire(ctx, sx, sy, r, color);      break;
   }
 }
 

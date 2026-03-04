@@ -16,6 +16,8 @@ interface CommandPickerProps {
   hasCompletedTechLab: boolean;
   /** True if at least one player unit has a 2-epoch snapshot (Chrono Shift target available). */
   canChronoShift: boolean;
+  /** True if the player has a completed War Foundry (enables Tier 2-3 unit training). */
+  hasWarFoundry: boolean;
   mode?: 'command' | 'train';
   trainStructureLabel?: string;
   feedback?: string | null;
@@ -64,6 +66,7 @@ export default function CommandPicker(props: CommandPickerProps) {
     researchEpochsLeft,
     hasCompletedTechLab,
     canChronoShift,
+    hasWarFoundry,
     mode = 'command',
     trainStructureLabel,
     feedback,
@@ -193,13 +196,15 @@ export default function CommandPicker(props: CommandPickerProps) {
       {mode === 'train' && TRAINABLE_UNIT_TYPES.map((unitType) => {
         const def = UNIT_DEFS[unitType];
         const tierLocked = def.techTierRequired > playerTechTier;
+        const needsWarFoundry = def.producedAt === 'war_foundry' && !hasWarFoundry;
         const ccAffordable = playerCC >= def.costCC;
         const fxAffordable = playerFX >= def.costFX;
-        const isEnabled = !tierLocked && ccAffordable && fxAffordable;
+        const isEnabled = !tierLocked && !needsWarFoundry && ccAffordable && fxAffordable;
 
         const costLabel = def.costFX > 0 ? `${def.costCC}CC ${def.costFX}FX` : `${def.costCC}CC`;
         const disabledLabel = tierLocked
           ? `T${def.techTierRequired}`
+          : needsWarFoundry ? 'War Foundry'
           : !ccAffordable ? 'no CC'
           : !fxAffordable ? 'no FX'
           : undefined;

@@ -37,7 +37,8 @@ import Minimap from '../hud/Minimap';
 
 const PLANNING_DURATION = GAME_CONSTANTS.PLANNING_PHASE_DURATION_MS / 1000;
 const BASE_BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks', 'tech_lab', 'watchtower'];
-const TIER1_BUILD_OPTIONS: BuildStructureType[] = [...BASE_BUILD_OPTIONS, 'flux_conduit'];
+const TIER1_BUILD_OPTIONS: BuildStructureType[] = [...BASE_BUILD_OPTIONS, 'flux_conduit', 'shield_pylon'];
+const TIER2_BUILD_OPTIONS: BuildStructureType[] = [...TIER1_BUILD_OPTIONS, 'war_foundry', 'chrono_spire'];
 
 
 export default function GameView() {
@@ -84,7 +85,13 @@ export default function GameView() {
     }
     return false;
   }, [gameState]);
-  const buildOptions = playerTechTier >= 1 ? TIER1_BUILD_OPTIONS : BASE_BUILD_OPTIONS;
+  const hasWarFoundry = useMemo(() => {
+    for (const s of gameState.structures.values()) {
+      if (s.owner === 'player' && s.type === 'war_foundry' && isComplete(s)) return true;
+    }
+    return false;
+  }, [gameState]);
+  const buildOptions = playerTechTier >= 2 ? TIER2_BUILD_OPTIONS : playerTechTier >= 1 ? TIER1_BUILD_OPTIONS : BASE_BUILD_OPTIONS;
   const canChronoShift = useMemo(
     () => getFirstEligibleUnit(gameState, 'chrono_shift') !== undefined,
     [gameState],
@@ -454,12 +461,15 @@ export default function GameView() {
           slotIndex,
           structureId: '',
           structureHex: { q: 0, r: 0 },
-          failureFeedback: 'Train requires a completed Barracks.',
+          failureFeedback: 'Train requires a completed Barracks or War Foundry.',
         });
         return;
       }
 
-      const withSpawn = eligible.find((entry) => entry.hasSpawnSpace) ?? eligible[0];
+      // Prefer a structure with spawn space; prefer Barracks for reliability.
+      const withSpawn = eligible.find((e) => e.hasSpawnSpace && e.structureType === 'barracks')
+        ?? eligible.find((e) => e.hasSpawnSpace)
+        ?? eligible[0];
       const selectedStructure = state.structures.get(withSpawn.structureId);
       if (!selectedStructure) {
         setMode({ kind: 'idle' });
@@ -476,7 +486,7 @@ export default function GameView() {
         slotIndex,
         structureId: selectedStructure.id,
         structureHex: selectedStructure.hex,
-        failureFeedback: withSpawn.hasSpawnSpace ? lowResourceFeedback : 'Train failed: barracks spawn is blocked.',
+        failureFeedback: withSpawn.hasSpawnSpace ? lowResourceFeedback : 'Train failed: spawn is blocked.',
       });
       return;
     }
@@ -508,9 +518,16 @@ export default function GameView() {
       return;
     }
 
+    // Auto-select the correct production building for this unit type.
+    const unitDef = UNIT_DEFS[unitType];
+    const eligible = getPlayerTrainEligibility(state);
+    const matchingBuilding = eligible.find((e) => e.structureType === unitDef.producedAt && e.hasSpawnSpace)
+      ?? eligible.find((e) => e.structureType === unitDef.producedAt);
+    const structureId = matchingBuilding?.structureId ?? m.structureId;
+
     const newCmd: TrainCommand = {
       type: 'train',
-      structureId: m.structureId,
+      structureId,
       unitType,
     };
 
@@ -680,10 +697,15 @@ export default function GameView() {
             researchEpochsLeft={researchEpochsLeft}
             hasCompletedTechLab={hasCompletedTechLab}
             canChronoShift={canChronoShift}
+            hasWarFoundry={hasWarFoundry}
             mode={mode.kind === 'train_picker' ? 'train' : 'command'}
             trainStructureLabel={
-              mode.kind === 'train_picker'
-                ? `Barracks (${mode.structureHex.q},${mode.structureHex.r})`
+              mode.kind === 'train_picker' && mode.structureId
+                ? (() => {
+                    const s = gameState.structures.get(mode.structureId);
+                    const label = s?.type === 'war_foundry' ? 'War Foundry' : 'Barracks';
+                    return `${label} (${mode.structureHex.q},${mode.structureHex.r})`;
+                  })()
                 : undefined
             }
             feedback={mode.kind === 'train_picker' ? mode.failureFeedback : null}
