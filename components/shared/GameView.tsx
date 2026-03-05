@@ -535,7 +535,9 @@ export default function GameView() {
         slotIndex,
         structureId: selectedStructure.id,
         structureHex: selectedStructure.hex,
-        failureFeedback: withSpawn.hasSpawnSpace ? lowResourceFeedback : 'Train failed: spawn is blocked.',
+        failureFeedback: withSpawn.hasSpawnSpace
+          ? lowResourceFeedback
+          : `Train failed: ${withSpawn.structureType === 'war_foundry' ? 'war foundry' : 'barracks'} spawn is blocked.`,
       });
       return;
     }
