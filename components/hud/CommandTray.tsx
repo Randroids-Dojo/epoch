@@ -77,12 +77,14 @@ export default function CommandTray({
             key={i}
             data-testid={`command-slot-${i}`}
             type="button"
+            disabled={lockedIn}
             onClick={() => onSlotClick(i)}
             className="relative flex items-center justify-center rounded text-xs select-none"
             style={{
               width: slot.width,
               height: slot.height,
-              cursor: 'pointer',
+              cursor: lockedIn ? 'not-allowed' : 'pointer',
+              opacity: lockedIn ? 0.5 : 1,
               border: isSelected
                 ? '1.5px solid #00d4ff'
                 : '1px solid #334155',
@@ -92,8 +94,8 @@ export default function CommandTray({
               background: isSelected
                 ? 'rgba(0,212,255,0.06)'
                 : 'rgba(30,41,59,0.5)',
-              animation: !cmd && !isSelected ? 'pulse-border 2.5s ease-in-out infinite' : undefined,
-              transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+              animation: !cmd && !isSelected && !lockedIn ? 'pulse-border 2.5s ease-in-out infinite' : undefined,
+              transition: 'border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease',
               fontFamily: 'inherit',
             }}
           >

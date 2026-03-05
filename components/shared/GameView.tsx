@@ -14,7 +14,7 @@ import {
   BuildStructureType,
 } from '@/engine/targeting';
 import { generateAICommands } from '@/engine/ai';
-import { isComplete } from '@/engine/structures';
+import { isComplete, STRUCTURE_DEFS } from '@/engine/structures';
 import { PlayerId } from '@/engine/player';
 import { COLORS, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
 import { InteractionMode } from '@/lib/types';
@@ -423,6 +423,7 @@ export default function GameView() {
   const handleSlotClick = useCallback((i: number) => {
     const m     = modeRef.current;
     const state = gameStateRef.current;
+    if (state.players.player.lockedIn) return;
     const cmd   = state.players.player.commands[i];
 
     if (m.kind === 'slot_selected' && m.slotIndex === i) {
@@ -439,6 +440,7 @@ export default function GameView() {
 
   const handleSlotClear = useCallback((i: number) => {
     const state = gameStateRef.current;
+    if (state.players.player.lockedIn) return;
     const newCommands = [...state.players.player.commands];
     newCommands[i] = null;
     state.players.player.commands = newCommands;
@@ -668,6 +670,9 @@ export default function GameView() {
       // Planning phase shortcuts.
       if (state.phase !== 'planning') return;
 
+      // Block slot interaction when locked in (only allow Space for skip).
+      if (state.players.player.lockedIn) return;
+
       // 1–5: select slot.
       if (e.key >= '1' && e.key <= '5') {
         const idx = parseInt(e.key, 10) - 1;
@@ -808,22 +813,36 @@ export default function GameView() {
             <div className="px-3 py-1.5" style={{ color: '#475569', borderBottom: '1px solid #1e293b', fontSize: '0.65rem', letterSpacing: '0.1em' }}>
               CHOOSE STRUCTURE
             </div>
-            {buildOptions.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                data-testid={`build-option-${opt}`}
-                onClick={() => handleBuildStructureSelect(opt)}
-                className="block w-full px-3 py-2 text-left"
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  color: '#e2e8f0',
-                }}
-              >
-                {opt.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase())}
-              </button>
-            ))}
+            {buildOptions.map((opt) => {
+              const sDef = STRUCTURE_DEFS[opt];
+              const ccOk = gameState.players.player.resources.cc >= sDef.costCC;
+              const fxOk = sDef.costFX === 0 || gameState.players.player.resources.fx >= sDef.costFX;
+              const isEnabled = ccOk && fxOk;
+              const costLabel = sDef.costFX > 0 ? `${sDef.costCC}CC ${sDef.costFX}FX` : `${sDef.costCC}CC`;
+              const disabledLabel = !ccOk ? 'no CC' : !fxOk ? 'no FX' : undefined;
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  data-testid={`build-option-${opt}`}
+                  disabled={!isEnabled}
+                  title={disabledLabel}
+                  onClick={() => isEnabled && handleBuildStructureSelect(opt)}
+                  className="flex w-full items-center justify-between px-3 py-2 text-left"
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    color: isEnabled ? '#e2e8f0' : '#334155',
+                    cursor: isEnabled ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  <span>{sDef.label}</span>
+                  <span style={{ color: isEnabled ? '#fbbf24' : '#334155', fontSize: '0.6rem', marginLeft: 16 }}>
+                    {disabledLabel ?? costLabel}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
 
