@@ -105,6 +105,33 @@ export default function GameView() {
     () => getFirstEligibleUnit(gameState, 'chrono_shift') !== undefined,
     [gameState],
   );
+  const canMove = useMemo(
+    () => getFirstEligibleUnit(gameState, 'move') !== undefined,
+    [gameState],
+  );
+  const canAttack = useMemo(
+    () => getFirstEligibleUnit(gameState, 'attack') !== undefined,
+    [gameState],
+  );
+  const canGather = useMemo(() => {
+    if (getFirstEligibleUnit(gameState, 'gather') === undefined) return false;
+    for (const s of gameState.structures.values()) {
+      if (s.owner === 'player' && isComplete(s) && (s.type === 'crystal_extractor' || s.type === 'flux_conduit')) return true;
+    }
+    return false;
+  }, [gameState]);
+  const canDefend = useMemo(
+    () => getFirstEligibleUnit(gameState, 'defend') !== undefined,
+    [gameState],
+  );
+  const canBuild = useMemo(() => {
+    const cc = gameState.players.player.resources.cc;
+    return cc >= 3; // cheapest structures (Crystal Extractor, Watchtower) cost 3 CC
+  }, [gameState]);
+  const canTrain = useMemo(
+    () => getPlayerTrainEligibility(gameState).length > 0,
+    [gameState],
+  );
   const hasEpochAnchor = gameState.players.player.epochAnchor !== null;
   const instabilityTier = gameState.players.player.instabilityTier;
   const instabilityEpochsLeft = gameState.players.player.instabilityEpochsLeft;
@@ -736,6 +763,12 @@ export default function GameView() {
             canChronoShift={canChronoShift}
             hasWarFoundry={hasWarFoundry}
             hasEpochAnchor={hasEpochAnchor}
+            canMove={canMove}
+            canAttack={canAttack}
+            canGather={canGather}
+            canDefend={canDefend}
+            canBuild={canBuild}
+            canTrain={canTrain}
             mode={mode.kind === 'train_picker' ? 'train' : 'command'}
             trainStructureLabel={
               mode.kind === 'train_picker' && mode.structureId
