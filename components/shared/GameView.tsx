@@ -81,7 +81,9 @@ export default function GameView() {
     const patchedState = createInitialState(42);
     testMutator(patchedState);
     setGameState({ ...patchedState });
-    setMode({ kind: 'idle' });
+    // Note: don't call setMode here — mode is already idle on mount, and
+    // resetting it after a test opens the picker would close the picker and
+    // race with Playwright's auto-wait for disabled-then-enabled buttons.
   }, []);
 
   const lockedIn = gameState.players.player.lockedIn;
