@@ -378,6 +378,7 @@ export default function GameView() {
 
   // ── Play Again ────────────────────────────────────────────────────────────
   const handlePlayAgain = useCallback(() => {
+    setGameState(createInitialState(42));
     setShowSetup(true);
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
