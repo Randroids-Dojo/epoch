@@ -78,6 +78,7 @@ test('clicking a slot opens command picker (desktop)', async ({ page, isMobile }
 test('build flow: choose structure, target hex, then clear command', async ({ page, isMobile }) => {
   test.skip(isMobile, 'Desktop-only interaction for canvas clicking');
   await page.goto('/');
+  await page.getByTestId('start-game-btn').click();
 
   await page.keyboard.press('1');
   await page.getByRole('menuitem', { name: 'Build' }).click();

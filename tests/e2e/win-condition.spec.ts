@@ -42,6 +42,7 @@ test('command tray is hidden when game is over', async ({ page }) => {
 
 test('Play Again resets to planning phase', async ({ page }) => {
   await page.goto('/');
+  await page.getByTestId('start-game-btn').click();
   await triggerGameOver(page, 'ai');
   await expect(page.getByTestId('game-over-overlay')).toBeVisible();
 
