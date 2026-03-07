@@ -752,22 +752,6 @@ function countTemporalAbilities(commands: CommandEntry[], owner: PlayerId): numb
   return count;
 }
 
-/** Check Resource Dominance: does `owner` have a structure on every crystal_node hex? */
-function controlsAllCrystalNodes(state: GameState, owner: PlayerId): boolean {
-  const ownedStructureHexes = new Set<string>();
-  for (const s of state.structures.values()) {
-    if (s.owner === owner) ownedStructureHexes.add(hexKey(s.hex));
-  }
-
-  let nodeCount = 0;
-  for (const [key, cell] of state.map.cells) {
-    if (cell.terrain === 'crystal_node') {
-      nodeCount++;
-      if (!ownedStructureHexes.has(key)) return false;
-    }
-  }
-  return nodeCount > 0;
-}
 
 function stepPostResolution(state: GameState, commands: CommandEntry[]): void {
   // Single pass over all units: snapshot for Chrono Shift, clear damage shields, collect vision.
@@ -787,13 +771,6 @@ function stepPostResolution(state: GameState, commands: CommandEntry[]): void {
 
   for (const pid of PLAYER_IDS) {
     const p = state.players[pid];
-
-    // ── Resource Dominance streak update ──────────────────────────────────────
-    if (controlsAllCrystalNodes(state, pid)) {
-      state.crystalNodeStreak[pid] += 1;
-    } else {
-      state.crystalNodeStreak[pid] = 0;
-    }
 
     // ── Paradox Risk: track temporal ability count this epoch ──────────────────
     const temporalCount = countTemporalAbilities(commands, pid);
@@ -908,21 +885,6 @@ function checkWinConditions(state: GameState): void {
     return;
   }
 
-  // Temporal Singularity: complete the entire tech tree (Tech Tier 3).
-  for (const pid of PLAYER_IDS) {
-    if (state.players[pid].techTier >= 3) {
-      state.winner = pid;
-      return;
-    }
-  }
-
-  // Resource Dominance: control all Crystal Node hexes for 5 consecutive epochs.
-  for (const pid of PLAYER_IDS) {
-    if (state.crystalNodeStreak[pid] >= 5) {
-      state.winner = pid;
-      return;
-    }
-  }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

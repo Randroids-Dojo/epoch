@@ -93,7 +93,6 @@ export function deepCopyState(state: GameState): GameState {
       ai: [...state.prevEpochCommands.ai],
     },
     unitHistory,
-    crystalNodeStreak: { ...state.crystalNodeStreak },
     aiConfig: {
       difficulty: state.aiConfig.difficulty,
       archetypeBlend: { ...state.aiConfig.archetypeBlend },

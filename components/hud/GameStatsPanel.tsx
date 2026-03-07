@@ -212,7 +212,7 @@ function PlayerSection({ gameState, owner }: { gameState: GameState; owner: Play
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function GameStatsPanel({ gameState }: GameStatsPanelProps) {
-  const { epoch, phase, crystalNodeStreak, eventLog, aiConfig } = gameState;
+  const { epoch, phase, eventLog, aiConfig } = gameState;
 
   const phaseColor = phase === 'planning' ? C.cyan : phase === 'execution' ? C.gold : C.dim;
   const diffLabel = aiConfig.difficulty.toUpperCase().replace('_', ' ');
@@ -276,12 +276,6 @@ export default function GameStatsPanel({ gameState }: GameStatsPanelProps) {
           <div className="flex justify-between" style={{ marginBottom: 2 }}>
             <span style={{ color: C.red }}>AI nodes</span>
             <span style={{ color: C.red }}>{aiNodes}</span>
-          </div>
-          <div className="flex justify-between" style={{ marginBottom: 2 }}>
-            <span style={{ color: C.muted }}>Streak P/AI</span>
-            <span style={{ color: C.text }}>
-              {crystalNodeStreak.player} / {crystalNodeStreak.ai}
-            </span>
           </div>
         </div>
       </div>

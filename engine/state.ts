@@ -96,11 +96,6 @@ export interface GameState {
    * Index 0 = oldest (2 epochs ago), index 1 = most recent (1 epoch ago).
    */
   unitHistory: Array<Map<string, ChronoSnapshot>>;
-  /**
-   * Resource Dominance win condition tracking.
-   * Number of consecutive epochs each player has controlled ALL crystal_node hexes.
-   */
-  crystalNodeStreak: Record<PlayerId, number>;
   /** AI difficulty, archetype blend, and player command history for adaptation. */
   aiConfig: AIConfig;
 }
@@ -226,7 +221,6 @@ export function createInitialState(seed?: number, difficulty: AIDifficulty = 'ad
     eventLog: [],
     prevEpochCommands:  { player: [], ai: [] },
     unitHistory:        [],
-    crystalNodeStreak:  { player: 0, ai: 0 },
     aiConfig:           createAIConfig(difficulty),
     units,
     structures,

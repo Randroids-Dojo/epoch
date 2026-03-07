@@ -315,7 +315,6 @@ export default function GameView() {
             type: st.type, hp: st.hp, buildProgress: st.buildProgress,
           })),
         },
-        crystalNodeStreak: { ...s.crystalNodeStreak },
         playerStart: { q: s.map.playerStart.q, r: s.map.playerStart.r },
         aiStart: { q: s.map.aiStart.q, r: s.map.aiStart.r },
         // Keep legacy field for smoke test helper
