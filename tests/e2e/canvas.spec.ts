@@ -18,7 +18,7 @@ test('canvas has non-zero dimensions', async ({ page }) => {
 
 test('EPOCH header is visible', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByText('EPOCH')).toBeVisible();
+  await expect(page.getByText(/^EPOCH \d+$/)).toBeVisible();
 });
 
 test('minimap is visible and placed by form factor', async ({ page }) => {

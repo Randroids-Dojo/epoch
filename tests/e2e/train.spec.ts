@@ -32,12 +32,12 @@ test('queues a train command when barracks and CC are available', async ({ page 
   await expect(slot).toContainText('pulse_sentry');
 });
 
-test('shows feedback when attempting train without a barracks', async ({ page }) => {
+test('train button is disabled when no barracks exists', async ({ page }) => {
   await page.goto('/');
   await page.keyboard.press('1');
-  await page.getByRole('menuitem', { name: 'Train' }).click();
-
-  await expect(page.getByTestId('command-feedback')).toHaveText('Train requires a completed Barracks.');
+  const trainBtn = page.getByRole('menuitem', { name: 'Train' });
+  await expect(trainBtn).toBeDisabled();
+  await expect(trainBtn).toHaveAttribute('title', 'No production building');
 });
 
 test('shows feedback when barracks exists but CC is insufficient', async ({ page }) => {

@@ -15,7 +15,7 @@ import {
   BuildStructureType,
 } from '@/engine/targeting';
 import { generateAICommands } from '@/engine/ai';
-import { isComplete } from '@/engine/structures';
+import { isComplete, STRUCTURE_DEFS } from '@/engine/structures';
 import { PlayerId } from '@/engine/player';
 import { COLORS, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
 import { InteractionMode } from '@/lib/types';
@@ -89,7 +89,9 @@ export default function GameView() {
     const patchedState = createInitialState(42);
     testMutator(patchedState);
     setGameState({ ...patchedState });
-    setMode({ kind: 'idle' });
+    // Note: don't call setMode here — mode is already idle on mount, and
+    // resetting it after a test opens the picker would close the picker and
+    // race with Playwright's auto-wait for disabled-then-enabled buttons.
   }, []);
 
   const lockedIn = gameState.players.player.lockedIn;
@@ -134,6 +136,33 @@ export default function GameView() {
   const buildOptions = playerTechTier >= 2 ? TIER2_BUILD_OPTIONS : playerTechTier >= 1 ? TIER1_BUILD_OPTIONS : BASE_BUILD_OPTIONS;
   const canChronoShift = useMemo(
     () => getFirstEligibleUnit(gameState, 'chrono_shift') !== undefined,
+    [gameState],
+  );
+  const canMove = useMemo(
+    () => getFirstEligibleUnit(gameState, 'move') !== undefined,
+    [gameState],
+  );
+  const canAttack = useMemo(
+    () => getFirstEligibleUnit(gameState, 'attack') !== undefined,
+    [gameState],
+  );
+  const canGather = useMemo(() => {
+    if (getFirstEligibleUnit(gameState, 'gather') === undefined) return false;
+    for (const s of gameState.structures.values()) {
+      if (s.owner === 'player' && isComplete(s) && (s.type === 'crystal_extractor' || s.type === 'flux_conduit')) return true;
+    }
+    return false;
+  }, [gameState]);
+  const canDefend = useMemo(
+    () => getFirstEligibleUnit(gameState, 'defend') !== undefined,
+    [gameState],
+  );
+  const canBuild = useMemo(() => {
+    const cc = gameState.players.player.resources.cc;
+    return cc >= 3; // cheapest structures (Crystal Extractor, Watchtower) cost 3 CC
+  }, [gameState]);
+  const canTrain = useMemo(
+    () => getPlayerTrainEligibility(gameState).length > 0,
     [gameState],
   );
   const hasEpochAnchor = gameState.players.player.epochAnchor !== null;
@@ -384,6 +413,7 @@ export default function GameView() {
 
   // ── Play Again ────────────────────────────────────────────────────────────
   const handlePlayAgain = useCallback(() => {
+    setGameState(createInitialState(42));
     setShowSetup(true);
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
@@ -450,6 +480,7 @@ export default function GameView() {
   const handleSlotClick = useCallback((i: number) => {
     const m     = modeRef.current;
     const state = gameStateRef.current;
+    if (state.players.player.lockedIn) return;
     const cmd   = state.players.player.commands[i];
 
     if (m.kind === 'slot_selected' && m.slotIndex === i) {
@@ -466,6 +497,7 @@ export default function GameView() {
 
   const handleSlotClear = useCallback((i: number) => {
     const state = gameStateRef.current;
+    if (state.players.player.lockedIn) return;
     const cmd = state.players.player.commands[i];
     if (cmd?.type === 'chrono_scout') setChronoScoutResult(null);
     if (cmd?.type === 'timeline_fork') {
@@ -580,7 +612,9 @@ export default function GameView() {
         slotIndex,
         structureId: selectedStructure.id,
         structureHex: selectedStructure.hex,
-        failureFeedback: withSpawn.hasSpawnSpace ? lowResourceFeedback : 'Train failed: spawn is blocked.',
+        failureFeedback: withSpawn.hasSpawnSpace
+          ? lowResourceFeedback
+          : `Train failed: ${withSpawn.structureType === 'war_foundry' ? 'war foundry' : 'barracks'} spawn is blocked.`,
       });
       return;
     }
@@ -715,6 +749,9 @@ export default function GameView() {
       // Planning phase shortcuts.
       if (state.phase !== 'planning') return;
 
+      // Block slot interaction when locked in (only allow Space for skip).
+      if (state.players.player.lockedIn) return;
+
       // 1–5: select slot.
       if (e.key >= '1' && e.key <= '5') {
         const idx = parseInt(e.key, 10) - 1;
@@ -812,6 +849,12 @@ export default function GameView() {
             canChronoShift={canChronoShift}
             hasWarFoundry={hasWarFoundry}
             hasEpochAnchor={hasEpochAnchor}
+            canMove={canMove}
+            canAttack={canAttack}
+            canGather={canGather}
+            canDefend={canDefend}
+            canBuild={canBuild}
+            canTrain={canTrain}
             canTimelineFork={canTimelineFork}
             timelineForkDisabledReason={timelineForkDisabledReason}
             canChronoScout={canChronoScout}
@@ -855,22 +898,36 @@ export default function GameView() {
             <div className="px-3 py-1.5" style={{ color: '#475569', borderBottom: '1px solid #1e293b', fontSize: '0.65rem', letterSpacing: '0.1em' }}>
               CHOOSE STRUCTURE
             </div>
-            {buildOptions.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                data-testid={`build-option-${opt}`}
-                onClick={() => handleBuildStructureSelect(opt)}
-                className="block w-full px-3 py-2 text-left"
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  color: '#e2e8f0',
-                }}
-              >
-                {opt.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase())}
-              </button>
-            ))}
+            {buildOptions.map((opt) => {
+              const sDef = STRUCTURE_DEFS[opt];
+              const ccOk = gameState.players.player.resources.cc >= sDef.costCC;
+              const fxOk = sDef.costFX === 0 || gameState.players.player.resources.fx >= sDef.costFX;
+              const isEnabled = ccOk && fxOk;
+              const costLabel = sDef.costFX > 0 ? `${sDef.costCC}CC ${sDef.costFX}FX` : `${sDef.costCC}CC`;
+              const disabledLabel = !ccOk ? 'no CC' : !fxOk ? 'no FX' : undefined;
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  data-testid={`build-option-${opt}`}
+                  disabled={!isEnabled}
+                  title={disabledLabel}
+                  onClick={() => isEnabled && handleBuildStructureSelect(opt)}
+                  className="flex w-full items-center justify-between px-3 py-2 text-left"
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    color: isEnabled ? '#e2e8f0' : '#334155',
+                    cursor: isEnabled ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  <span>{sDef.label}</span>
+                  <span style={{ color: isEnabled ? '#fbbf24' : '#334155', fontSize: '0.6rem', marginLeft: 16 }}>
+                    {disabledLabel ?? costLabel}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
 

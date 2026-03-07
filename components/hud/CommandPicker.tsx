@@ -24,6 +24,18 @@ interface CommandPickerProps {
   hasWarFoundry: boolean;
   /** True if the player has an active Epoch Anchor set. */
   hasEpochAnchor: boolean;
+  /** True if the player has at least one unit that can move. */
+  canMove: boolean;
+  /** True if the player has at least one combat unit (range > 0). */
+  canAttack: boolean;
+  /** True if the player has a drone AND a completed harvestable structure. */
+  canGather: boolean;
+  /** True if the player has at least one unit that can defend. */
+  canDefend: boolean;
+  /** True if the player can afford at least one structure and has a valid build hex. */
+  canBuild: boolean;
+  /** True if the player has a completed production building. */
+  canTrain: boolean;
   /** True if Timeline Fork is available (Tier 2, enough TE, not yet used this match). */
   canTimelineFork: boolean;
   /** Reason Timeline Fork is disabled, if any. */
@@ -85,6 +97,12 @@ export default function CommandPicker(props: CommandPickerProps) {
     canChronoShift,
     hasWarFoundry,
     hasEpochAnchor,
+    canMove,
+    canAttack,
+    canGather,
+    canDefend,
+    canBuild,
+    canTrain,
     canTimelineFork,
     timelineForkDisabledReason,
     canChronoScout,
@@ -132,12 +150,12 @@ export default function CommandPicker(props: CommandPickerProps) {
       : undefined;
 
   const entries: PickerEntry[] = [
-    { type: 'move',     label: 'Move',     shortcut: 'M', enabled: true },
-    { type: 'attack',   label: 'Attack',   shortcut: 'A', enabled: true },
-    { type: 'gather',   label: 'Gather',   shortcut: 'G', enabled: true },
-    { type: 'defend',   label: 'Defend',   shortcut: 'D', enabled: true },
-    { type: 'build',    label: 'Build',    shortcut: 'B', enabled: true },
-    { type: 'train',    label: 'Train',    shortcut: 'T', enabled: true },
+    { type: 'move',     label: 'Move',     shortcut: 'M', enabled: canMove,   disabledReason: canMove   ? undefined : 'No units available' },
+    { type: 'attack',   label: 'Attack',   shortcut: 'A', enabled: canAttack, disabledReason: canAttack ? undefined : 'No combat units' },
+    { type: 'gather',   label: 'Gather',   shortcut: 'G', enabled: canGather, disabledReason: canGather ? undefined : 'No drone or extractor' },
+    { type: 'defend',   label: 'Defend',   shortcut: 'D', enabled: canDefend, disabledReason: canDefend ? undefined : 'No units available' },
+    { type: 'build',    label: 'Build',    shortcut: 'B', enabled: canBuild,  disabledReason: canBuild  ? undefined : 'Cannot build' },
+    { type: 'train',    label: 'Train',    shortcut: 'T', enabled: canTrain,  disabledReason: canTrain  ? undefined : 'No production building' },
     {
       type: 'temporal',
       label: 'Echo',
