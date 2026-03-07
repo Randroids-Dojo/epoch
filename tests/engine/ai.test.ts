@@ -57,6 +57,12 @@ describe('generateAICommands — economy', () => {
       id: exId, owner: 'ai', type: 'crystal_extractor', hex: exHex,
       hp: STRUCTURE_DEFS.crystal_extractor.maxHp, buildProgress: 0, assignedDroneId: null,
     });
+    // Barracks must exist — gather is gated on having military production
+    const bkId = newId('s');
+    state.structures.set(bkId, {
+      id: bkId, owner: 'ai', type: 'barracks', hex: { q: nexus.hex.q - 1, r: nexus.hex.r },
+      hp: STRUCTURE_DEFS.barracks.maxHp, buildProgress: 0, assignedDroneId: null,
+    });
 
     generateAICommands(state);
     const cmds = allAICmds(state);

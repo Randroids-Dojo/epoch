@@ -255,13 +255,8 @@ export default function GameView() {
     type W = Window & {
       __triggerGameOver?: (winner: PlayerId) => void;
       __getEligibleTargets?: (type: string) => Array<{ q: number; r: number }>;
-      __getGameSnapshot?: () => {
-        phase: string; epoch: number; winner: string | null;
-        resources: { cc: number; fx: number; te: number };
-        playerStart: { q: number; r: number };
-        aiStart: { q: number; r: number };
-        playerStructureTypes: string[];
-      };
+      __getGameSnapshot?: () => unknown;
+      __getEventLog?: () => string[];
     };
     const w = window as W;
 
@@ -289,18 +284,46 @@ export default function GameView() {
 
     w.__getGameSnapshot = () => {
       const s = gameStateRef.current;
+      const playerUnits = [...s.units.values()].filter(u => u.owner === 'player');
+      const aiUnits     = [...s.units.values()].filter(u => u.owner === 'ai');
+      const playerStructs = [...s.structures.values()].filter(st => st.owner === 'player');
+      const aiStructs     = [...s.structures.values()].filter(st => st.owner === 'ai');
       return {
         phase: s.phase,
         epoch: s.epoch,
         winner: s.winner,
-        resources: { ...s.players.player.resources },
+        player: {
+          resources: { ...s.players.player.resources },
+          techTier: s.players.player.techTier,
+          researchLeft: s.players.player.researchEpochsLeft,
+          instabilityTier: s.players.player.instabilityTier,
+          instabilityLeft: s.players.player.instabilityEpochsLeft,
+          hasAnchor: s.players.player.epochAnchor !== null,
+          forkUsed: s.players.player.timelineForkUsed,
+          units: playerUnits.map(u => ({ type: u.type, hp: u.hp, hex: u.hex })),
+          structures: playerStructs.map(st => ({
+            type: st.type, hp: st.hp, buildProgress: st.buildProgress,
+          })),
+        },
+        ai: {
+          resources: { ...s.players.ai.resources },
+          techTier: s.players.ai.techTier,
+          researchLeft: s.players.ai.researchEpochsLeft,
+          instabilityTier: s.players.ai.instabilityTier,
+          units: aiUnits.map(u => ({ type: u.type, hp: u.hp, hex: u.hex })),
+          structures: aiStructs.map(st => ({
+            type: st.type, hp: st.hp, buildProgress: st.buildProgress,
+          })),
+        },
+        crystalNodeStreak: { ...s.crystalNodeStreak },
         playerStart: { q: s.map.playerStart.q, r: s.map.playerStart.r },
         aiStart: { q: s.map.aiStart.q, r: s.map.aiStart.r },
-        playerStructureTypes: [...s.structures.values()]
-          .filter(st => st.owner === 'player')
-          .map(st => st.type),
+        // Keep legacy field for smoke test helper
+        playerStructureTypes: playerStructs.map(st => st.type),
       };
     };
+
+    w.__getEventLog = () => gameStateRef.current.eventLog;
   }, []);
 
   // ── handleResolve ─────────────────────────────────────────────────────────
@@ -787,8 +810,8 @@ export default function GameView() {
           />
         )}
 
-        {/* Stats panel — right sidebar, always visible */}
-        <GameStatsPanel gameState={gameState} />
+        {/* Stats panel — right sidebar, desktop only (too wide for mobile viewports) */}
+        {!isMobile && <GameStatsPanel gameState={gameState} />}
 
         <Minimap
           gameState={gameState}

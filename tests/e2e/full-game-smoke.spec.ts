@@ -5,11 +5,22 @@ import { DEFAULT_ZOOM } from '@/renderer/camera';
 
 type Hex = { q: number; r: number };
 
+type PlayerSnap = {
+  resources: { cc: number; fx: number; te: number };
+  techTier: number;
+  researchLeft: number;
+  instabilityTier: number;
+  units: { type: string; hp: number; hex: Hex }[];
+  structures: { type: string; hp: number; buildProgress: number }[];
+};
+
 type GameSnapshot = {
   phase: string;
   epoch: number;
   winner: string | null;
-  resources: { cc: number; fx: number; te: number };
+  player: PlayerSnap;
+  ai: PlayerSnap;
+  crystalNodeStreak: { player: number; ai: number };
   playerStart: Hex;
   aiStart: Hex;
   playerStructureTypes: string[];
@@ -112,9 +123,11 @@ async function fillEpoch(page: Page): Promise<void> {
   const snap = await getSnapshot(page);
   if (snap.phase !== 'planning') return;
 
-  const { playerStart, aiStart, resources, playerStructureTypes } = snap;
+  const { playerStart, aiStart, player, playerStructureTypes } = snap;
+  const resources = player.resources;
   const hasBarracks  = playerStructureTypes.includes('barracks');
   const hasExtractor = playerStructureTypes.includes('crystal_extractor');
+  const hasTechLab   = playerStructureTypes.includes('tech_lab');
 
   const [moveHexes, attackHexes, gatherHexes, buildHexes] = await Promise.all([
     getTargets(page, 'move'),
@@ -128,24 +141,21 @@ async function fillEpoch(page: Page): Promise<void> {
   const gatherTarget = sortClosestTo(gatherHexes, playerStart)[0] ?? null;
   const buildTarget  = sortClosestTo(buildHexes, playerStart)[0] ?? null;
 
-  let gatherUsed  = false;
   let buildUsed   = false;
-  let attackUsed  = false;
-  let moveUsed    = false;
+  let gatherUsed  = false;
 
-  // Assign orders to every unassigned unit card
-  for (let attempt = 0; attempt < 10; attempt++) {
+  // Assign orders to every unassigned unit card.
+  // Attack and Move have no per-epoch cap — every unit that can attack does so,
+  // and every remaining unit advances toward the enemy.
+  for (let attempt = 0; attempt < 20; attempt++) {
     if (await page.locator('text=TAP TO ASSIGN').count() === 0) break;
 
-    // Priority 1: Attack a visible enemy
-    if (!attackUsed && attackTarget) {
-      if (await assignNextUnit(page, 'Attack', attackTarget, playerStart)) {
-        attackUsed = true;
-        continue;
-      }
+    // Priority 1: Attack a visible enemy (unlimited — every eligible unit attacks)
+    if (attackTarget) {
+      if (await assignNextUnit(page, 'Attack', attackTarget, playerStart)) continue;
     }
 
-    // Priority 2: Build extractor if none + affordable
+    // Priority 2: Build extractor if none + affordable (once per epoch)
     if (!buildUsed && !hasExtractor && resources.cc >= 3 && buildTarget) {
       if (await assignBuild(page, 'crystal_extractor', buildTarget, playerStart)) {
         buildUsed = true;
@@ -153,7 +163,7 @@ async function fillEpoch(page: Page): Promise<void> {
       }
     }
 
-    // Priority 3: Build barracks if none + affordable
+    // Priority 3: Build barracks if none + affordable (once per epoch)
     if (!buildUsed && !hasBarracks && resources.cc >= 5 && buildTarget) {
       if (await assignBuild(page, 'barracks', buildTarget, playerStart)) {
         buildUsed = true;
@@ -161,7 +171,15 @@ async function fillEpoch(page: Page): Promise<void> {
       }
     }
 
-    // Priority 4: Gather from nearest crystal/extractor
+    // Priority 3b: Build tech lab once barracks exists + affordable (once per epoch)
+    if (!buildUsed && hasBarracks && !hasTechLab && resources.cc >= 6 && buildTarget) {
+      if (await assignBuild(page, 'tech_lab', buildTarget, playerStart)) {
+        buildUsed = true;
+        continue;
+      }
+    }
+
+    // Priority 4: Gather from nearest crystal/extractor (once per epoch)
     if (!gatherUsed && gatherTarget) {
       if (await assignNextUnit(page, 'Gather', gatherTarget, playerStart)) {
         gatherUsed = true;
@@ -169,16 +187,31 @@ async function fillEpoch(page: Page): Promise<void> {
       }
     }
 
-    // Priority 5: Move toward AI
-    if (!moveUsed && moveTarget) {
-      if (await assignNextUnit(page, 'Move', moveTarget, playerStart)) {
-        moveUsed = true;
-        continue;
-      }
+    // Priority 5: Move toward AI (unlimited — every remaining unit advances)
+    if (moveTarget) {
+      if (await assignNextUnit(page, 'Move', moveTarget, playerStart)) continue;
     }
 
     // Fallback: Defend
     if (!await assignNextUnit(page, 'Defend', null, playerStart)) break;
+  }
+
+  // Global slot 1: Research if tech lab exists and not already researching
+  if (hasTechLab && player.researchLeft === 0 && player.techTier < 3) {
+    const slot1 = page.getByTestId('command-slot-1');
+    if (await slot1.isVisible().catch(() => false)) {
+      await slot1.click({ force: true });
+      const menu = page.getByRole('menu');
+      try {
+        await menu.waitFor({ state: 'visible', timeout: 1500 });
+        const researchItem = page.getByRole('menuitem', { name: /Research/i });
+        if (await researchItem.isEnabled().catch(() => false)) {
+          await researchItem.click();
+        } else {
+          await page.keyboard.press('Escape');
+        }
+      } catch { /* noop */ }
+    }
   }
 
   // Global slot 0: Train a combat unit if affordable
@@ -236,6 +269,19 @@ test('smoke: player can play full match from planning to game-over @smoke', asyn
     await expect(page.getByTestId('phase-label')).toBeVisible({ timeout: 5_000 });
 
     const result = await waitForPlanningOrGameOver(page);
+
+    // Dump full game state after each epoch for analysis
+    const detail = await page.evaluate(() => {
+      const w = window as Window & { __getGameSnapshot?: () => unknown; __getFullDetail?: () => unknown };
+      const snap = w.__getGameSnapshot?.() as Record<string, unknown> | undefined;
+      return snap ?? null;
+    });
+    const eventLog = await page.evaluate(() =>
+      (window as Window & { __getEventLog?: () => string[] }).__getEventLog?.() ?? []
+    );
+    console.log(`\n=== EPOCH ${snap.epoch} RESOLUTION ===`);
+    console.log(JSON.stringify({ ...detail, eventLog }, null, 2));
+
     if (result === 'over') break;
   }
 

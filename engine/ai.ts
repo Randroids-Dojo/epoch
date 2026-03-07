@@ -17,7 +17,7 @@ import { GameState, findUnitAt, findStructureAt, findNexus, AIArchetype, getOlde
 import { Hex, hexKey, hexDistance, hexEqual, hexesInRange, hexNeighbors } from './hex';
 import { Command, UnitCommand, GlobalCommand } from './commands';
 import { Unit, UNIT_DEFS, UnitType } from './units';
-import { Structure, STRUCTURE_DEFS, isComplete, isHarvestable } from './structures';
+import { Structure, StructureType, STRUCTURE_DEFS, isComplete, isHarvestable } from './structures';
 import { TERRAIN } from './terrain';
 import { PlayerId } from './player';
 import { AIDifficulty } from './state';
@@ -267,6 +267,18 @@ function generateCandidates(
   // ── Gather ─────────────────────────────────────────────────────────────────
   // Pair each unstaffed extractor with one idle drone (one candidate per pair,
   // not the full cross-product — the greedy picker handles conflict avoidance).
+  // Reserve one drone per critical production structure that hasn't been started
+  // yet, so gathering doesn't permanently consume the only build-capable unit.
+  const CRITICAL_PRODUCTION: StructureType[] = ['barracks'];
+  if (ai.techTier >= 2) CRITICAL_PRODUCTION.push('war_foundry');
+  // Only reserve a drone for a critical build if the AI can actually afford it.
+  // If it's broke, let the drone gather so it can earn enough CC to build later.
+  const reservedForBuilds = CRITICAL_PRODUCTION.filter((type) => {
+    if (aiStructures.some((s) => s.type === type)) return false; // already exists
+    const cost = STRUCTURE_DEFS[type].costCC;
+    return ai.resources.cc >= cost; // only reserve if affordable right now
+  }).length;
+
   const completedExtractors = aiStructures.filter(
     (s) => isHarvestable(s) && isComplete(s) && !s.assignedDroneId,
   );
@@ -274,7 +286,7 @@ function generateCandidates(
     (u) => u.type === 'drone' && !u.assignedExtractorId,
   );
   {
-    const availableDrones = [...idleDrones];
+    const availableDrones = idleDrones.slice(reservedForBuilds);
     for (const extractor of completedExtractors) {
       const drone = availableDrones.shift();
       if (!drone) break;
@@ -290,10 +302,17 @@ function generateCandidates(
 
   // ── Build Economy (Crystal Extractors) ────────────────────────────────────
   // Build candidates require an idle drone. We find the closest one per target.
+  // Limit to one extractor until military production is established — otherwise
+  // the Expander AI spends every CC on extractors and can never afford a barracks.
+  const hasMilitaryProduction = aiStructures.some(
+    (s) => s.type === 'barracks' || s.type === 'war_foundry',
+  );
+  const alreadyHasExtractor = aiStructures.some((s) => s.type === 'crystal_extractor');
   const crystalNodes = findNearbyCrystalNodes(state, 'ai', 6);
   const extractorCost = STRUCTURE_DEFS.crystal_extractor.costCC;
 
   for (const nodeHex of crystalNodes) {
+    if (!hasMilitaryProduction && alreadyHasExtractor) break; // one extractor is enough until barracks
     if (findStructureAt(state, nodeHex) !== undefined) continue;
     const buildHex = findEmptyPassableHex(state, nodeHex);
     if (!buildHex) continue;
