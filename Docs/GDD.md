@@ -169,8 +169,6 @@ A match ends when any of these conditions are met:
 | Condition | Description |
 |-----------|-------------|
 | **Annihilation** | Destroy the enemy's Command Nexus |
-| **Temporal Singularity** | Complete the entire tech tree (all 4 tiers researched) |
-| **Resource Dominance** | Control all Crystal Node hexes on the map for 5 consecutive epochs |
 
 ### 3.5 Strategic Tension
 
@@ -281,6 +279,20 @@ Reveals **predicted enemy positions** for the next epoch as probability clouds o
 
 **Constraint:** Requires the Chrono Spire structure (expensive, Tech Tier 2). If the Spire is destroyed, Chrono Scout is unavailable.
 
+#### Phase Surge — *"Move beyond limits"*
+
+| Property | Value |
+|----------|-------|
+| TE Cost | 2 |
+| Command Slot | Unit action (replaces Move for that unit) |
+| Unlocked | Tier 0 (available immediately) |
+
+Grants a unit **+3 movement** this epoch. Select Surge from a unit's action menu, then pick a destination hex just like a normal Move. The unit travels at `base speed + 3` hexes instead of its normal speed.
+
+**Strategic use:** Rapid repositioning — rush a unit across the map in one epoch, flank an enemy formation, or get a damaged unit out of range before it dies. The 2 TE cost means spending roughly every other epoch's income on a single boost, creating real trade-offs against other temporal abilities.
+
+**Constraint:** Only combat units can Surge (not Drones). The action is grayed out in the unit picker when TE < 2.
+
 ### 4.3 Paradox Risk — Temporal Instability
 
 Overuse of temporal abilities in rapid succession creates **Temporal Instability**:
@@ -300,7 +312,7 @@ Temporal mechanics are not siloed — they interact with every system:
 - **AI Opponent:** Higher-difficulty AIs use temporal abilities strategically and adapt to the player's temporal patterns
 - **Resources:** TE is the only non-harvestable resource, creating unique economic tension
 - **Command Slots:** Every temporal ability is a conventional action you didn't take
-- **Win Conditions:** Temporal Singularity victory requires completing the tech tree, which unlocks all temporal abilities as a side effect
+- **Win Conditions:** Annihilation only — victory requires destroying the enemy Command Nexus, keeping every match focused on combat
 - **Map Control:** Chrono Spire placement matters — it enables Chrono Scout but is vulnerable to attack
 
 ---
@@ -425,21 +437,21 @@ All units and structures follow the minimalist vector aesthetic — geometric sh
 
 | Unit | Cost | HP | ATK | Speed | Range | Shape | Special |
 |------|------|----|-----|-------|-------|-------|---------|
-| **Pulse Sentry** | 4 CC | 40 | 12 | 2 hex | 1 (melee) | Square | Sturdy front-line fighter. +25% damage when Defending. |
-| **Arc Ranger** | 5 CC | 25 | 8 | 2 hex | 3 hex | Diamond | Ranged attacker. Can fire without moving into the target hex. Fragile. |
+| **Pulse Sentry** | 4 CC | 40 | 12 | 3 hex | 1 (melee) | Square | Sturdy front-line fighter. +25% damage when Defending. |
+| **Arc Ranger** | 5 CC | 30 | 10 | 3 hex | 3 hex | Diamond | Ranged attacker. Can fire without moving into the target hex. Fragile. |
 
 #### Tier 2 — Requires Tech Tier 1
 
 | Unit | Cost | HP | ATK | Speed | Range | Shape | Special |
 |------|------|----|-----|-------|-------|-------|---------|
 | **Phase Walker** | 6 CC, 1 FX | 30 | 10 | 3 hex | 1 (melee) | Triangle | Phases through enemy units during Move (ignores blocking). Cannot be intercepted in transit. |
-| **Temporal Warden** | 5 CC, 2 FX | 35 | 6 | 2 hex | 2 hex | Hexagon | Provides **+2 hex vision radius** to all friendly units within 3 hexes. Detects Chrono Shifted units. |
+| **Temporal Warden** | 5 CC, 2 FX | 35 | 6 | 3 hex | 2 hex | Hexagon | Provides **+2 hex vision radius** to all friendly units within 3 hexes. Detects Chrono Shifted units. |
 
 #### Tier 3 — Requires Tech Tier 2 + War Foundry
 
 | Unit | Cost | HP | ATK | Speed | Range | Shape | Special |
 |------|------|----|-----|-------|-------|-------|---------|
-| **Void Striker** | 8 CC, 3 FX | 50 | 18 | 1 hex | 2 hex | Octagon | Heavy DPS. Attacks deal **splash damage** to adjacent hexes (50% of primary damage). Slow. |
+| **Void Striker** | 8 CC, 3 FX | 50 | 18 | 2 hex | 2 hex | Octagon | Heavy DPS. Attacks deal **splash damage** to adjacent hexes (50% of primary damage). Slow. |
 | **Flux Weaver** | 6 CC, 2 FX | 20 | 0 | 2 hex | 3 hex | Star (6-pointed) | Healer. Restores 12 HP to one friendly unit per epoch. Cannot attack. |
 
 #### Tier 4 — Requires Tech Tier 3 + War Foundry
@@ -492,7 +504,7 @@ TECH TIER 3 (3 epochs research, requires Tier 2)
 └── Command Slots: 8
 ```
 
-Completing all 4 tiers (Tier 0 + 3 researched) triggers the **Temporal Singularity** win condition.
+Completing all 4 tiers (Tier 0 + 3 researched) unlocks the full roster of units and temporal abilities.
 
 ---
 
@@ -674,7 +686,7 @@ The AI selects (or blends) from four strategic archetypes:
 |-----------|-----------|------------|----------|-----------|
 | **Expander** | Economy, map control | Builds extractors aggressively, claims Crystal Nodes | Secures Flux Vents, builds Watchtowers for vision | Leverages resource advantage into overwhelming force |
 | **Aggressor** | Military pressure | Trains Pulse Sentries immediately, early attacks | Constant harassment, targets undefended extractors | All-in pushes with Void Strikers |
-| **Technologist** | Tech tree, temporal abilities | Rushes Tech Lab, researches Tier 1 ASAP | Uses Chrono Shift and Timeline Fork aggressively | Aims for Temporal Singularity win condition |
+| **Technologist** | Tech tree, temporal abilities | Rushes Tech Lab, researches Tier 1 ASAP | Uses Chrono Shift and Timeline Fork aggressively | Aims for superior units + temporal edge to overwhelm |
 | **Fortress** | Defense, turtling | Builds Shield Pylons, Defends frequently | Creates layered defense with Watchtowers and Barriers | Slow, methodical push with overwhelming tech advantage |
 
 ### 9.2 Difficulty Levels
@@ -1353,7 +1365,7 @@ Vercel's edge CDN ensures fast global delivery. Additional measures:
 | Paradox Risk / Temporal Instability | ✅ v1.1 |
 | AI archetypes (Aggressor, Technologist, Fortress) | ✅ v1.1 |
 | AI difficulty levels (Novice, Commander, Epoch Master) | ✅ v1.1 |
-| Temporal Singularity + Resource Dominance win conditions | ✅ v1.1 |
+| Phase Surge temporal ability (unit action, 2 TE, +3 speed) | ✅ v1.1 |
 | Execution speed controls (0.5x, 2x, skip) | v1.2 |
 | Tutorial / onboarding | v1.2 |
 | Settings panel (audio, accessibility) | v1.2 |
@@ -1388,7 +1400,7 @@ Vercel's edge CDN ensures fast global delivery. Additional measures:
 - ✅ Annihilation win condition (carried from v1.0)
 - ✅ Epoch Anchor temporal ability (Tier 3, 5TE set / 3TE activate)
 - ✅ Paradox Risk / Temporal Instability system (Tier 1 & 2 debuffs)
-- ✅ Temporal Singularity + Resource Dominance win conditions
+- ✅ Phase Surge temporal ability (unit action, 2 TE, +3 speed for one epoch)
 - ✅ Timeline Fork, Chrono Scout temporal abilities
 - ⬜ All 4 AI archetypes with blending
 - ⬜ All 4 difficulty levels (Novice → Epoch Master)
