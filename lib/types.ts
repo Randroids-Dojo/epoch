@@ -6,8 +6,29 @@ import type { StructureType } from '../engine/structures'
 
 export type InteractionMode =
   | { kind: 'idle' }
-  | { kind: 'slot_selected'; slotIndex: number }
-  | { kind: 'picker_open'; slotIndex: number }
+
+  /** Unit command picker is open for this unit (from panel card or canvas click). */
+  | { kind: 'unit_picker_open'; unitId: string }
+
+  /** Global command picker is open for this slot in the tray. */
+  | { kind: 'global_picker_open'; slotIndex: number }
+
+  | {
+      kind: 'targeting';
+      unitId: string;
+      commandType: TargetingCommandType;
+      eligibleKeys: Set<string>;
+    }
+
+  /** Drone selected; waiting for player to choose which structure to build. */
+  | { kind: 'build_select'; unitId: string }
+
+  | {
+      kind: 'build_targeting';
+      unitId: string;
+      structureType: Exclude<StructureType, 'command_nexus'>;
+      eligibleKeys: Set<string>;
+    }
 
   | {
       kind: 'train_picker';
@@ -15,23 +36,6 @@ export type InteractionMode =
       structureId: string;
       structureHex: { q: number; r: number };
       failureFeedback: string | null;
-    }
-  | {
-      kind: 'targeting';
-      slotIndex: number;
-      commandType: TargetingCommandType;
-      eligibleKeys: Set<string>;
-      subjectUnitId: string;
-    }
-  | {
-      kind: 'build_select'
-      slotIndex: number
-    }
-  | {
-      kind: 'build_targeting'
-      slotIndex: number
-      structureType: Exclude<StructureType, 'command_nexus'>
-      eligibleKeys: Set<string>
     }
 
 export type Phase = 'planning' | 'temporal' | 'execution'

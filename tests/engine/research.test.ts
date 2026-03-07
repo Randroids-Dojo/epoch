@@ -29,11 +29,21 @@ function addTechLab(state: GameState, q: number, r: number): void {
   });
 }
 
-/** Queue a command in the player's first free slot. */
-function queue(state: GameState, cmd: unknown): void {
-  const cmds = state.players.player.commands;
-  const i = cmds.findIndex((c) => c === null);
-  if (i >= 0) cmds[i] = cmd as never;
+/** Queue a command for the player. Unit commands go to unitOrders; globals to first free slot. */
+function queue(state: GameState, cmd: { type: string; unitId?: string; [k: string]: unknown }): void {
+  const unitTypes = ['move', 'attack', 'gather', 'defend', 'build', 'chrono_shift'];
+  if (unitTypes.includes(cmd.type)) {
+    if (!cmd.unitId) {
+      // Auto-assign the player drone for drone commands (build/gather).
+      const drone = [...state.units.values()].find(u => u.owner === 'player' && u.type === 'drone');
+      if (drone) cmd = { ...cmd, unitId: drone.id };
+    }
+    state.players.player.unitOrders.set(cmd.unitId as string, cmd as never);
+  } else {
+    const i = state.players.player.globalCommands.findIndex((c) => c === null);
+    if (i >= 0) state.players.player.globalCommands[i] = cmd as never;
+    else state.players.player.globalCommands.push(cmd as never);
+  }
 }
 
 describe('Tech Tree — Research command', () => {
@@ -77,7 +87,7 @@ describe('Tech Tree — Research command', () => {
     expect(log.some((l) => l.includes('Tech Tier 1'))).toBe(true);
     expect(state.players.player.techTier).toBe(1);
     expect(state.players.player.researchEpochsLeft).toBe(0);
-    expect(state.players.player.commandSlots).toBe(6);
+    expect(state.players.player.commandSlots).toBe(3); // global slots at Tier 1
   });
 
   it('cannot start research while already researching', () => {
@@ -104,14 +114,14 @@ describe('Tech Tree — Research command', () => {
   });
 });
 
-describe('Tech Tree — command slot upgrades', () => {
-  it('player starts with 5 command slots', () => {
+describe('Tech Tree — global slot upgrades', () => {
+  it('player starts with 2 global slots', () => {
     const state = buildState();
-    expect(state.players.player.commandSlots).toBe(5);
-    expect(state.players.player.commands.length).toBe(5);
+    expect(state.players.player.commandSlots).toBe(2);
+    expect(state.players.player.globalCommands.length).toBe(2);
   });
 
-  it('command slots increase to 6 after Tier 1 research completes', () => {
+  it('global slots increase to 3 after Tier 1 research completes', () => {
     const state = buildState();
     addTechLab(state, -7, 0);
     queue(state, { type: 'research' });
@@ -119,8 +129,8 @@ describe('Tech Tree — command slot upgrades', () => {
     resolveEpoch(state); state.phase = 'planning';
     resolveEpoch(state); state.phase = 'planning';
     resolveEpoch(state);
-    expect(state.players.player.commandSlots).toBe(6);
-    expect(state.players.player.commands.length).toBe(6);
+    expect(state.players.player.commandSlots).toBe(3);
+    expect(state.players.player.globalCommands.length).toBe(3);
   });
 });
 

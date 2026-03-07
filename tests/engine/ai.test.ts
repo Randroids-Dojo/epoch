@@ -1,11 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { computeVisibility, generateAICommands } from '@/engine/ai';
-import { findNexus, newId } from '@/engine/state';
+import { findNexus, newId, GameState } from '@/engine/state';
 import { hexKey } from '@/engine/hex';
 import { UNIT_DEFS } from '@/engine/units';
 import { STRUCTURE_DEFS } from '@/engine/structures';
 import { resolveEpoch } from '@/engine/resolution';
 import { makeState, makeStateWithDifficulty } from './helpers';
+
+function allAICmds(state: GameState) {
+  return [
+    ...state.players.ai.unitOrders.values(),
+    ...state.players.ai.globalCommands.filter((c): c is NonNullable<typeof c> => c !== null),
+  ];
+}
 
 describe('computeVisibility', () => {
   it('includes hexes around AI units within vision radius', () => {
@@ -52,7 +59,7 @@ describe('generateAICommands — economy', () => {
     });
 
     generateAICommands(state);
-    const cmds = state.players.ai.commands.filter((c) => c !== null);
+    const cmds = allAICmds(state);
     expect(cmds.find((c) => c.type === 'gather')).toBeDefined();
   });
 
@@ -61,16 +68,18 @@ describe('generateAICommands — economy', () => {
     state.players.ai.resources.cc = 10;
 
     generateAICommands(state);
-    const cmds = state.players.ai.commands.filter((c) => c !== null);
+    const cmds = allAICmds(state);
     expect(cmds.find((c) => c.type === 'build' && c.structureType === 'crystal_extractor')).toBeDefined();
   });
 
   it('builds barracks when none exists and affordable', () => {
     const state = makeState();
+    // Use Aggressor blend so barracks (buildMilitary) scores above extractor (buildEconomy)
+    state.aiConfig.archetypeBlend = { expander: 0, aggressor: 1, technologist: 0, fortress: 0 };
     state.players.ai.resources.cc = 15;
 
     generateAICommands(state);
-    const cmds = state.players.ai.commands.filter((c) => c !== null);
+    const cmds = allAICmds(state);
     expect(cmds.find((c) => c.type === 'build' && c.structureType === 'barracks')).toBeDefined();
   });
 
@@ -105,7 +114,7 @@ describe('generateAICommands — economy', () => {
 
     state.players.ai.resources.cc = 10;
     generateAICommands(state);
-    const cmds = state.players.ai.commands.filter((c) => c !== null);
+    const cmds = allAICmds(state);
     expect(cmds.find((c) => c.type === 'train' && c.unitType === 'drone')).toBeDefined();
   });
 });
@@ -124,7 +133,7 @@ describe('generateAICommands — military', () => {
 
     state.players.ai.resources.cc = 20;
     generateAICommands(state);
-    const cmds = state.players.ai.commands.filter((c) => c !== null);
+    const cmds = allAICmds(state);
     const trainCmd = cmds.find(
       (c) => c.type === 'train' && (c.unitType === 'arc_ranger' || c.unitType === 'pulse_sentry'),
     );
@@ -152,7 +161,7 @@ describe('generateAICommands — military', () => {
     });
 
     generateAICommands(state);
-    const cmds = state.players.ai.commands.filter((c) => c !== null);
+    const cmds = allAICmds(state);
     const attackCmd = cmds.find((c) => c.type === 'attack' && c.unitId === rangerId);
     expect(attackCmd).toBeDefined();
     if (attackCmd?.type === 'attack') {
@@ -172,7 +181,7 @@ describe('generateAICommands — military', () => {
     });
 
     generateAICommands(state);
-    const cmds = state.players.ai.commands.filter((c) => c !== null);
+    const cmds = allAICmds(state);
     const moveCmd = cmds.find((c) => c.type === 'move' && c.unitId === sentryId);
     expect(moveCmd).toBeDefined();
     if (moveCmd?.type === 'move') {
@@ -196,8 +205,8 @@ describe('generateAICommands — constraints', () => {
     }
 
     generateAICommands(state);
-    const filledSlots = state.players.ai.commands.filter((c) => c !== null).length;
-    expect(filledSlots).toBeLessThanOrEqual(state.players.ai.commandSlots);
+    const filledGlobalSlots = state.players.ai.globalCommands.filter((c) => c !== null).length;
+    expect(filledGlobalSlots).toBeLessThanOrEqual(state.players.ai.commandSlots);
   });
 
   it('does not spend more CC than available', () => {
@@ -205,7 +214,7 @@ describe('generateAICommands — constraints', () => {
     state.players.ai.resources.cc = 3;
 
     generateAICommands(state);
-    const cmds = state.players.ai.commands.filter((c) => c !== null);
+    const cmds = [...allAICmds(state)];
 
     let totalCost = 0;
     for (const cmd of cmds) {
@@ -218,37 +227,37 @@ describe('generateAICommands — constraints', () => {
   it('does not attack units outside visibility', () => {
     const state = makeState();
     generateAICommands(state);
-    const cmds = state.players.ai.commands.filter((c) => c !== null);
+    const cmds = allAICmds(state);
     expect(cmds.filter((c) => c.type === 'attack').length).toBe(0);
   });
 });
 
 describe('generateAICommands — difficulty slots', () => {
-  it('Novice AI uses 4 command slots', () => {
+  it('Novice AI uses 1 global command slot', () => {
     const state = makeStateWithDifficulty('novice');
-    expect(state.players.ai.commandSlots).toBe(4);
+    expect(state.players.ai.commandSlots).toBe(1);
     state.players.ai.resources.cc = 100;
     generateAICommands(state);
-    expect(state.players.ai.commands.filter((c) => c !== null).length).toBeLessThanOrEqual(4);
+    expect(state.players.ai.globalCommands.filter((c) => c !== null).length).toBeLessThanOrEqual(1);
   });
 
-  it('Adept AI uses 5 command slots', () => {
+  it('Adept AI uses 2 global command slots', () => {
     const state = makeStateWithDifficulty('adept');
-    expect(state.players.ai.commandSlots).toBe(5);
+    expect(state.players.ai.commandSlots).toBe(2);
   });
 
-  it('Commander AI uses 5 command slots', () => {
+  it('Commander AI uses 2 global command slots', () => {
     const state = makeStateWithDifficulty('commander');
-    expect(state.players.ai.commandSlots).toBe(5);
+    expect(state.players.ai.commandSlots).toBe(2);
   });
 
-  it('Epoch Master AI uses 6 command slots', () => {
+  it('Epoch Master AI uses 3 global command slots', () => {
     const state = makeStateWithDifficulty('epoch_master');
-    expect(state.players.ai.commandSlots).toBe(6);
+    expect(state.players.ai.commandSlots).toBe(3);
     state.players.ai.resources.cc = 100;
     generateAICommands(state);
-    // Should not exceed 6 slots
-    expect(state.players.ai.commands.filter((c) => c !== null).length).toBeLessThanOrEqual(6);
+    // Global commands should not exceed 3 slots
+    expect(state.players.ai.globalCommands.filter((c) => c !== null).length).toBeLessThanOrEqual(3);
   });
 });
 
@@ -267,7 +276,7 @@ describe('generateAICommands — archetypes', () => {
     state.players.ai.resources.cc = 20;
 
     generateAICommands(state);
-    const cmds = state.players.ai.commands.filter((c) => c !== null);
+    const cmds = allAICmds(state);
     const trainCombat = cmds.find(
       (c) => c.type === 'train' && c.unitType !== 'drone',
     );
@@ -289,7 +298,7 @@ describe('generateAICommands — archetypes', () => {
     });
 
     generateAICommands(state);
-    const cmds = state.players.ai.commands.filter((c) => c !== null);
+    const cmds = allAICmds(state);
     expect(cmds.find((c) => c.type === 'defend')).toBeDefined();
   });
 
@@ -299,16 +308,16 @@ describe('generateAICommands — archetypes', () => {
     state.players.ai.resources.cc = 20;
 
     generateAICommands(state);
-    const cmds = state.players.ai.commands.filter((c) => c !== null);
+    const cmds = allAICmds(state);
     expect(cmds.find((c) => c.type === 'build' && c.structureType === 'tech_lab')).toBeDefined();
   });
 });
 
 describe('generateAICommands — integration', () => {
-  it('populates state.players.ai.commands', () => {
+  it('populates AI unit orders or global commands', () => {
     const state = makeState();
     generateAICommands(state);
-    expect(state.players.ai.commands.filter((c) => c !== null).length).toBeGreaterThan(0);
+    expect(allAICmds(state).length).toBeGreaterThan(0);
   });
 
   it('resolveEpoch processes AI commands alongside player', () => {
@@ -330,7 +339,7 @@ describe('generateAICommands — integration', () => {
     const state = makeState();
     // Queue a player move command
     const playerDrone = [...state.units.values()].find((u) => u.owner === 'player')!;
-    state.players.player.commands[0] = { type: 'move', unitId: playerDrone.id, targetHex: { q: -8, r: 0 } };
+    state.players.player.unitOrders.set(playerDrone.id, { type: 'move', unitId: playerDrone.id, targetHex: { q: -8, r: 0 } });
     generateAICommands(state);
     resolveEpoch(state);
     expect(state.aiConfig.playerCommandHistory.length).toBe(1);

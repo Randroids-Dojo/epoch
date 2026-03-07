@@ -1,24 +1,21 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import CommandTray from '@/components/hud/CommandTray';
-import type { CommandQueue } from '@/engine/commands';
+import type { GlobalCommand } from '@/engine/commands';
 
-const emptyCommands: CommandQueue = [null, null, null, null, null];
+const emptyCommands: Array<GlobalCommand | null> = [null, null];
 
-const filledCommands: CommandQueue = [
-  { type: 'move', unitId: 'u1', targetHex: { q: 2, r: -1 } },
-  null,
-  null,
-  null,
+const filledCommands: Array<GlobalCommand | null> = [
+  { type: 'research' },
   null,
 ];
 
 describe('CommandTray', () => {
-  it('renders 5 command slots', () => {
+  it('renders 2 global command slots', () => {
     render(
       <CommandTray
-        commands={emptyCommands}
-        selectedSlot={null}
+        globalCommands={emptyCommands}
+        selectedGlobalSlot={null}
         lockedIn={false}
         lockInFlash={false}
         onSlotClick={() => {}}
@@ -26,16 +23,16 @@ describe('CommandTray', () => {
         onLockIn={() => {}}
       />,
     );
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 2; i++) {
       expect(screen.getByTestId(`command-slot-${i}`)).toBeInTheDocument();
     }
   });
 
-  it('filled slot shows type code and target', () => {
+  it('filled slot shows type code and label', () => {
     render(
       <CommandTray
-        commands={filledCommands}
-        selectedSlot={null}
+        globalCommands={filledCommands}
+        selectedGlobalSlot={null}
         lockedIn={false}
         lockInFlash={false}
         onSlotClick={() => {}}
@@ -43,24 +40,21 @@ describe('CommandTray', () => {
         onLockIn={() => {}}
       />,
     );
-    expect(screen.getByText('MV')).toBeInTheDocument();
-    expect(screen.getByText('(2,-1)')).toBeInTheDocument();
+    expect(screen.getByText('RS')).toBeInTheDocument();
+    expect(screen.getByText('TECH')).toBeInTheDocument();
   });
 
 
   it('train command shows unit type and structure hint', () => {
-    const trainCommands: CommandQueue = [
+    const trainCommands: Array<GlobalCommand | null> = [
       { type: 'train', structureId: 's12345', unitType: 'arc_ranger' },
-      null,
-      null,
-      null,
       null,
     ];
 
     render(
       <CommandTray
-        commands={trainCommands}
-        selectedSlot={null}
+        globalCommands={trainCommands}
+        selectedGlobalSlot={null}
         lockedIn={false}
         lockInFlash={false}
         onSlotClick={() => {}}
@@ -77,8 +71,8 @@ describe('CommandTray', () => {
     const onSlotClear = vi.fn();
     render(
       <CommandTray
-        commands={filledCommands}
-        selectedSlot={null}
+        globalCommands={filledCommands}
+        selectedGlobalSlot={null}
         lockedIn={false}
         lockInFlash={false}
         onSlotClick={() => {}}
@@ -94,8 +88,8 @@ describe('CommandTray', () => {
   it('lock-in button is disabled when lockedIn=true', () => {
     render(
       <CommandTray
-        commands={emptyCommands}
-        selectedSlot={null}
+        globalCommands={emptyCommands}
+        selectedGlobalSlot={null}
         lockedIn={true}
         lockInFlash={false}
         onSlotClick={() => {}}
@@ -110,8 +104,8 @@ describe('CommandTray', () => {
   it('lock-in button is enabled when not lockedIn', () => {
     render(
       <CommandTray
-        commands={emptyCommands}
-        selectedSlot={null}
+        globalCommands={emptyCommands}
+        selectedGlobalSlot={null}
         lockedIn={false}
         lockInFlash={false}
         onSlotClick={() => {}}
@@ -126,8 +120,8 @@ describe('CommandTray', () => {
   it('selected slot has cyan border styling', () => {
     render(
       <CommandTray
-        commands={emptyCommands}
-        selectedSlot={2}
+        globalCommands={emptyCommands}
+        selectedGlobalSlot={1}
         lockedIn={false}
         lockInFlash={false}
         onSlotClick={() => {}}
@@ -135,7 +129,7 @@ describe('CommandTray', () => {
         onLockIn={() => {}}
       />,
     );
-    const slot = screen.getByTestId('command-slot-2');
+    const slot = screen.getByTestId('command-slot-1');
     // Selected slot has cyan border (jsdom converts hex to rgb)
     expect(slot.style.border).toContain('rgb(0, 212, 255)');
   });
@@ -144,8 +138,8 @@ describe('CommandTray', () => {
     const onSlotClick = vi.fn();
     render(
       <CommandTray
-        commands={emptyCommands}
-        selectedSlot={null}
+        globalCommands={emptyCommands}
+        selectedGlobalSlot={null}
         lockedIn={false}
         lockInFlash={false}
         onSlotClick={onSlotClick}
@@ -153,7 +147,7 @@ describe('CommandTray', () => {
         onLockIn={() => {}}
       />,
     );
-    fireEvent.click(screen.getByTestId('command-slot-3'));
-    expect(onSlotClick).toHaveBeenCalledWith(3);
+    fireEvent.click(screen.getByTestId('command-slot-1'));
+    expect(onSlotClick).toHaveBeenCalledWith(1);
   });
 });

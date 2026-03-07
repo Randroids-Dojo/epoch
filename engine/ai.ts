@@ -15,7 +15,7 @@
 
 import { GameState, findUnitAt, findStructureAt, findNexus, AIArchetype, getOldestSnapshot } from './state';
 import { Hex, hexKey, hexDistance, hexEqual, hexesInRange, hexNeighbors } from './hex';
-import { Command } from './commands';
+import { Command, UnitCommand, GlobalCommand } from './commands';
 import { Unit, UNIT_DEFS, UnitType } from './units';
 import { Structure, STRUCTURE_DEFS, isComplete, isHarvestable } from './structures';
 import { TERRAIN } from './terrain';
@@ -101,6 +101,15 @@ function blendedWeight(
   return score;
 }
 
+// ── Type guard ────────────────────────────────────────────────────────────────
+
+function isUnitOrderCommand(cmd: Command): cmd is UnitCommand {
+  return (
+    cmd.type === 'move' || cmd.type === 'attack' || cmd.type === 'gather' ||
+    cmd.type === 'defend' || cmd.type === 'build' || cmd.type === 'chrono_shift'
+  );
+}
+
 // ── Candidate Type ────────────────────────────────────────────────────────────
 
 interface ScoredCandidate {
@@ -168,6 +177,17 @@ function findNearbyCrystalNodes(
     }
   }
   return nodes;
+}
+
+/** Find the closest idle drone to the given hex for a build assignment. */
+function findClosestDrone(drones: Unit[], targetHex: Hex): Unit | null {
+  let best: Unit | null = null;
+  let bestDist = Infinity;
+  for (const d of drones) {
+    const dist = hexDistance(d.hex, targetHex);
+    if (dist < bestDist) { bestDist = dist; best = d; }
+  }
+  return best;
 }
 
 function findNearestCrystalNode(state: GameState, from: Hex): Hex | null {
@@ -269,6 +289,7 @@ function generateCandidates(
   }
 
   // ── Build Economy (Crystal Extractors) ────────────────────────────────────
+  // Build candidates require an idle drone. We find the closest one per target.
   const crystalNodes = findNearbyCrystalNodes(state, 'ai', 6);
   const extractorCost = STRUCTURE_DEFS.crystal_extractor.costCC;
 
@@ -276,13 +297,15 @@ function generateCandidates(
     if (findStructureAt(state, nodeHex) !== undefined) continue;
     const buildHex = findEmptyPassableHex(state, nodeHex);
     if (!buildHex) continue;
+    const drone = findClosestDrone(idleDrones, buildHex);
+    if (!drone) continue;
     const bk = hexKey(buildHex);
     candidates.push({
-      command: { type: 'build', targetHex: buildHex, structureType: 'crystal_extractor' },
+      command: { type: 'build', unitId: drone.id, targetHex: buildHex, structureType: 'crystal_extractor' },
       category: 'buildEconomy',
       basePriority: 8,
       costCC: extractorCost, costFX: 0, costTE: 0,
-      unitIds: [],
+      unitIds: [drone.id],
       buildHexKey: bk,
     });
   }
@@ -293,12 +316,13 @@ function generateCandidates(
       const def = STRUCTURE_DEFS.barracks;
       const bHex = findEmptyPassableHex(state, nexus.hex);
       if (bHex) {
-        candidates.push({
-          command: { type: 'build', targetHex: bHex, structureType: 'barracks' },
+        const drone = findClosestDrone(idleDrones, bHex);
+        if (drone) candidates.push({
+          command: { type: 'build', unitId: drone.id, targetHex: bHex, structureType: 'barracks' },
           category: 'buildMilitary',
           basePriority: 9,
           costCC: def.costCC, costFX: def.costFX, costTE: 0,
-          unitIds: [],
+          unitIds: [drone.id],
           buildHexKey: hexKey(bHex),
         });
       }
@@ -309,12 +333,13 @@ function generateCandidates(
       const def = STRUCTURE_DEFS.tech_lab;
       const bHex = findEmptyPassableHex(state, nexus.hex);
       if (bHex) {
-        candidates.push({
-          command: { type: 'build', targetHex: bHex, structureType: 'tech_lab' },
+        const drone = findClosestDrone(idleDrones, bHex);
+        if (drone) candidates.push({
+          command: { type: 'build', unitId: drone.id, targetHex: bHex, structureType: 'tech_lab' },
           category: 'buildTech',
           basePriority: 9,
           costCC: def.costCC, costFX: def.costFX, costTE: 0,
-          unitIds: [],
+          unitIds: [drone.id],
           buildHexKey: hexKey(bHex),
         });
       }
@@ -324,12 +349,13 @@ function generateCandidates(
       if (def) {
         const bHex = findEmptyPassableHex(state, nexus.hex);
         if (bHex) {
-          candidates.push({
-            command: { type: 'build', targetHex: bHex, structureType: 'chrono_spire' },
+          const drone = findClosestDrone(idleDrones, bHex);
+          if (drone) candidates.push({
+            command: { type: 'build', unitId: drone.id, targetHex: bHex, structureType: 'chrono_spire' },
             category: 'buildTech',
             basePriority: 7,
             costCC: def.costCC, costFX: def.costFX, costTE: 0,
-            unitIds: [],
+            unitIds: [drone.id],
             buildHexKey: hexKey(bHex),
           });
         }
@@ -341,12 +367,13 @@ function generateCandidates(
       const def = STRUCTURE_DEFS.shield_pylon;
       const bHex = findEmptyPassableHex(state, nexus.hex);
       if (bHex) {
-        candidates.push({
-          command: { type: 'build', targetHex: bHex, structureType: 'shield_pylon' },
+        const drone = findClosestDrone(idleDrones, bHex);
+        if (drone) candidates.push({
+          command: { type: 'build', unitId: drone.id, targetHex: bHex, structureType: 'shield_pylon' },
           category: 'buildDefense',
           basePriority: 8,
           costCC: def.costCC, costFX: def.costFX, costTE: 0,
-          unitIds: [],
+          unitIds: [drone.id],
           buildHexKey: hexKey(bHex),
         });
       }
@@ -355,12 +382,13 @@ function generateCandidates(
       const def = STRUCTURE_DEFS.war_foundry;
       const bHex = findEmptyPassableHex(state, nexus.hex);
       if (bHex) {
-        candidates.push({
-          command: { type: 'build', targetHex: bHex, structureType: 'war_foundry' },
+        const drone = findClosestDrone(idleDrones, bHex);
+        if (drone) candidates.push({
+          command: { type: 'build', unitId: drone.id, targetHex: bHex, structureType: 'war_foundry' },
           category: 'buildMilitary',
           basePriority: 8,
           costCC: def.costCC, costFX: def.costFX, costTE: 0,
-          unitIds: [],
+          unitIds: [drone.id],
           buildHexKey: hexKey(bHex),
         });
       }
@@ -576,7 +604,7 @@ function generateCandidates(
 
 // ── Main Entry Point ──────────────────────────────────────────────────────────
 
-/** Fill state.players.ai.commands with up to commandSlots commands. */
+/** Fill state.players.ai.unitOrders and globalCommands for this epoch. */
 export function generateAICommands(state: GameState): void {
   const ai = state.players.ai;
   const { difficulty, archetypeBlend } = state.aiConfig;
@@ -593,8 +621,7 @@ export function generateAICommands(state: GameState): void {
   // 2. Generate all candidates.
   const candidates = generateCandidates(state, difficulty, aiUnits, aiStructures, visibility);
 
-  // 3. Pre-compute blended weight per category (13 categories × 4 archetypes once),
-  //    then score each candidate without repeating the dot product.
+  // 3. Pre-compute blended weight per category.
   const categoryWeight: Partial<Record<ActionCategory, number>> = {};
   for (const cand of candidates) {
     if (!(cand.category in categoryWeight)) {
@@ -609,19 +636,17 @@ export function generateAICommands(state: GameState): void {
   // 4. Sort descending by finalScore.
   scored.sort((a, b) => b.finalScore - a.finalScore);
 
-  // 5. Greedily pick, respecting constraints.
-  const commands: Array<Command | null> = Array(ai.commandSlots).fill(null);
-  let slot = 0;
+  // 5. Greedily pick, routing unit commands to unitOrders and global commands to globalCommands.
+  const unitOrders = new Map<string, UnitCommand>();
+  const globalCommands: Array<GlobalCommand | null> = Array(ai.commandSlots).fill(null);
+  let globalSlot = 0;
   let budgetCC = ai.resources.cc;
   let budgetTE = ai.resources.te;
   const assignedUnits = new Set<string>();
   const plannedBuildHexes = new Set<string>();
-  // Track train commands per structure (one train per structure per epoch).
   const trainingStructures = new Set<string>();
 
   for (const cand of scored) {
-    if (slot >= ai.commandSlots) break;
-
     // Constraint: budget
     if (cand.costCC > budgetCC) continue;
     if (cand.costTE > budgetTE) continue;
@@ -633,20 +658,29 @@ export function generateAICommands(state: GameState): void {
     // Constraint: build hex already planned
     if (cand.buildHexKey && plannedBuildHexes.has(cand.buildHexKey)) continue;
 
-    // Constraint: only one train per structure per epoch
-    if (cand.command.type === 'train') {
-      const structId = cand.command.structureId;
-      if (trainingStructures.has(structId)) continue;
-      trainingStructures.add(structId);
+    if (isUnitOrderCommand(cand.command)) {
+      // Unit commands go into unitOrders (one per unit, unlimited slots).
+      unitOrders.set(cand.command.unitId, cand.command);
+    } else {
+      // Global commands consume a global slot.
+      if (globalSlot >= ai.commandSlots) continue;
+
+      // Constraint: only one train per structure per epoch.
+      if (cand.command.type === 'train') {
+        const structId = cand.command.structureId;
+        if (trainingStructures.has(structId)) continue;
+        trainingStructures.add(structId);
+      }
+
+      globalCommands[globalSlot++] = cand.command as GlobalCommand;
     }
 
-    // Commit
-    commands[slot++] = cand.command;
     budgetCC -= cand.costCC;
     budgetTE -= cand.costTE;
     for (const id of cand.unitIds) assignedUnits.add(id);
     if (cand.buildHexKey) plannedBuildHexes.add(cand.buildHexKey);
   }
 
-  state.players.ai.commands = commands;
+  state.players.ai.unitOrders = unitOrders;
+  state.players.ai.globalCommands = globalCommands;
 }

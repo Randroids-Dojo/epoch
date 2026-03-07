@@ -4,21 +4,22 @@ import { StructureType } from './structures';
 
 // ── Individual command shapes (GDD §3.1 & §5.2) ──────────────────────────────
 
-/** Assign a Drone to harvest from a Crystal Extractor. */
+/** Assign a Drone to harvest from a Crystal Extractor or Flux Conduit. */
 export interface GatherCommand {
   readonly type: 'gather';
   readonly unitId: string;
-  readonly targetHex: Hex; // hex of the Crystal Extractor
+  readonly targetHex: Hex;
 }
 
-/** Begin constructing a structure on an empty hex. */
+/** Begin constructing a structure on an empty hex. Requires a Drone. */
 export interface BuildCommand {
   readonly type: 'build';
+  readonly unitId: string; // the Drone performing the build
   readonly targetHex: Hex;
   readonly structureType: StructureType;
 }
 
-/** Produce a unit at a Barracks. */
+/** Produce a unit at a Barracks or War Foundry. */
 export interface TrainCommand {
   readonly type: 'train';
   readonly structureId: string;
@@ -55,11 +56,10 @@ export const EPOCH_ANCHOR_ACTIVATE_COST = 3;
 export const TIMELINE_FORK_COST = 4;
 export const CHRONO_SCOUT_COST = 2;
 
-/** Activate a temporal ability (Echo or Chrono Shift). */
+/** Activate a temporal ability (Temporal Echo). */
 export interface TemporalCommand {
   readonly type: 'temporal';
   readonly ability: 'echo';
-  /** Cost deducted from TE at resolution time. */
   readonly teCost: number;
 }
 
@@ -90,8 +90,7 @@ export interface ResearchCommand {
 
 /**
  * Timeline Fork — simulate the next execution phase with your current commands
- * and show a ghost overlay of the predicted outcome. After viewing, you may
- * revise other commands before confirming lock-in.
+ * and show a ghost overlay of the predicted outcome.
  * Requires Tech Tier 2. One use per match. Cost: TIMELINE_FORK_COST TE.
  */
 export interface TimelineForkCommand {
@@ -99,31 +98,32 @@ export interface TimelineForkCommand {
 }
 
 /**
- * Chrono Scout — reveal predicted enemy unit positions for the next epoch
- * as probability cloud markers (~75% accuracy; positions may be off by 1 hex).
+ * Chrono Scout — reveal predicted enemy unit positions for the next epoch.
  * Requires Chrono Spire structure. Cost: CHRONO_SCOUT_COST TE.
  */
 export interface ChronoScoutCommand {
   readonly type: 'chrono_scout';
 }
 
-export type Command =
-  | GatherCommand
-  | BuildCommand
-  | TrainCommand
+// ── Command categories ────────────────────────────────────────────────────────
+
+/** Commands tied to a specific unit (one per unit per epoch). */
+export type UnitCommand =
   | MoveCommand
   | AttackCommand
+  | GatherCommand
   | DefendCommand
-  | TemporalCommand
-  | ChronoShiftCommand
-  | EpochAnchorCommand
+  | BuildCommand
+  | ChronoShiftCommand;
+
+/** Commands not tied to a specific unit (train, research, temporal abilities). */
+export type GlobalCommand =
+  | TrainCommand
   | ResearchCommand
+  | TemporalCommand
+  | EpochAnchorCommand
   | TimelineForkCommand
   | ChronoScoutCommand;
 
+export type Command = UnitCommand | GlobalCommand;
 export type CommandType = Command['type'];
-
-/** A player's command queue for one epoch. Null entries are empty slots. */
-export type CommandQueue = Array<Command | null>;
-
-export const MAX_COMMAND_SLOTS = 5;

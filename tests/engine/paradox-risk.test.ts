@@ -46,7 +46,7 @@ describe('Paradox Risk — temporal instability', () => {
     const state = createInitialState(1);
     state.players.player.resources.te = 10;
     state.players.player.commandSlots = 8;
-    state.players.player.commands = Array(8).fill(null);
+    state.players.player.globalCommands = Array(8).fill(null);
 
     // Epoch 1: 2 temporal abilities
     queueCommand(state, 'player', 0, { type: 'temporal', ability: 'echo', teCost: 2 });
@@ -69,7 +69,7 @@ describe('Paradox Risk — temporal instability', () => {
     // check passes before the Tier 1 check, so we land directly on Tier 2).
     const state = createInitialState(1);
     state.players.player.commandSlots = 8;
-    state.players.player.commands = Array(8).fill(null);
+    state.players.player.globalCommands = Array(8).fill(null);
 
     // Epoch 1: 1 temporal
     state.players.player.resources.te = 10;
@@ -115,7 +115,7 @@ describe('Paradox Risk — temporal instability', () => {
     const state = createInitialState(1);
     state.players.player.resources.te = 10;
     state.players.player.commandSlots = 8;
-    state.players.player.commands = Array(8).fill(null);
+    state.players.player.globalCommands = Array(8).fill(null);
 
     // Epoch 1: 2 temporals, Epoch 2: 1 temporal → triggers Tier 1
     queueCommand(state, 'player', 0, { type: 'temporal', ability: 'echo', teCost: 2 });

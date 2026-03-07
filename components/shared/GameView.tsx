@@ -5,10 +5,13 @@ import { GameState, createInitialState, findNexus, getOldestSnapshot, AIDifficul
 import { resolveEpoch } from '@/engine/resolution';
 import { Hex, hexKey, hexToPixel } from '@/engine/hex';
 import { BASE_HEX_SIZE } from '@/renderer/drawHex';
-import { Command, EpochAnchorCommand, TEMPORAL_ECHO_COST, TIMELINE_FORK_COST, CHRONO_SCOUT_COST, TrainCommand } from '@/engine/commands';
+import {
+  Command, GlobalCommand, EpochAnchorCommand,
+  TEMPORAL_ECHO_COST, TIMELINE_FORK_COST, CHRONO_SCOUT_COST, CHRONO_SHIFT_COST,
+  TrainCommand, UnitCommand,
+} from '@/engine/commands';
 import { runTimelineForkSimulation, computeChronoScout, TimelineForkResult, ChronoScoutResult } from '@/engine/simulation';
 import {
-  getFirstEligibleUnit,
   computeEligibleHexes,
   computeEligibleBuildHexes,
   TargetingCommandType,
@@ -19,7 +22,8 @@ import { isComplete, STRUCTURE_DEFS } from '@/engine/structures';
 import { PlayerId } from '@/engine/player';
 import { COLORS, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
 import { InteractionMode } from '@/lib/types';
-import { Unit, UnitType, UNIT_DEFS } from '@/engine/units';
+import { Unit, UNIT_DEFS } from '@/engine/units';
+import { findUnitAt } from '@/engine/state';
 import { getPlayerTrainEligibility, getTrainFailureReason } from './trainFlow';
 import {
   ExecutionAnimation, UnitSnapshot, StructSnapshot,
@@ -33,6 +37,7 @@ import { CameraSnapshot } from './GameCanvas';
 import PlanningBar from '../hud/PlanningBar';
 import CommandTray from '../hud/CommandTray';
 import CommandPicker from '../hud/CommandPicker';
+import UnitActionPanel from '../hud/UnitActionPanel';
 import ExecutionOverlay from '../hud/ExecutionOverlay';
 import Minimap from '../hud/Minimap';
 
@@ -41,12 +46,11 @@ const BASE_BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks
 const TIER1_BUILD_OPTIONS: BuildStructureType[] = [...BASE_BUILD_OPTIONS, 'flux_conduit', 'shield_pylon'];
 const TIER2_BUILD_OPTIONS: BuildStructureType[] = [...TIER1_BUILD_OPTIONS, 'war_foundry', 'chrono_spire'];
 
-
 const DIFFICULTY_OPTIONS: { value: AIDifficulty; label: string; desc: string }[] = [
-  { value: 'novice',       label: 'Novice',       desc: '4 command slots · Expander archetype · No temporal abilities' },
-  { value: 'adept',        label: 'Adept',         desc: '5 command slots · Expander archetype · Adapts mildly' },
-  { value: 'commander',    label: 'Commander',     desc: '5 command slots · Blended archetypes · Uses Chrono Shift' },
-  { value: 'epoch_master', label: 'Epoch Master',  desc: '6 command slots · Full archetype blend · All abilities' },
+  { value: 'novice',       label: 'Novice',       desc: 'Simple economy AI · No temporal abilities' },
+  { value: 'adept',        label: 'Adept',         desc: 'Blended strategy · Adapts mildly' },
+  { value: 'commander',    label: 'Commander',     desc: 'Mixed archetypes · Uses Chrono Shift' },
+  { value: 'epoch_master', label: 'Epoch Master',  desc: 'Full archetype blend · All abilities' },
 ];
 
 export default function GameView() {
@@ -57,7 +61,7 @@ export default function GameView() {
   const [timeLeft, setTimeLeft]     = useState(PLANNING_DURATION);
   const [lockInFlash, setLockInFlash] = useState(false);
   const [animElapsed, setAnimElapsed] = useState(0);
-  const [isMobile, setIsMobile] = useState(false); // default desktop; corrected after mount
+  const [isMobile, setIsMobile] = useState(false);
   const [cameraSnapshot, setCameraSnapshot] = useState<CameraSnapshot | null>(null);
   const [centerRequest, setCenterRequest] = useState<{ nonce: number; worldX: number; worldY: number } | null>(null);
   const centerNonceRef = useRef(0);
@@ -65,7 +69,6 @@ export default function GameView() {
   // ── Timeline Fork + Chrono Scout state ────────────────────────────────────
   const [timelineForkResult, setTimelineForkResult] = useState<TimelineForkResult | null>(null);
   const [chronoScoutResult, setChronoScoutResult]   = useState<ChronoScoutResult | null>(null);
-  /** True when we've shown the fork preview and are waiting for the player to confirm. */
   const timelineForkActiveRef = useRef(false);
   const [timelineForkActive, setTimelineForkActive]  = useState(false);
 
@@ -89,90 +92,60 @@ export default function GameView() {
     const patchedState = createInitialState(42);
     testMutator(patchedState);
     setGameState({ ...patchedState });
-    // Note: don't call setMode here — mode is already idle on mount, and
-    // resetting it after a test opens the picker would close the picker and
-    // race with Playwright's auto-wait for disabled-then-enabled buttons.
   }, []);
 
   const lockedIn = gameState.players.player.lockedIn;
   const playerNexusHp = useMemo(() => findNexus(gameState, 'player')?.hp ?? 0, [gameState]);
   const playerTechTier = gameState.players.player.techTier;
   const researchEpochsLeft = gameState.players.player.researchEpochsLeft;
+
   const hasCompletedTechLab = useMemo(() => {
     for (const s of gameState.structures.values()) {
       if (s.owner === 'player' && s.type === 'tech_lab' && isComplete(s)) return true;
     }
     return false;
   }, [gameState]);
+
   const hasWarFoundry = useMemo(() => {
     for (const s of gameState.structures.values()) {
       if (s.owner === 'player' && s.type === 'war_foundry' && isComplete(s)) return true;
     }
     return false;
   }, [gameState]);
+
   const hasChronoSpire = useMemo(() => {
     for (const s of gameState.structures.values()) {
       if (s.owner === 'player' && s.type === 'chrono_spire' && isComplete(s)) return true;
     }
     return false;
   }, [gameState]);
+
   const canTimelineFork = playerTechTier >= 2 &&
     gameState.players.player.resources.te >= TIMELINE_FORK_COST &&
     !gameState.players.player.timelineForkUsed;
+
   const timelineForkDisabledReason: string | undefined = gameState.players.player.timelineForkUsed
     ? 'Already used this match'
-    : playerTechTier < 2
-      ? 'Requires Tech Tier 2'
-      : gameState.players.player.resources.te < TIMELINE_FORK_COST
-        ? `Need ${TIMELINE_FORK_COST} TE`
-        : undefined;
-  const canChronoScout = hasChronoSpire &&
-    gameState.players.player.resources.te >= CHRONO_SCOUT_COST;
-  const chronoScoutDisabledReason: string | undefined = !hasChronoSpire
-    ? 'Requires Chrono Spire'
-    : gameState.players.player.resources.te < CHRONO_SCOUT_COST
-      ? `Need ${CHRONO_SCOUT_COST} TE`
-      : undefined;
-  const buildOptions = playerTechTier >= 2 ? TIER2_BUILD_OPTIONS : playerTechTier >= 1 ? TIER1_BUILD_OPTIONS : BASE_BUILD_OPTIONS;
-  const canChronoShift = useMemo(
-    () => getFirstEligibleUnit(gameState, 'chrono_shift') !== undefined,
-    [gameState],
-  );
-  const canMove = useMemo(
-    () => getFirstEligibleUnit(gameState, 'move') !== undefined,
-    [gameState],
-  );
-  const canAttack = useMemo(
-    () => getFirstEligibleUnit(gameState, 'attack') !== undefined,
-    [gameState],
-  );
-  const canGather = useMemo(() => {
-    if (getFirstEligibleUnit(gameState, 'gather') === undefined) return false;
-    for (const s of gameState.structures.values()) {
-      if (s.owner === 'player' && isComplete(s) && (s.type === 'crystal_extractor' || s.type === 'flux_conduit')) return true;
-    }
-    return false;
-  }, [gameState]);
-  const canDefend = useMemo(
-    () => getFirstEligibleUnit(gameState, 'defend') !== undefined,
-    [gameState],
-  );
-  const canBuild = useMemo(() => {
-    const cc = gameState.players.player.resources.cc;
-    return cc >= 3; // cheapest structures (Crystal Extractor, Watchtower) cost 3 CC
-  }, [gameState]);
+    : playerTechTier < 2 ? 'Requires Tech Tier 2'
+    : gameState.players.player.resources.te < TIMELINE_FORK_COST ? `Need ${TIMELINE_FORK_COST} TE`
+    : undefined;
+
+  const canChronoScout = hasChronoSpire && gameState.players.player.resources.te >= CHRONO_SCOUT_COST;
+
   const canTrain = useMemo(
     () => getPlayerTrainEligibility(gameState).length > 0,
     [gameState],
   );
+
   const hasEpochAnchor = gameState.players.player.epochAnchor !== null;
   const instabilityTier = gameState.players.player.instabilityTier;
   const instabilityEpochsLeft = gameState.players.player.instabilityEpochsLeft;
+  const buildOptions = playerTechTier >= 2 ? TIER2_BUILD_OPTIONS : playerTechTier >= 1 ? TIER1_BUILD_OPTIONS : BASE_BUILD_OPTIONS;
 
   // ── Execution animation ref ───────────────────────────────────────────────
   const animationRef = useRef<ExecutionAnimation | null>(null);
 
-  // ── finishExecution (stable ref for use in effects) ───────────────────────
+  // ── finishExecution ───────────────────────────────────────────────────────
   const finishExecutionRef = useRef<() => void>(() => {});
 
   const finishExecution = useCallback(() => {
@@ -195,10 +168,8 @@ export default function GameView() {
   finishExecutionRef.current = finishExecution;
 
   // ── Audio ─────────────────────────────────────────────────────────────────
-  // Track which execution-phase sounds have fired for the current animation.
   const execSoundsRef = useRef({ move: false, attack: false, build: false });
 
-  // Init AudioContext on first user interaction (browser policy requirement).
   useEffect(() => {
     const init = () => audioEngine.init();
     window.addEventListener('click', init, { once: true });
@@ -209,7 +180,6 @@ export default function GameView() {
     };
   }, []);
 
-  // Update ambient drone based on game state.
   useEffect(() => {
     if (gameState.phase === 'execution') {
       audioEngine.setAmbient('execution');
@@ -222,14 +192,12 @@ export default function GameView() {
     }
   }, [gameState.phase, playerNexusHp, timeLeft, lockedIn]);
 
-  // Timer warning and critical sounds.
   useEffect(() => {
     if (gameState.phase !== 'planning' || lockedIn) return;
     if (timeLeft === 5) audioEngine.playTimerWarning();
     if (timeLeft >= 1 && timeLeft <= 3) audioEngine.playTimerCritical(timeLeft);
   }, [timeLeft, gameState.phase, lockedIn]);
 
-  // Execution-phase sounds — fire once per animation phase.
   useEffect(() => {
     const anim = animationRef.current;
     if (!anim) return;
@@ -271,17 +239,17 @@ export default function GameView() {
     }
   }, [animElapsed]);
 
-  // ── Viewport tracking for responsive layout ───────────────────────────────
+  // ── Viewport tracking ─────────────────────────────────────────────────────
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT_PX);
-    check(); // sync after hydration
+    check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
 
   const slotDims = isMobile ? SLOT_LAYOUT.MOBILE : SLOT_LAYOUT.DESKTOP;
 
-  // ── Test hooks used by Playwright specs ────────────────────────────────────
+  // ── Test hooks ────────────────────────────────────────────────────────────
   useEffect(() => {
     type W = Window & {
       __triggerGameOver?: (winner: PlayerId) => void;
@@ -341,10 +309,8 @@ export default function GameView() {
     const state = gameStateRef.current;
     if (state.phase !== 'planning') return;
 
-    // Generate AI commands before resolution.
     generateAICommands(state);
 
-    // Snapshot unit and structure state before resolution.
     const unitSnaps = new Map<string, UnitSnapshot>();
     for (const [id, u] of state.units) {
       unitSnaps.set(id, { hex: { ...u.hex }, hp: u.hp, owner: u.owner, type: u.type });
@@ -354,14 +320,11 @@ export default function GameView() {
       structSnaps.set(id, { hex: { ...s.hex }, hp: s.hp, owner: s.owner, type: s.type });
     }
 
-    // Run resolution instantly.
     resolveEpoch(state);
 
-    // Build animation timeline from diff.
     const anim = buildAnimationTimeline(unitSnaps, structSnaps, state);
     animationRef.current = anim;
 
-    // Reset per-animation sound flags and fire transition sound.
     execSoundsRef.current = { move: false, attack: false, build: false };
     audioEngine.playEpochTransition();
 
@@ -371,7 +334,7 @@ export default function GameView() {
 
   handleResolveRef.current = handleResolve;
 
-  // ── Animation tick — drives overlay updates and completion ────────────────
+  // ── Animation tick ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!animationRef.current) return;
 
@@ -392,7 +355,7 @@ export default function GameView() {
 
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [gameState.phase]); // re-run when phase changes to execution
+  }, [gameState.phase]);
 
   // ── Countdown timer ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -404,14 +367,13 @@ export default function GameView() {
     return () => clearInterval(id);
   }, [lockedIn, gameState.phase, showSetup]);
 
-  // Trigger resolution when the timer reaches zero.
   useEffect(() => {
     if (timeLeft === 0 && gameState.phase === 'planning' && !lockedIn && !showSetup) {
       handleResolveRef.current();
     }
   }, [timeLeft, gameState.phase, lockedIn, showSetup]);
 
-  // ── Play Again ────────────────────────────────────────────────────────────
+  // ── Play Again / Start ────────────────────────────────────────────────────
   const handlePlayAgain = useCallback(() => {
     setGameState(createInitialState(42));
     setShowSetup(true);
@@ -443,9 +405,8 @@ export default function GameView() {
     const state = gameStateRef.current;
     if (state.players.player.lockedIn) return;
 
-    // If the player queued Timeline Fork and we haven't shown the preview yet,
-    // run the simulation and enter fork-preview mode instead of locking in.
-    const hasFork = state.players.player.commands.some((c) => c?.type === 'timeline_fork');
+    // If a Timeline Fork is queued in global commands and preview not yet shown, run it.
+    const hasFork = state.players.player.globalCommands.some((c) => c?.type === 'timeline_fork');
     if (hasFork && !timelineForkActiveRef.current) {
       state.players.player.timelineForkUsed = true;
       const result = runTimelineForkSimulation(state);
@@ -453,11 +414,10 @@ export default function GameView() {
       setGameState({ ...state });
       timelineForkActiveRef.current = true;
       setTimelineForkActive(true);
-      audioEngine.playTemporalEcho(); // temporal whoosh sound
+      audioEngine.playTemporalEcho();
       return;
     }
 
-    // Normal lock-in (also reached on second click after fork preview).
     timelineForkActiveRef.current = false;
     setTimelineForkActive(false);
 
@@ -467,174 +427,186 @@ export default function GameView() {
     setLockInFlash(true);
     setTimeout(() => setLockInFlash(false), 500);
     audioEngine.playLockIn(earlyBonus);
-    // Brief delay so the LOCKED state renders before resolution.
     setTimeout(() => handleResolveRef.current(), 800);
   }, []);
 
-  // ── Skip execution ──────────────────────────────────────────────────────
+  // ── Skip execution ────────────────────────────────────────────────────────
   const handleSkip = useCallback(() => {
     finishExecutionRef.current();
   }, []);
 
-  // ── Slot interaction ──────────────────────────────────────────────────────
-  const handleSlotClick = useCallback((i: number) => {
-    const m     = modeRef.current;
+  // ── Unit order helpers ────────────────────────────────────────────────────
+  const commitUnitOrder = useCallback((unitId: string, cmd: UnitCommand) => {
     const state = gameStateRef.current;
-    if (state.players.player.lockedIn) return;
-    const cmd   = state.players.player.commands[i];
-
-    if (m.kind === 'slot_selected' && m.slotIndex === i) {
-      setMode({ kind: 'picker_open', slotIndex: i });
-      return;
-    }
-
-    if (cmd !== null) {
-      setMode({ kind: 'slot_selected', slotIndex: i });
-    } else {
-      setMode({ kind: 'picker_open', slotIndex: i });
-    }
+    state.players.player.unitOrders.set(unitId, cmd);
+    setGameState({ ...state });
+    setMode({ kind: 'idle' });
+    audioEngine.playFillSlot(0);
   }, []);
 
-  const handleSlotClear = useCallback((i: number) => {
+  const handleUnitOrderClear = useCallback((unitId: string) => {
     const state = gameStateRef.current;
     if (state.players.player.lockedIn) return;
-    const cmd = state.players.player.commands[i];
-    if (cmd?.type === 'chrono_scout') setChronoScoutResult(null);
-    if (cmd?.type === 'timeline_fork') {
-      // Clearing the fork slot also exits fork preview mode.
-      timelineForkActiveRef.current = false;
-      setTimelineForkActive(false);
-      setTimelineForkResult(null);
-    }
-    const newCommands = [...state.players.player.commands];
-    newCommands[i] = null;
-    state.players.player.commands = newCommands;
+    state.players.player.unitOrders.delete(unitId);
+    // If clearing a chrono_scout unit, clear the scout result
+    // (chrono_scout is global, but handle defensively)
     setGameState({ ...state });
     setMode({ kind: 'idle' });
     audioEngine.playClearSlot();
   }, []);
 
-  // ── Command picker selection ──────────────────────────────────────────────
-  const handleCommandPick = useCallback((type: Command['type']) => {
-    const m     = modeRef.current;
-    if (m.kind !== 'picker_open') return;
-    const { slotIndex } = m;
+  const handleUnitCardClick = useCallback((unitId: string) => {
     const state = gameStateRef.current;
-
-    const commitCmd = (cmd: Command, audio: () => void) => {
-      const newCommands = [...state.players.player.commands];
-      newCommands[slotIndex] = cmd;
-      state.players.player.commands = newCommands;
-      setGameState({ ...state });
-      setMode({ kind: 'idle' });
-      audio();
-    };
-
-    if (type === 'temporal') {
-      commitCmd({ type: 'temporal', ability: 'echo', teCost: TEMPORAL_ECHO_COST }, () => audioEngine.playTemporalEcho());
-      return;
-    }
-
-    if (type === 'timeline_fork') {
-      commitCmd({ type: 'timeline_fork' }, () => audioEngine.playFillSlot(slotIndex));
-      return;
-    }
-
-    if (type === 'chrono_scout') {
-      const result = computeChronoScout(state);
-      setChronoScoutResult(result);
-      commitCmd({ type: 'chrono_scout' }, () => audioEngine.playFillSlot(slotIndex));
-      return;
-    }
-
-    if (type === 'research') {
-      commitCmd({ type: 'research' }, () => audioEngine.playFillSlot(slotIndex));
-      return;
-    }
-
-    if (type === 'defend') {
-      const unit = getFirstEligibleUnit(state, 'defend');
-      if (!unit) { setMode({ kind: 'idle' }); return; }
-      commitCmd({ type: 'defend', unitId: unit.id }, () => audioEngine.playFillSlot(slotIndex));
-      return;
-    }
-
-    if (type === 'build') {
-      setMode({ kind: 'build_select', slotIndex });
-      return;
-    }
-
-    if (type === 'move' || type === 'attack' || type === 'gather' || type === 'chrono_shift') {
-      const cmdType = type as TargetingCommandType;
-      const unit    = getFirstEligibleUnit(state, cmdType);
-      if (!unit) { setMode({ kind: 'idle' }); return; }
-      const eligibleKeys = computeEligibleHexes(state, cmdType);
-      setMode({
-        kind: 'targeting',
-        slotIndex,
-        commandType: cmdType,
-        eligibleKeys,
-        subjectUnitId: unit.id,
-      });
-      return;
-    }
-
-    if (type === 'train') {
-      const eligible = getPlayerTrainEligibility(state);
-      if (eligible.length === 0) {
-        setMode({
-          kind: 'train_picker',
-          slotIndex,
-          structureId: '',
-          structureHex: { q: 0, r: 0 },
-          failureFeedback: 'Train requires a completed Barracks or War Foundry.',
-        });
-        return;
-      }
-
-      // Prefer a structure with spawn space; prefer Barracks for reliability.
-      const withSpawn = eligible.find((e) => e.hasSpawnSpace && e.structureType === 'barracks')
-        ?? eligible.find((e) => e.hasSpawnSpace)
-        ?? eligible[0];
-      const selectedStructure = state.structures.get(withSpawn.structureId);
-      if (!selectedStructure) {
-        setMode({ kind: 'idle' });
-        return;
-      }
-
-      const minTrainCost = UNIT_DEFS.drone.costCC; // Drone is always the cheapest
-      const lowResourceFeedback = state.players.player.resources.cc < minTrainCost
-        ? 'Not enough CC to train any unit.'
-        : null;
-
-      setMode({
-        kind: 'train_picker',
-        slotIndex,
-        structureId: selectedStructure.id,
-        structureHex: selectedStructure.hex,
-        failureFeedback: withSpawn.hasSpawnSpace
-          ? lowResourceFeedback
-          : `Train failed: ${withSpawn.structureType === 'war_foundry' ? 'war foundry' : 'barracks'} spawn is blocked.`,
-      });
-      return;
-    }
-
-    setMode({ kind: 'idle' });
+    if (state.players.player.lockedIn) return;
+    setMode({ kind: 'unit_picker_open', unitId });
   }, []);
 
-  const handleEpochAnchorAction = useCallback((action: 'set' | 'activate') => {
-    const m = modeRef.current;
-    if (m.kind !== 'picker_open') return;
-    const { slotIndex } = m;
+  // ── Global slot helpers ───────────────────────────────────────────────────
+  const handleGlobalSlotClick = useCallback((i: number) => {
     const state = gameStateRef.current;
-    const cmd: EpochAnchorCommand = { type: 'epoch_anchor', action };
-    const newCommands = [...state.players.player.commands];
-    newCommands[slotIndex] = cmd;
-    state.players.player.commands = newCommands;
+    if (state.players.player.lockedIn) return;
+    setMode({ kind: 'global_picker_open', slotIndex: i });
+  }, []);
+
+  const handleGlobalSlotClear = useCallback((i: number) => {
+    const state = gameStateRef.current;
+    if (state.players.player.lockedIn) return;
+    const cmd = state.players.player.globalCommands[i];
+    if (cmd?.type === 'chrono_scout') setChronoScoutResult(null);
+    if (cmd?.type === 'timeline_fork') {
+      timelineForkActiveRef.current = false;
+      setTimelineForkActive(false);
+      setTimelineForkResult(null);
+    }
+    const newGlobal = [...state.players.player.globalCommands];
+    newGlobal[i] = null;
+    state.players.player.globalCommands = newGlobal;
+    setGameState({ ...state });
+    setMode({ kind: 'idle' });
+    audioEngine.playClearSlot();
+  }, []);
+
+  const commitGlobalCommand = useCallback((slotIndex: number, cmd: GlobalCommand) => {
+    const state = gameStateRef.current;
+    const newGlobal = [...state.players.player.globalCommands];
+    newGlobal[slotIndex] = cmd;
+    state.players.player.globalCommands = newGlobal;
     setGameState({ ...state });
     setMode({ kind: 'idle' });
     audioEngine.playFillSlot(slotIndex);
   }, []);
+
+  // ── Command picker selection ──────────────────────────────────────────────
+  const handleCommandPick = useCallback((type: Command['type']) => {
+    const m     = modeRef.current;
+    const state = gameStateRef.current;
+
+    // ── Unit context ─────────────────────────────────────────────────────────
+    if (m.kind === 'unit_picker_open') {
+      const { unitId } = m;
+      const unit = state.units.get(unitId);
+      if (!unit) { setMode({ kind: 'idle' }); return; }
+
+      if (type === 'defend') {
+        commitUnitOrder(unitId, { type: 'defend', unitId });
+        return;
+      }
+
+      if (type === 'chrono_shift') {
+        commitUnitOrder(unitId, { type: 'chrono_shift', unitId });
+        return;
+      }
+
+      if (type === 'build') {
+        setMode({ kind: 'build_select', unitId });
+        return;
+      }
+
+      if (type === 'move' || type === 'attack' || type === 'gather') {
+        const cmdType = type as TargetingCommandType;
+        const eligibleKeys = computeEligibleHexes(state, cmdType);
+        setMode({ kind: 'targeting', unitId, commandType: cmdType, eligibleKeys });
+        return;
+      }
+
+      setMode({ kind: 'idle' });
+      return;
+    }
+
+    // ── Global context ───────────────────────────────────────────────────────
+    if (m.kind === 'global_picker_open') {
+      const { slotIndex } = m;
+
+      if (type === 'temporal') {
+        commitGlobalCommand(slotIndex, { type: 'temporal', ability: 'echo', teCost: TEMPORAL_ECHO_COST });
+        return;
+      }
+
+      if (type === 'timeline_fork') {
+        commitGlobalCommand(slotIndex, { type: 'timeline_fork' });
+        return;
+      }
+
+      if (type === 'chrono_scout') {
+        const result = computeChronoScout(state);
+        setChronoScoutResult(result);
+        commitGlobalCommand(slotIndex, { type: 'chrono_scout' });
+        return;
+      }
+
+      if (type === 'research') {
+        commitGlobalCommand(slotIndex, { type: 'research' });
+        return;
+      }
+
+      if (type === 'train') {
+        const eligible = getPlayerTrainEligibility(state);
+        if (eligible.length === 0) {
+          setMode({
+            kind: 'train_picker',
+            slotIndex,
+            structureId: '',
+            structureHex: { q: 0, r: 0 },
+            failureFeedback: 'Train requires a completed Barracks or War Foundry.',
+          });
+          return;
+        }
+
+        const withSpawn = eligible.find((e) => e.hasSpawnSpace && e.structureType === 'barracks')
+          ?? eligible.find((e) => e.hasSpawnSpace)
+          ?? eligible[0];
+        const selectedStructure = state.structures.get(withSpawn.structureId);
+        if (!selectedStructure) { setMode({ kind: 'idle' }); return; }
+
+        const minTrainCost = UNIT_DEFS.drone.costCC;
+        const lowResourceFeedback = state.players.player.resources.cc < minTrainCost
+          ? 'Not enough CC to train any unit.'
+          : null;
+
+        setMode({
+          kind: 'train_picker',
+          slotIndex,
+          structureId: selectedStructure.id,
+          structureHex: selectedStructure.hex,
+          failureFeedback: withSpawn.hasSpawnSpace
+            ? lowResourceFeedback
+            : `Train failed: ${withSpawn.structureType === 'war_foundry' ? 'war foundry' : 'barracks'} spawn is blocked.`,
+        });
+        return;
+      }
+
+      setMode({ kind: 'idle' });
+      return;
+    }
+  }, [commitUnitOrder, commitGlobalCommand]);
+
+  const handleEpochAnchorAction = useCallback((action: 'set' | 'activate') => {
+    const m = modeRef.current;
+    if (m.kind !== 'global_picker_open') return;
+    const { slotIndex } = m;
+    const cmd: EpochAnchorCommand = { type: 'epoch_anchor', action };
+    commitGlobalCommand(slotIndex, cmd);
+  }, [commitGlobalCommand]);
 
   const handleBuildStructureSelect = useCallback((structureType: BuildStructureType) => {
     const m = modeRef.current;
@@ -643,13 +615,13 @@ export default function GameView() {
     const eligibleKeys = computeEligibleBuildHexes(gameStateRef.current);
     setMode({
       kind: 'build_targeting',
-      slotIndex: m.slotIndex,
+      unitId: m.unitId,
       structureType,
       eligibleKeys,
     });
   }, []);
 
-  const handleTrainPick = useCallback((unitType: UnitType) => {
+  const handleTrainPick = useCallback((unitType: import('@/engine/units').UnitType) => {
     const m = modeRef.current;
     if (m.kind !== 'train_picker') return;
 
@@ -660,52 +632,34 @@ export default function GameView() {
       return;
     }
 
-    // Auto-select the correct production building for this unit type.
     const unitDef = UNIT_DEFS[unitType];
     const eligible = getPlayerTrainEligibility(state);
     const matchingBuilding = eligible.find((e) => e.structureType === unitDef.producedAt && e.hasSpawnSpace)
       ?? eligible.find((e) => e.structureType === unitDef.producedAt);
     const structureId = matchingBuilding?.structureId ?? m.structureId;
 
-    const newCmd: TrainCommand = {
-      type: 'train',
-      structureId,
-      unitType,
-    };
-
-    const newCommands = [...state.players.player.commands];
-    newCommands[m.slotIndex] = newCmd;
-    state.players.player.commands = newCommands;
-    setGameState({ ...state });
-    setMode({ kind: 'idle' });
-    audioEngine.playFillSlot(m.slotIndex);
-  }, []);
+    const newCmd: TrainCommand = { type: 'train', structureId, unitType };
+    commitGlobalCommand(m.slotIndex, newCmd);
+  }, [commitGlobalCommand]);
 
   // ── Hex click from canvas ─────────────────────────────────────────────────
   const handleHexClick = useCallback((hex: Hex) => {
     const m = modeRef.current;
-    if (m.kind !== 'targeting' && m.kind !== 'build_targeting') return;
-
-    const key   = hexKey(hex);
     const state = gameStateRef.current;
 
-    if (!m.eligibleKeys.has(key)) {
-      setMode({ kind: 'idle' });
-      return;
-    }
-
-    const { slotIndex } = m;
-    let newCmd: Command;
-
+    // ── Targeting: commit the chosen hex ──────────────────────────────────
     if (m.kind === 'targeting') {
-      const { commandType, subjectUnitId } = m;
+      const key = hexKey(hex);
+      if (!m.eligibleKeys.has(key)) { setMode({ kind: 'idle' }); return; }
+
+      const { unitId, commandType } = m;
+      let newCmd: UnitCommand;
+
       if (commandType === 'move') {
-        newCmd = { type: 'move', unitId: subjectUnitId, targetHex: hex };
+        newCmd = { type: 'move', unitId, targetHex: hex };
       } else if (commandType === 'attack') {
-        newCmd = { type: 'attack', unitId: subjectUnitId, targetHex: hex };
+        newCmd = { type: 'attack', unitId, targetHex: hex };
       } else if (commandType === 'chrono_shift') {
-        // Find the specific player unit at this hex that has a 2-epoch snapshot.
-        // findUnitAt would return the wrong unit if two player units share a hex.
         const snap = getOldestSnapshot(state);
         let shiftTarget: Unit | undefined;
         for (const u of state.units.values()) {
@@ -716,83 +670,80 @@ export default function GameView() {
         if (!shiftTarget) { setMode({ kind: 'idle' }); return; }
         newCmd = { type: 'chrono_shift', unitId: shiftTarget.id };
       } else {
-        newCmd = { type: 'gather', unitId: subjectUnitId, targetHex: hex };
+        newCmd = { type: 'gather', unitId, targetHex: hex };
       }
-    } else {
-      newCmd = { type: 'build', structureType: m.structureType, targetHex: hex };
+
+      commitUnitOrder(unitId, newCmd);
+      return;
     }
 
-    const newCommands = [...state.players.player.commands];
-    newCommands[slotIndex] = newCmd;
-    state.players.player.commands = newCommands;
-    setGameState({ ...state });
-    setMode({ kind: 'idle' });
-    audioEngine.playFillSlot(slotIndex);
-  }, []);
+    // ── Build targeting: place the structure ──────────────────────────────
+    if (m.kind === 'build_targeting') {
+      const key = hexKey(hex);
+      if (!m.eligibleKeys.has(key)) { setMode({ kind: 'idle' }); return; }
+      commitUnitOrder(m.unitId, { type: 'build', unitId: m.unitId, structureType: m.structureType, targetHex: hex });
+      return;
+    }
 
-  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+    // ── Idle: clicking a player unit opens its picker ─────────────────────
+    if (m.kind === 'idle' && state.phase === 'planning' && !lockedIn) {
+      const unit = findUnitAt(state, hex, 'player');
+      if (unit) {
+        setMode({ kind: 'unit_picker_open', unitId: unit.id });
+      }
+    }
+  }, [commitUnitOrder, lockedIn]);
+
+  // ── Escape key closes picker ──────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const m = modeRef.current;
-      const state = gameStateRef.current;
-
-      // During execution: Space or Escape → skip.
-      if (animationRef.current !== null) {
-        if (e.key === ' ' || e.key === 'Escape') {
+      if (e.key === 'Escape') {
+        if (animationRef.current !== null) {
           e.preventDefault();
           finishExecutionRef.current();
-          return;
-        }
-        return; // Ignore other keys during execution.
-      }
-
-      // Planning phase shortcuts.
-      if (state.phase !== 'planning') return;
-
-      // Block slot interaction when locked in (only allow Space for skip).
-      if (state.players.player.lockedIn) return;
-
-      // 1–5: select slot.
-      if (e.key >= '1' && e.key <= '5') {
-        const idx = parseInt(e.key, 10) - 1;
-        const cmd = state.players.player.commands[idx];
-        if (cmd !== null) {
-          setMode({ kind: 'slot_selected', slotIndex: idx });
         } else {
-          setMode({ kind: 'picker_open', slotIndex: idx });
+          setMode({ kind: 'idle' });
         }
-        return;
-      }
-
-      // Escape: return to idle.
-      if (e.key === 'Escape') {
-        setMode({ kind: 'idle' });
-        return;
-      }
-
-      // Delete / Backspace: clear selected slot.
-      if ((e.key === 'Delete' || e.key === 'Backspace') && m.kind === 'slot_selected') {
-        handleSlotClear(m.slotIndex);
-        return;
-      }
-
-      // Space: lock in (when idle and in planning).
-      if (e.key === ' ' && m.kind === 'idle') {
+      } else if (e.key === ' ' && animationRef.current !== null) {
         e.preventDefault();
-        handleLockIn();
-        return;
+        finishExecutionRef.current();
       }
     };
-
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [handleSlotClear, handleLockIn]);
+  }, []);
 
   const isExecuting = animationRef.current !== null;
 
-  // Show previous epoch AI commands as echo overlay when player has Echo queued.
-  const hasEcho = gameState.players.player.commands.some((c) => c?.type === 'temporal');
+  // Echo overlay: show previous AI commands when player has Echo queued.
+  const hasEcho = gameState.players.player.globalCommands.some((c) => c?.type === 'temporal');
   const echoCommands = hasEcho ? gameState.prevEpochCommands.ai : null;
+
+  // ── Unit picker props (derived from current mode) ─────────────────────────
+  const activeUnitId =
+    mode.kind === 'unit_picker_open' ? mode.unitId :
+    mode.kind === 'targeting' || mode.kind === 'build_select' || mode.kind === 'build_targeting' ? mode.unitId :
+    null;
+
+  const unitForPicker = activeUnitId ? gameState.units.get(activeUnitId) : null;
+  const unitPickerProps = unitForPicker ? (() => {
+    const def = UNIT_DEFS[unitForPicker.type];
+    const canAttack = def.range > 0;
+    const canGather = unitForPicker.type === 'drone' && (() => {
+      for (const s of gameState.structures.values()) {
+        if (s.owner === 'player' && isComplete(s) && (s.type === 'crystal_extractor' || s.type === 'flux_conduit')) return true;
+      }
+      return false;
+    })();
+    const canBuild = unitForPicker.type === 'drone' && gameState.players.player.resources.cc >= 3;
+    const unitHasChrono = !!(getOldestSnapshot(gameState)?.has(unitForPicker.id));
+    const canChronoShift = playerTechTier >= 1 && gameState.players.player.resources.te >= CHRONO_SHIFT_COST && unitHasChrono;
+    return { canAttack, canGather, canBuild, canChronoShift, unitType: unitForPicker.type };
+  })() : null;
+
+  // Position for unit picker: to the right of the panel, aligned to the card.
+  // We use a fixed top offset; the panel scrolls the card into view.
+  const unitPickerTop = 8;
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden">
@@ -824,6 +775,17 @@ export default function GameView() {
           centerRequest={centerRequest}
         />
 
+        {/* Unit action panel — left sidebar */}
+        {gameState.phase === 'planning' && !isExecuting && (
+          <UnitActionPanel
+            gameState={gameState}
+            mode={mode}
+            lockedIn={lockedIn}
+            onUnitClick={handleUnitCardClick}
+            onOrderClear={handleUnitOrderClear}
+          />
+        )}
+
         <Minimap
           gameState={gameState}
           cameraSnapshot={cameraSnapshot}
@@ -832,36 +794,77 @@ export default function GameView() {
           onSnapHome={handleSnapHome}
         />
 
-        {/* Command picker floats above the tray */}
-        {(mode.kind === 'picker_open' || mode.kind === 'train_picker') && !isExecuting && (
+        {/* Unit command picker */}
+        {mode.kind === 'unit_picker_open' && !isExecuting && unitForPicker && unitPickerProps && (
           <CommandPicker
-            slotIndex={mode.slotIndex}
-            left={Math.min(
-              mode.slotIndex * (slotDims.width + slotDims.gap) + 16,
-              window.innerWidth - 168,
-            )}
+            position={{ kind: 'unit', top: unitPickerTop }}
             playerTE={gameState.players.player.resources.te}
             playerCC={gameState.players.player.resources.cc}
             playerFX={gameState.players.player.resources.fx}
             playerTechTier={playerTechTier}
             researchEpochsLeft={researchEpochsLeft}
             hasCompletedTechLab={hasCompletedTechLab}
-            canChronoShift={canChronoShift}
             hasWarFoundry={hasWarFoundry}
+            hasChronoSpire={hasChronoSpire}
             hasEpochAnchor={hasEpochAnchor}
-            canMove={canMove}
-            canAttack={canAttack}
-            canGather={canGather}
-            canDefend={canDefend}
-            canBuild={canBuild}
+            unitType={unitPickerProps.unitType}
+            canAttack={unitPickerProps.canAttack}
+            canGather={unitPickerProps.canGather}
+            canBuild={unitPickerProps.canBuild}
+            canChronoShift={unitPickerProps.canChronoShift}
+            onSelect={handleCommandPick}
+            onEpochAnchorAction={handleEpochAnchorAction}
+            onClose={() => setMode({ kind: 'idle' })}
+          />
+        )}
+
+        {/* Global command picker */}
+        {mode.kind === 'global_picker_open' && !isExecuting && (
+          <CommandPicker
+            position={{
+              kind: 'global',
+              slotIndex: mode.slotIndex,
+              left: Math.min(mode.slotIndex * (slotDims.width + slotDims.gap) + 16, window.innerWidth - 168),
+            }}
+            playerTE={gameState.players.player.resources.te}
+            playerCC={gameState.players.player.resources.cc}
+            playerFX={gameState.players.player.resources.fx}
+            playerTechTier={playerTechTier}
+            researchEpochsLeft={researchEpochsLeft}
+            hasCompletedTechLab={hasCompletedTechLab}
+            hasWarFoundry={hasWarFoundry}
+            hasChronoSpire={hasChronoSpire}
+            hasEpochAnchor={hasEpochAnchor}
             canTrain={canTrain}
             canTimelineFork={canTimelineFork}
             timelineForkDisabledReason={timelineForkDisabledReason}
             canChronoScout={canChronoScout}
-            chronoScoutDisabledReason={chronoScoutDisabledReason}
-            mode={mode.kind === 'train_picker' ? 'train' : 'command'}
+            onSelect={handleCommandPick}
+            onEpochAnchorAction={handleEpochAnchorAction}
+            onClose={() => setMode({ kind: 'idle' })}
+          />
+        )}
+
+        {/* Train picker (sub-mode of global) */}
+        {mode.kind === 'train_picker' && !isExecuting && (
+          <CommandPicker
+            position={{
+              kind: 'global',
+              slotIndex: mode.slotIndex,
+              left: Math.min(mode.slotIndex * (slotDims.width + slotDims.gap) + 16, window.innerWidth - 168),
+            }}
+            playerTE={gameState.players.player.resources.te}
+            playerCC={gameState.players.player.resources.cc}
+            playerFX={gameState.players.player.resources.fx}
+            playerTechTier={playerTechTier}
+            researchEpochsLeft={researchEpochsLeft}
+            hasCompletedTechLab={hasCompletedTechLab}
+            hasWarFoundry={hasWarFoundry}
+            hasChronoSpire={hasChronoSpire}
+            hasEpochAnchor={hasEpochAnchor}
+            mode="train"
             trainStructureLabel={
-              mode.kind === 'train_picker' && mode.structureId
+              mode.structureId
                 ? (() => {
                     const s = gameState.structures.get(mode.structureId);
                     const label = s?.type === 'war_foundry' ? 'War Foundry' : 'Barracks';
@@ -869,7 +872,7 @@ export default function GameView() {
                   })()
                 : undefined
             }
-            feedback={mode.kind === 'train_picker' ? mode.failureFeedback : null}
+            feedback={mode.failureFeedback}
             onSelect={handleCommandPick}
             onEpochAnchorAction={handleEpochAnchorAction}
             onTrainSelect={handleTrainPick}
@@ -877,15 +880,15 @@ export default function GameView() {
           />
         )}
 
-
+        {/* Build structure chooser */}
         {mode.kind === 'build_select' && !isExecuting && (
           <div
             role="dialog"
             aria-label="Build structure picker"
             className="absolute font-mono text-xs"
             style={{
-              bottom: 84,
-              left: Math.min(mode.slotIndex * (slotDims.width + slotDims.gap) + 16, window.innerWidth - 188),
+              top: unitPickerTop,
+              left: 188,
               zIndex: 100,
               background: '#0d1321',
               border: '1px solid #334155',
@@ -1008,12 +1011,12 @@ export default function GameView() {
         )}
       </div>
 
-      {/* Show tray only during planning phase */}
+      {/* Global command tray — shown only during planning */}
       {gameState.phase === 'planning' && !isExecuting && (
         <CommandTray
-          commands={gameState.players.player.commands}
-          selectedSlot={
-            mode.kind === 'slot_selected' || mode.kind === 'picker_open' || mode.kind === 'build_select' || mode.kind === 'build_targeting' || mode.kind === 'train_picker'
+          globalCommands={gameState.players.player.globalCommands}
+          selectedGlobalSlot={
+            mode.kind === 'global_picker_open' || mode.kind === 'train_picker'
               ? mode.slotIndex
               : null
           }
@@ -1021,8 +1024,8 @@ export default function GameView() {
           lockInFlash={lockInFlash}
           isMobile={isMobile}
           forkMode={timelineForkActive}
-          onSlotClick={handleSlotClick}
-          onSlotClear={handleSlotClear}
+          onSlotClick={handleGlobalSlotClick}
+          onSlotClear={handleGlobalSlotClear}
           onLockIn={handleLockIn}
         />
       )}

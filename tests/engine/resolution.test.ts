@@ -256,12 +256,13 @@ describe('Attack step', () => {
 describe('Build step', () => {
   it('places a structure with correct build progress', () => {
     const s = createInitialState(1);
+    const drone = [...s.units.values()].find((u) => u.owner === 'player')!;
     s.players.player.resources.cc = 10;
     // (-8, 0) is occupied by the player drone; use (-8, -1) instead
     const target = { q: -8, r: -1 };
 
     queueCommand(s, 'player', 0, {
-      type: 'build', targetHex: target, structureType: 'barracks',
+      type: 'build', unitId: drone.id, targetHex: target, structureType: 'barracks',
     });
 
     resolveEpoch(s);
@@ -277,9 +278,10 @@ describe('Build step', () => {
 
   it('deducts CC when building', () => {
     const s = createInitialState(1);
+    const drone = [...s.units.values()].find((u) => u.owner === 'player')!;
     s.players.player.resources.cc = 10;
     queueCommand(s, 'player', 0, {
-      type: 'build', targetHex: { q: -8, r: -1 }, structureType: 'barracks',
+      type: 'build', unitId: drone.id, targetHex: { q: -8, r: -1 }, structureType: 'barracks',
     });
 
     resolveEpoch(s);
@@ -292,11 +294,12 @@ describe('Build step', () => {
 
   it('fails to build on an occupied hex', () => {
     const s = createInitialState(1);
+    const drone = [...s.units.values()].find((u) => u.owner === 'player')!;
     s.players.player.resources.cc = 10;
-    const occupiedHex = [...s.units.values()].find((u) => u.owner === 'player')!.hex;
+    const occupiedHex = drone.hex;
 
     queueCommand(s, 'player', 0, {
-      type: 'build', targetHex: occupiedHex, structureType: 'watchtower',
+      type: 'build', unitId: drone.id, targetHex: occupiedHex, structureType: 'watchtower',
     });
 
     resolveEpoch(s);
@@ -310,11 +313,12 @@ describe('Build step', () => {
 
   it('fails to build on impassable terrain', () => {
     const s = createInitialState(1);
+    const drone = [...s.units.values()].find((u) => u.owner === 'player')!;
     s.players.player.resources.cc = 10;
     const impassable = [...s.map.cells.values()].find((cell) => cell.terrain === 'void_rift')!;
 
     queueCommand(s, 'player', 0, {
-      type: 'build', targetHex: impassable.hex, structureType: 'watchtower',
+      type: 'build', unitId: drone.id, targetHex: impassable.hex, structureType: 'watchtower',
     });
 
     resolveEpoch(s);
@@ -328,9 +332,10 @@ describe('Build step', () => {
 
   it('fails to build when insufficient CC', () => {
     const s = createInitialState(1);
+    const drone = [...s.units.values()].find((u) => u.owner === 'player')!;
     s.players.player.resources.cc = 2; // not enough for barracks (5 CC)
     queueCommand(s, 'player', 0, {
-      type: 'build', targetHex: { q: -8, r: 0 }, structureType: 'barracks',
+      type: 'build', unitId: drone.id, targetHex: { q: -8, r: 0 }, structureType: 'barracks',
     });
 
     resolveEpoch(s);
@@ -551,6 +556,7 @@ describe('Post-resolution', () => {
     const drone = [...s.units.values()].find(u => u.owner === 'player')!;
     queueCommand(s, 'player', 0, { type: 'defend', unitId: drone.id });
     resolveEpoch(s);
-    expect(s.players.player.commands.every(c => c === null)).toBe(true);
+    expect(s.players.player.unitOrders.size).toBe(0);
+    expect(s.players.player.globalCommands.every(c => c === null)).toBe(true);
   });
 });

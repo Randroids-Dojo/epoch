@@ -1,11 +1,11 @@
 'use client';
 
-import { Command, CommandQueue } from '@/engine/commands';
+import { GlobalCommand } from '@/engine/commands';
 import { SLOT_LAYOUT } from '@/lib/constants';
 
 interface CommandTrayProps {
-  commands: CommandQueue;
-  selectedSlot: number | null;
+  globalCommands: Array<GlobalCommand | null>;
+  selectedGlobalSlot: number | null;
   lockedIn: boolean;
   lockInFlash: boolean;
   isMobile?: boolean;
@@ -16,53 +16,30 @@ interface CommandTrayProps {
   onLockIn(): void;
 }
 
-/** Two-letter code shown on a filled command slot. */
 const TYPE_CODE: Record<string, string> = {
-  move:           'MV',
-  attack:         'AT',
-  gather:         'GR',
-  defend:         'DF',
-  build:          'BD',
   train:          'TR',
+  research:       'RS',
   temporal:       'TM',
   chrono_shift:   'SH',
   epoch_anchor:   'AN',
-  research:       'RS',
   timeline_fork:  'FK',
   chrono_scout:   'SC',
 };
 
-/** Short description of the command target. */
-function cmdLabel(cmd: Command): string {
+function cmdLabel(cmd: GlobalCommand): string {
   switch (cmd.type) {
-    case 'move':
-    case 'attack':
-    case 'gather':
-      return `(${cmd.targetHex.q},${cmd.targetHex.r})`;
-    case 'defend':
-      return cmd.unitId.slice(-4);
-    case 'build':
-      return `BD`;
-    case 'train':
-      return `${cmd.unitType}@${cmd.structureId.slice(-3)}`;
-    case 'temporal':
-      return 'ECHO';
-    case 'chrono_shift':
-      return 'SHIFT';
-    case 'epoch_anchor':
-      return cmd.action === 'set' ? 'ANCHOR' : 'RECALL';
-    case 'research':
-      return 'TECH';
-    case 'timeline_fork':
-      return 'FORK';
-    case 'chrono_scout':
-      return 'SCOUT';
+    case 'train':        return `${cmd.unitType}@${cmd.structureId.slice(-3)}`;
+    case 'research':     return 'TECH';
+    case 'temporal':     return 'ECHO';
+    case 'epoch_anchor': return cmd.action === 'set' ? 'ANCHOR' : 'RECALL';
+    case 'timeline_fork': return 'FORK';
+    case 'chrono_scout': return 'SCOUT';
   }
 }
 
 export default function CommandTray({
-  commands,
-  selectedSlot,
+  globalCommands,
+  selectedGlobalSlot,
   lockedIn,
   lockInFlash,
   isMobile = false,
@@ -78,9 +55,9 @@ export default function CommandTray({
       className="shrink-0 flex items-center px-4 py-3 font-mono"
       style={{ gap: slot.gap, background: 'rgba(10,14,26,0.95)', borderTop: '1px solid #1e293b' }}
     >
-      {/* Command slots */}
-      {commands.map((cmd, i) => {
-        const isSelected = selectedSlot === i;
+      {/* Global command slots */}
+      {globalCommands.map((cmd, i) => {
+        const isSelected = selectedGlobalSlot === i;
         return (
           <button
             key={i}
@@ -110,15 +87,12 @@ export default function CommandTray({
           >
             {cmd ? (
               <>
-                {/* Slot index label */}
                 <span
                   className="absolute left-1 top-0.5"
                   style={{ color: '#334155', fontSize: '0.6rem' }}
                 >
                   {i + 1}
                 </span>
-
-                {/* Command type badge */}
                 <div className="flex flex-col items-center gap-0.5">
                   <span style={{ color: '#00d4ff', fontWeight: 700 }}>
                     {TYPE_CODE[cmd.type] ?? cmd.type.slice(0, 2).toUpperCase()}
@@ -127,8 +101,6 @@ export default function CommandTray({
                     {cmdLabel(cmd)}
                   </span>
                 </div>
-
-                {/* Clear control */}
                 <span
                   role="button"
                   tabIndex={0}
@@ -189,7 +161,7 @@ export default function CommandTray({
           color: lockedIn ? '#334155' : '#00d4ff',
           cursor: lockedIn ? 'not-allowed' : 'pointer',
           transition: 'background 0.2s ease, border-color 0.2s ease',
-          minWidth: isMobile ? 72 : 100, // narrower lock button on mobile
+          minWidth: isMobile ? 72 : 100,
         }}
       >
         {lockedIn

@@ -65,7 +65,7 @@ describe('runTimelineForkSimulation', () => {
   it('strips timeline_fork command from the simulation copy', () => {
     // The fork command should not cause recursion or errors.
     const state = makeState();
-    state.players.player.commands[0] = { type: 'timeline_fork' };
+    state.players.player.globalCommands[0] = { type: 'timeline_fork' };
     expect(() => runTimelineForkSimulation(state)).not.toThrow();
   });
 });

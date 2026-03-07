@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createInitialState, findNexus, findUnitAt, resetIdSeq } from '@/engine/state';
+import { createInitialState, findNexus, findUnitAt, resetIdSeq, INITIAL_GLOBAL_SLOTS } from '@/engine/state';
 import { UNIT_DEFS } from '@/engine/units';
 import { STRUCTURE_DEFS } from '@/engine/structures';
-import { MAX_COMMAND_SLOTS } from '@/engine/commands';
 
 beforeEach(() => resetIdSeq());
 
@@ -24,13 +23,12 @@ describe('createInitialState', () => {
     }
   });
 
-  it('both players have 5 empty command slots', () => {
+  it('player starts with 2 global slots and empty unit orders', () => {
     const s = createInitialState(1);
-    for (const pid of ['player', 'ai'] as const) {
-      expect(s.players[pid].commandSlots).toBe(MAX_COMMAND_SLOTS);
-      expect(s.players[pid].commands).toHaveLength(MAX_COMMAND_SLOTS);
-      expect(s.players[pid].commands.every(c => c === null)).toBe(true);
-    }
+    expect(s.players.player.commandSlots).toBe(INITIAL_GLOBAL_SLOTS);
+    expect(s.players.player.globalCommands).toHaveLength(INITIAL_GLOBAL_SLOTS);
+    expect(s.players.player.globalCommands.every(c => c === null)).toBe(true);
+    expect(s.players.player.unitOrders.size).toBe(0);
   });
 
   it('each player has a Command Nexus on their start hex', () => {

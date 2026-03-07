@@ -3,7 +3,7 @@ import { Hex, hexEqual, hexKey } from './hex';
 import { PlayerId, PLAYER_IDS } from './player';
 import { Unit, UNIT_DEFS } from './units';
 import { Structure, STRUCTURE_DEFS } from './structures';
-import { Command, CommandQueue, MAX_COMMAND_SLOTS } from './commands';
+import { UnitCommand, GlobalCommand } from './commands';
 
 // ── AI Configuration Types ────────────────────────────────────────────────────
 
@@ -52,8 +52,12 @@ export interface AnchorSnapshot {
 export interface PlayerState {
   readonly id: PlayerId;
   resources: Resources;
+  /** Number of global command slots (train/research/temporal). Scales with tech tier. */
   commandSlots: number;
-  commands: CommandQueue;
+  /** Per-unit orders for this epoch: maps unitId → action. One per unit maximum. */
+  unitOrders: Map<string, UnitCommand>;
+  /** Global command slots for train / research / temporal abilities. */
+  globalCommands: Array<GlobalCommand | null>;
   /** Current tech tier (0–3). Increases when research completes. */
   techTier: number;
   /** Epochs of research remaining. 0 = not researching. */
@@ -86,11 +90,10 @@ export interface GameState {
   /** Human-readable log lines from the last epoch resolution. */
   eventLog: string[];
   /** Commands each player queued in the previous epoch (for Temporal Echo). */
-  prevEpochCommands: Record<PlayerId, Command[]>;
+  prevEpochCommands: Record<PlayerId, (UnitCommand | GlobalCommand)[]>;
   /**
    * Rolling 2-epoch history of unit snapshots for Chrono Shift.
    * Index 0 = oldest (2 epochs ago), index 1 = most recent (1 epoch ago).
-   * Empty until the second completed epoch.
    */
   unitHistory: Array<Map<string, ChronoSnapshot>>;
   /**
@@ -140,13 +143,16 @@ function createAIConfig(difficulty: AIDifficulty): AIConfig {
   };
 }
 
-/** Command slots per difficulty level. */
+/** Global command slots per difficulty level for the AI. */
 export const DIFFICULTY_SLOTS: Record<AIDifficulty, number> = {
-  novice:       4,
-  adept:        5,
-  commander:    5,
-  epoch_master: 6,
+  novice:       1,
+  adept:        2,
+  commander:    2,
+  epoch_master: 3,
 };
+
+/** Initial global command slots for the human player. */
+export const INITIAL_GLOBAL_SLOTS = 2;
 
 // ── Initial state factory ─────────────────────────────────────────────────────
 
@@ -190,25 +196,26 @@ export function createInitialState(seed?: number, difficulty: AIDifficulty = 'ad
     });
   }
 
-  const playerSlots = MAX_COMMAND_SLOTS;
-  const aiSlots = DIFFICULTY_SLOTS[difficulty];
+  const playerSlots = INITIAL_GLOBAL_SLOTS;
+  const aiSlots     = DIFFICULTY_SLOTS[difficulty];
 
   const makePlayer = (id: PlayerId): PlayerState => {
     const slots = id === 'ai' ? aiSlots : playerSlots;
     return {
-    id,
-    resources:            { cc: 10, fx: 0, te: 3 },
-    commandSlots:         slots,
-    commands:             Array<null>(slots).fill(null),
-    techTier:             0,
-    researchEpochsLeft:   0,
-    lockedIn:             false,
-    temporalEpochCounts:  [],
-    instabilityTier:      0,
-    instabilityEpochsLeft: 0,
-    epochAnchor:          null,
-    timelineForkUsed:     false,
-  };
+      id,
+      resources:            { cc: 10, fx: 0, te: 3 },
+      commandSlots:         slots,
+      unitOrders:           new Map(),
+      globalCommands:       Array<null>(slots).fill(null),
+      techTier:             0,
+      researchEpochsLeft:   0,
+      lockedIn:             false,
+      temporalEpochCounts:  [],
+      instabilityTier:      0,
+      instabilityEpochsLeft: 0,
+      epochAnchor:          null,
+      timelineForkUsed:     false,
+    };
   };
 
   return {

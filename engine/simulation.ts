@@ -12,7 +12,7 @@ import { Hex, hexKey, hexNeighbors } from './hex';
 import { GameState, PlayerState, ChronoSnapshot, AnchorSnapshot } from './state';
 import { Unit } from './units';
 import { Structure } from './structures';
-import { Command } from './commands';
+import { UnitCommand, GlobalCommand } from './commands';
 import { resolveEpoch } from './resolution';
 import { generateAICommands } from './ai';
 
@@ -60,7 +60,8 @@ function copyPlayer(p: PlayerState): PlayerState {
   return {
     ...p,
     resources: { ...p.resources },
-    commands: [...p.commands] as Command[],
+    unitOrders: new Map(p.unitOrders) as Map<string, UnitCommand>,
+    globalCommands: [...p.globalCommands] as Array<GlobalCommand | null>,
     temporalEpochCounts: [...p.temporalEpochCounts],
     epochAnchor: p.epochAnchor ? copyAnchor(p.epochAnchor) : null,
   };
@@ -119,7 +120,7 @@ export function runTimelineForkSimulation(liveState: GameState): TimelineForkRes
   const sim = deepCopyState(liveState);
 
   // Strip the fork command from the simulation copy so resolution doesn't re-process it.
-  sim.players.player.commands = sim.players.player.commands.map(
+  sim.players.player.globalCommands = sim.players.player.globalCommands.map(
     (c) => (c?.type === 'timeline_fork' ? null : c),
   );
 

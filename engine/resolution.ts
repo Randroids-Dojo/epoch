@@ -27,7 +27,7 @@ import {
 import {
   AttackCommand, BuildCommand, ChronoShiftCommand, CHRONO_SHIFT_COST,
   ChronoScoutCommand, CHRONO_SCOUT_COST,
-  Command, DefendCommand, EpochAnchorCommand, EPOCH_ANCHOR_ACTIVATE_COST,
+  Command, GlobalCommand, DefendCommand, EpochAnchorCommand, EPOCH_ANCHOR_ACTIVATE_COST,
   EPOCH_ANCHOR_SET_COST, GatherCommand, MoveCommand, ResearchCommand,
   TemporalCommand, TimelineForkCommand, TIMELINE_FORK_COST, TrainCommand,
 } from './commands';
@@ -42,8 +42,8 @@ const EXTRACTOR_YIELD_CC = 3;
 /** FX per epoch from a staffed Flux Conduit. */
 const FLUX_CONDUIT_YIELD_FX = 2;
 
-/** Command slots granted at each tech tier (index = tier). */
-const SLOTS_BY_TIER = [5, 6, 7, 8];
+/** Global command slots granted at each tech tier (index = tier). */
+const GLOBAL_SLOTS_BY_TIER = [2, 3, 4, 5];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -54,11 +54,14 @@ interface CommandEntry {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Collect all non-null commands from both players, tagged with owner. */
+/** Collect all commands from both players (unit orders + global), tagged with owner. */
 function gatherCommands(state: GameState): CommandEntry[] {
   const entries: CommandEntry[] = [];
   for (const pid of PLAYER_IDS) {
-    for (const cmd of state.players[pid].commands) {
+    for (const cmd of state.players[pid].unitOrders.values()) {
+      entries.push({ owner: pid, command: cmd });
+    }
+    for (const cmd of state.players[pid].globalCommands) {
       if (cmd !== null) entries.push({ owner: pid, command: cmd });
     }
   }
@@ -475,6 +478,13 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
   );
 
   for (const { owner, command } of builds) {
+    // Verify the assigned drone exists and belongs to this player.
+    const drone = state.units.get(command.unitId);
+    if (!drone || drone.owner !== owner || drone.type !== 'drone') {
+      log.push(`${owner} Build ${command.structureType} failed — drone not found`);
+      continue;
+    }
+
     const player = state.players[owner];
     const def    = STRUCTURE_DEFS[command.structureType];
 
@@ -575,8 +585,8 @@ function stepUpgrade(state: GameState, commands: CommandEntry[], log: string[]):
       player.researchEpochsLeft -= 1;
       if (player.researchEpochsLeft === 0) {
         player.techTier += 1;
-        player.commandSlots = SLOTS_BY_TIER[Math.min(player.techTier, SLOTS_BY_TIER.length - 1)];
-        log.push(`${pid} reached Tech Tier ${player.techTier} — +1 command slot (now ${player.commandSlots})`);
+        player.commandSlots = GLOBAL_SLOTS_BY_TIER[Math.min(player.techTier, GLOBAL_SLOTS_BY_TIER.length - 1)];
+        log.push(`${pid} reached Tech Tier ${player.techTier} — global slots now ${player.commandSlots}`);
       }
     }
   }
@@ -828,14 +838,17 @@ function stepPostResolution(state: GameState, commands: CommandEntry[]): void {
       }
     }
 
-    // Snapshot commands before clearing — used by Temporal Echo next epoch.
-    const filledCmds = p.commands.filter((c): c is Command => c !== null);
-    state.prevEpochCommands[pid] = filledCmds;
+    // Snapshot all commands before clearing — used by Temporal Echo next epoch.
+    const allCmds: (Command)[] = [
+      ...p.unitOrders.values(),
+      ...(p.globalCommands.filter((c): c is GlobalCommand => c !== null)),
+    ];
+    state.prevEpochCommands[pid] = allCmds;
 
     // Track player command distribution for AI adaptation (GDD §9.3).
     if (pid === 'player') {
       const counts = { gather: 0, build: 0, train: 0, move: 0, attack: 0, temporal: 0 };
-      for (const cmd of filledCmds) {
+      for (const cmd of allCmds) {
         if (cmd.type === 'gather') counts.gather++;
         else if (cmd.type === 'build') counts.build++;
         else if (cmd.type === 'train') counts.train++;
@@ -861,8 +874,9 @@ function stepPostResolution(state: GameState, commands: CommandEntry[]): void {
     if (p.lockedIn) {
       p.resources.te = Math.min(p.resources.te + 1, 10);
     }
-    // Clear commands and lock-in for the new planning phase (size = current commandSlots).
-    p.commands = Array(p.commandSlots).fill(null);
+    // Clear unit orders and global commands for the new planning phase.
+    p.unitOrders = new Map();
+    p.globalCommands = Array(p.commandSlots).fill(null);
     p.lockedIn = false;
   }
 
