@@ -5,7 +5,8 @@ import { GameState, createInitialState, findNexus, getOldestSnapshot, AIDifficul
 import { resolveEpoch } from '@/engine/resolution';
 import { Hex, hexKey, hexToPixel } from '@/engine/hex';
 import { BASE_HEX_SIZE } from '@/renderer/drawHex';
-import { Command, EpochAnchorCommand, TEMPORAL_ECHO_COST, TrainCommand } from '@/engine/commands';
+import { Command, EpochAnchorCommand, TEMPORAL_ECHO_COST, TIMELINE_FORK_COST, CHRONO_SCOUT_COST, TrainCommand } from '@/engine/commands';
+import { runTimelineForkSimulation, computeChronoScout, TimelineForkResult, ChronoScoutResult } from '@/engine/simulation';
 import {
   getFirstEligibleUnit,
   computeEligibleHexes,
@@ -61,6 +62,13 @@ export default function GameView() {
   const [centerRequest, setCenterRequest] = useState<{ nonce: number; worldX: number; worldY: number } | null>(null);
   const centerNonceRef = useRef(0);
 
+  // ── Timeline Fork + Chrono Scout state ────────────────────────────────────
+  const [timelineForkResult, setTimelineForkResult] = useState<TimelineForkResult | null>(null);
+  const [chronoScoutResult, setChronoScoutResult]   = useState<ChronoScoutResult | null>(null);
+  /** True when we've shown the fork preview and are waiting for the player to confirm. */
+  const timelineForkActiveRef = useRef(false);
+  const [timelineForkActive, setTimelineForkActive]  = useState(false);
+
   // Stable refs so callbacks always see the latest values.
   const gameStateRef = useRef(gameState);
   gameStateRef.current = gameState;
@@ -102,6 +110,29 @@ export default function GameView() {
     }
     return false;
   }, [gameState]);
+  const hasChronoSpire = useMemo(() => {
+    for (const s of gameState.structures.values()) {
+      if (s.owner === 'player' && s.type === 'chrono_spire' && isComplete(s)) return true;
+    }
+    return false;
+  }, [gameState]);
+  const canTimelineFork = playerTechTier >= 2 &&
+    gameState.players.player.resources.te >= TIMELINE_FORK_COST &&
+    !gameState.players.player.timelineForkUsed;
+  const timelineForkDisabledReason: string | undefined = gameState.players.player.timelineForkUsed
+    ? 'Already used this match'
+    : playerTechTier < 2
+      ? 'Requires Tech Tier 2'
+      : gameState.players.player.resources.te < TIMELINE_FORK_COST
+        ? `Need ${TIMELINE_FORK_COST} TE`
+        : undefined;
+  const canChronoScout = hasChronoSpire &&
+    gameState.players.player.resources.te >= CHRONO_SCOUT_COST;
+  const chronoScoutDisabledReason: string | undefined = !hasChronoSpire
+    ? 'Requires Chrono Spire'
+    : gameState.players.player.resources.te < CHRONO_SCOUT_COST
+      ? `Need ${CHRONO_SCOUT_COST} TE`
+      : undefined;
   const buildOptions = playerTechTier >= 2 ? TIER2_BUILD_OPTIONS : playerTechTier >= 1 ? TIER1_BUILD_OPTIONS : BASE_BUILD_OPTIONS;
   const canChronoShift = useMemo(
     () => getFirstEligibleUnit(gameState, 'chrono_shift') !== undefined,
@@ -149,6 +180,10 @@ export default function GameView() {
     setAnimElapsed(0);
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
+    setTimelineForkResult(null);
+    setChronoScoutResult(null);
+    timelineForkActiveRef.current = false;
+    setTimelineForkActive(false);
 
     const s = gameStateRef.current;
     if (s.phase !== 'over') {
@@ -407,6 +442,25 @@ export default function GameView() {
   const handleLockIn = useCallback(() => {
     const state = gameStateRef.current;
     if (state.players.player.lockedIn) return;
+
+    // If the player queued Timeline Fork and we haven't shown the preview yet,
+    // run the simulation and enter fork-preview mode instead of locking in.
+    const hasFork = state.players.player.commands.some((c) => c?.type === 'timeline_fork');
+    if (hasFork && !timelineForkActiveRef.current) {
+      state.players.player.timelineForkUsed = true;
+      const result = runTimelineForkSimulation(state);
+      setTimelineForkResult(result);
+      setGameState({ ...state });
+      timelineForkActiveRef.current = true;
+      setTimelineForkActive(true);
+      audioEngine.playTemporalEcho(); // temporal whoosh sound
+      return;
+    }
+
+    // Normal lock-in (also reached on second click after fork preview).
+    timelineForkActiveRef.current = false;
+    setTimelineForkActive(false);
+
     const earlyBonus = timeLeftRef.current > 0;
     state.players.player.lockedIn = true;
     setGameState({ ...state });
@@ -444,6 +498,14 @@ export default function GameView() {
   const handleSlotClear = useCallback((i: number) => {
     const state = gameStateRef.current;
     if (state.players.player.lockedIn) return;
+    const cmd = state.players.player.commands[i];
+    if (cmd?.type === 'chrono_scout') setChronoScoutResult(null);
+    if (cmd?.type === 'timeline_fork') {
+      // Clearing the fork slot also exits fork preview mode.
+      timelineForkActiveRef.current = false;
+      setTimelineForkActive(false);
+      setTimelineForkResult(null);
+    }
     const newCommands = [...state.players.player.commands];
     newCommands[i] = null;
     state.players.player.commands = newCommands;
@@ -470,6 +532,18 @@ export default function GameView() {
 
     if (type === 'temporal') {
       commitCmd({ type: 'temporal', ability: 'echo', teCost: TEMPORAL_ECHO_COST }, () => audioEngine.playTemporalEcho());
+      return;
+    }
+
+    if (type === 'timeline_fork') {
+      commitCmd({ type: 'timeline_fork' }, () => audioEngine.playFillSlot(slotIndex));
+      return;
+    }
+
+    if (type === 'chrono_scout') {
+      const result = computeChronoScout(state);
+      setChronoScoutResult(result);
+      commitCmd({ type: 'chrono_scout' }, () => audioEngine.playFillSlot(slotIndex));
       return;
     }
 
@@ -743,6 +817,8 @@ export default function GameView() {
           mode={mode}
           animation={animationRef.current}
           echoCommands={echoCommands}
+          timelineForkResult={timelineForkResult}
+          chronoScoutResult={chronoScoutResult}
           onHexClick={handleHexClick}
           onCameraChange={setCameraSnapshot}
           centerRequest={centerRequest}
@@ -779,6 +855,10 @@ export default function GameView() {
             canDefend={canDefend}
             canBuild={canBuild}
             canTrain={canTrain}
+            canTimelineFork={canTimelineFork}
+            timelineForkDisabledReason={timelineForkDisabledReason}
+            canChronoScout={canChronoScout}
+            chronoScoutDisabledReason={chronoScoutDisabledReason}
             mode={mode.kind === 'train_picker' ? 'train' : 'command'}
             trainStructureLabel={
               mode.kind === 'train_picker' && mode.structureId
@@ -940,6 +1020,7 @@ export default function GameView() {
           lockedIn={lockedIn}
           lockInFlash={lockInFlash}
           isMobile={isMobile}
+          forkMode={timelineForkActive}
           onSlotClick={handleSlotClick}
           onSlotClear={handleSlotClear}
           onLockIn={handleLockIn}

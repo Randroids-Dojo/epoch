@@ -20,6 +20,8 @@ const defaultProps = {
   canDefend: true,
   canBuild: true,
   canTrain: true,
+  canTimelineFork: false,
+  canChronoScout: false,
   onSelect: vi.fn(),
   onEpochAnchorAction: vi.fn(),
   onTrainSelect: vi.fn(),

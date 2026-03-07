@@ -2,8 +2,9 @@
 
 import React, { useEffect, useRef } from 'react';
 import {
-  CommandType, CHRONO_SHIFT_COST, EPOCH_ANCHOR_ACTIVATE_COST,
-  EPOCH_ANCHOR_SET_COST, TEMPORAL_ECHO_COST,
+  CommandType, CHRONO_SHIFT_COST, CHRONO_SCOUT_COST,
+  EPOCH_ANCHOR_ACTIVATE_COST, EPOCH_ANCHOR_SET_COST,
+  TEMPORAL_ECHO_COST, TIMELINE_FORK_COST,
 } from '@/engine/commands';
 import { UnitType, UNIT_DEFS } from '@/engine/units';
 import { TRAINABLE_UNIT_TYPES } from '@/components/shared/trainFlow';
@@ -35,6 +36,14 @@ interface CommandPickerProps {
   canBuild: boolean;
   /** True if the player has a completed production building. */
   canTrain: boolean;
+  /** True if Timeline Fork is available (Tier 2, enough TE, not yet used this match). */
+  canTimelineFork: boolean;
+  /** Reason Timeline Fork is disabled, if any. */
+  timelineForkDisabledReason?: string;
+  /** True if Chrono Scout is available (Chrono Spire present, enough TE). */
+  canChronoScout: boolean;
+  /** Reason Chrono Scout is disabled, if any. */
+  chronoScoutDisabledReason?: string;
   mode?: 'command' | 'train';
   trainStructureLabel?: string;
   feedback?: string | null;
@@ -94,6 +103,10 @@ export default function CommandPicker(props: CommandPickerProps) {
     canDefend,
     canBuild,
     canTrain,
+    canTimelineFork,
+    timelineForkDisabledReason,
+    canChronoScout,
+    chronoScoutDisabledReason,
     mode = 'command',
     trainStructureLabel,
     feedback,
@@ -181,6 +194,20 @@ export default function CommandPicker(props: CommandPickerProps) {
       cost: playerTechTier < 3 ? `T${playerTechTier + 1}` : undefined,
       enabled: researchEnabled,
       disabledReason: researchDisabledReason,
+    },
+    {
+      type: 'timeline_fork',
+      label: 'Fork',
+      cost: `${TIMELINE_FORK_COST}TE`,
+      enabled: canTimelineFork,
+      disabledReason: timelineForkDisabledReason,
+    },
+    {
+      type: 'chrono_scout',
+      label: 'Scout',
+      cost: `${CHRONO_SCOUT_COST}TE`,
+      enabled: canChronoScout,
+      disabledReason: chronoScoutDisabledReason,
     },
   ];
 

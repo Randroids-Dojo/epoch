@@ -6,7 +6,8 @@ import { GameState } from '@/engine/state';
 import { Hex, hexKey, hexToPixel, pixelToHex } from '@/engine/hex';
 import { Camera, DEFAULT_ZOOM, zoomToward, canvasToWorld } from '@/renderer/camera';
 import { BASE_HEX_SIZE, drawBackground, drawHexCell } from '@/renderer/drawHex';
-import { drawUnits, drawStructures, drawTargetingOverlay, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawEchoOverlay } from '@/renderer/drawEntities';
+import { drawUnits, drawStructures, drawTargetingOverlay, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawEchoOverlay, drawTimelineForkOverlay, drawChronoScoutOverlay } from '@/renderer/drawEntities';
+import { TimelineForkResult, ChronoScoutResult } from '@/engine/simulation';
 import { InteractionMode } from '@/lib/types';
 import { ExecutionAnimation } from '@/renderer/animation';
 import { Command } from '@/engine/commands';
@@ -21,6 +22,8 @@ interface GameCanvasProps {
   mode: InteractionMode;
   animation: ExecutionAnimation | null;
   echoCommands: Command[] | null;
+  timelineForkResult?: TimelineForkResult | null;
+  chronoScoutResult?: ChronoScoutResult | null;
   onHexClick(hex: Hex): void;
   onCameraChange?: (snapshot: CameraSnapshot) => void;
   centerRequest?: CameraCenterRequest | null;
@@ -60,6 +63,8 @@ export default function GameCanvas({
   mode,
   animation,
   echoCommands,
+  timelineForkResult,
+  chronoScoutResult,
   onHexClick,
   onCameraChange,
   centerRequest,
@@ -102,6 +107,12 @@ export default function GameCanvas({
 
   const echoCommandsRef = useRef<Command[] | null>(echoCommands);
   echoCommandsRef.current = echoCommands;
+
+  const timelineForkResultRef = useRef<TimelineForkResult | null>(timelineForkResult ?? null);
+  timelineForkResultRef.current = timelineForkResult ?? null;
+
+  const chronoScoutResultRef = useRef<ChronoScoutResult | null>(chronoScoutResult ?? null);
+  chronoScoutResultRef.current = chronoScoutResult ?? null;
 
   const onCameraChangeRef = useRef(onCameraChange);
   onCameraChangeRef.current = onCameraChange;
@@ -162,6 +173,18 @@ export default function GameCanvas({
     const echo = echoCommandsRef.current;
     if (echo && echo.length > 0 && !anim) {
       drawEchoOverlay(ctx, echo, cam, performance.now());
+    }
+
+    // ── Timeline Fork ghost overlay (planning phase only) ─────────────────────
+    const forkResult = timelineForkResultRef.current;
+    if (forkResult && forkResult.forEpoch === gs.epoch && !anim) {
+      drawTimelineForkOverlay(ctx, forkResult, gs.units, cam, performance.now());
+    }
+
+    // ── Chrono Scout prediction overlay (planning phase only) ─────────────────
+    const scoutResult = chronoScoutResultRef.current;
+    if (scoutResult && scoutResult.forEpoch === gs.epoch && !anim) {
+      drawChronoScoutOverlay(ctx, scoutResult, cam, performance.now());
     }
 
     const topLeft = canvasToWorld(0, 0, cam);
