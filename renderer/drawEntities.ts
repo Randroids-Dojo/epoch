@@ -6,6 +6,7 @@ import { Structure, StructureType, STRUCTURE_DEFS } from '../engine/structures';
 import { HexCell } from '../engine/map';
 import { TERRAIN } from '../engine/terrain';
 import { Command } from '../engine/commands';
+import { TimelineForkResult, ChronoScoutResult } from '../engine/simulation';
 import {
   ExecutionAnimation,
   getAnimatedUnitPosition, getCurrentPhase, getPhaseProgress,
@@ -786,6 +787,131 @@ export function drawEchoOverlay(
       ctx.globalAlpha = alphaLabel;
       ctx.fillText(label, sx, sy);
     }
+  }
+
+  ctx.globalAlpha = prevAlpha;
+}
+
+// ── Timeline Fork overlay ─────────────────────────────────────────────────────
+
+/**
+ * Draw Timeline Fork ghost overlay.
+ * Player units are shown as translucent cyan ghosts at their predicted
+ * post-resolution positions, with dashed movement lines from their current
+ * positions. Destroyed units appear as faded × markers at their current hex.
+ */
+export function drawTimelineForkOverlay(
+  ctx: CanvasRenderingContext2D,
+  result: TimelineForkResult,
+  units: Map<string, Unit>,
+  cam: Camera,
+  timeMs: number,
+): void {
+  const pulse = 0.5 + 0.25 * Math.sin(timeMs / 600);
+  const r = BASE_HEX_SIZE * cam.zoom * 0.3;
+  const prevAlpha = ctx.globalAlpha;
+
+  for (const [id, ghost] of result.ghostUnitPositions) {
+    const unit = units.get(id);
+    if (!unit) continue;
+
+    const toWp  = hexToPixel(ghost.hex, BASE_HEX_SIZE);
+    const { x: tx, y: ty } = worldToCanvas(toWp.x, toWp.y, cam);
+
+    if (ghost.survived) {
+      // Draw movement trail (dashed line from current → predicted).
+      const fromWp = hexToPixel(unit.hex, BASE_HEX_SIZE);
+      const { x: fx, y: fy } = worldToCanvas(fromWp.x, fromWp.y, cam);
+      if (fx !== tx || fy !== ty) {
+        ctx.globalAlpha = pulse * 0.35;
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth   = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(fx, fy);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Ghost unit shape at predicted position.
+      ctx.globalAlpha = pulse * 0.5;
+      paintUnit(ctx, tx, ty, r, unit.type, '#00e5ff');
+
+      // Outer ghost ring.
+      ctx.globalAlpha = pulse * 0.28;
+      ctx.strokeStyle = '#00e5ff';
+      ctx.lineWidth   = 1;
+      ctx.beginPath();
+      ctx.arc(tx, ty, r + 3 * cam.zoom, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      // × marker for units predicted to be destroyed.
+      const fromWp = hexToPixel(unit.hex, BASE_HEX_SIZE);
+      const { x: fx, y: fy } = worldToCanvas(fromWp.x, fromWp.y, cam);
+      const xr = r * 0.7;
+      ctx.globalAlpha = pulse * 0.75;
+      ctx.strokeStyle = '#ff6b4a';
+      ctx.lineWidth   = 2;
+      ctx.beginPath();
+      ctx.moveTo(fx - xr, fy - xr); ctx.lineTo(fx + xr, fy + xr);
+      ctx.moveTo(fx + xr, fy - xr); ctx.lineTo(fx - xr, fy + xr);
+      ctx.stroke();
+    }
+  }
+
+  ctx.globalAlpha = prevAlpha;
+}
+
+// ── Chrono Scout overlay ──────────────────────────────────────────────────────
+
+/**
+ * Draw Chrono Scout probability cloud overlay.
+ * Renders AI unit predicted positions as amber hexagonal clouds.
+ * Opacity reflects certainty: solid (1.0) = high confidence, faded (0.55) = uncertain.
+ * Uncertain predictions use a dashed ring.
+ */
+export function drawChronoScoutOverlay(
+  ctx: CanvasRenderingContext2D,
+  result: ChronoScoutResult,
+  cam: Camera,
+  timeMs: number,
+): void {
+  const pulse = 0.45 + 0.3 * Math.sin(timeMs / 800);
+  const hexR  = BASE_HEX_SIZE * cam.zoom;
+  const r     = hexR * 0.36;
+  const prevAlpha = ctx.globalAlpha;
+
+  const fontSize = Math.max(7, Math.round(hexR * 0.28));
+  ctx.font         = `bold ${fontSize}px monospace`;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+
+  for (const pred of result.predictedPositions) {
+    const wp = hexToPixel(pred.hex, BASE_HEX_SIZE);
+    const { x: sx, y: sy } = worldToCanvas(wp.x, wp.y, cam);
+
+    // Probability cloud hex fill.
+    hexPath(ctx, sx, sy, hexR * 0.78);
+    ctx.fillStyle   = '#fbbf24';
+    ctx.globalAlpha = pulse * pred.certainty * 0.13;
+    ctx.fill();
+
+    // Outer ring (dashed for uncertain).
+    ctx.globalAlpha = pulse * pred.certainty * 0.8;
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth   = 1.5;
+    if (pred.certainty < 0.8) ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.arc(sx, sy, r + 3 * cam.zoom, 0, Math.PI * 2);
+    ctx.stroke();
+    if (pred.certainty < 0.8) ctx.setLineDash([]);
+
+    // Label: "?" for uncertain, unit type prefix for high-certainty.
+    ctx.fillStyle   = '#fbbf24';
+    ctx.globalAlpha = pulse * pred.certainty * 0.9;
+    const label = pred.certainty < 0.8 ? '?' : pred.unitType.slice(0, 3).toUpperCase();
+    ctx.fillText(label, sx, sy);
   }
 
   ctx.globalAlpha = prevAlpha;

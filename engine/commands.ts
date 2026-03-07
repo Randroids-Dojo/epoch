@@ -52,6 +52,8 @@ export const TEMPORAL_ECHO_COST = 2;
 export const CHRONO_SHIFT_COST = 3;
 export const EPOCH_ANCHOR_SET_COST = 5;
 export const EPOCH_ANCHOR_ACTIVATE_COST = 3;
+export const TIMELINE_FORK_COST = 4;
+export const CHRONO_SCOUT_COST = 2;
 
 /** Activate a temporal ability (Echo or Chrono Shift). */
 export interface TemporalCommand {
@@ -86,6 +88,25 @@ export interface ResearchCommand {
   readonly type: 'research';
 }
 
+/**
+ * Timeline Fork — simulate the next execution phase with your current commands
+ * and show a ghost overlay of the predicted outcome. After viewing, you may
+ * revise other commands before confirming lock-in.
+ * Requires Tech Tier 2. One use per match. Cost: TIMELINE_FORK_COST TE.
+ */
+export interface TimelineForkCommand {
+  readonly type: 'timeline_fork';
+}
+
+/**
+ * Chrono Scout — reveal predicted enemy unit positions for the next epoch
+ * as probability cloud markers (~75% accuracy; positions may be off by 1 hex).
+ * Requires Chrono Spire structure. Cost: CHRONO_SCOUT_COST TE.
+ */
+export interface ChronoScoutCommand {
+  readonly type: 'chrono_scout';
+}
+
 export type Command =
   | GatherCommand
   | BuildCommand
@@ -96,7 +117,9 @@ export type Command =
   | TemporalCommand
   | ChronoShiftCommand
   | EpochAnchorCommand
-  | ResearchCommand;
+  | ResearchCommand
+  | TimelineForkCommand
+  | ChronoScoutCommand;
 
 export type CommandType = Command['type'];
 

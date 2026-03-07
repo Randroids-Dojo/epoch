@@ -9,6 +9,8 @@ interface CommandTrayProps {
   lockedIn: boolean;
   lockInFlash: boolean;
   isMobile?: boolean;
+  /** When true (fork preview active), changes lock-in button to "CONFIRM FORK". */
+  forkMode?: boolean;
   onSlotClick(i: number): void;
   onSlotClear(i: number): void;
   onLockIn(): void;
@@ -16,16 +18,18 @@ interface CommandTrayProps {
 
 /** Two-letter code shown on a filled command slot. */
 const TYPE_CODE: Record<string, string> = {
-  move:          'MV',
-  attack:        'AT',
-  gather:        'GR',
-  defend:        'DF',
-  build:         'BD',
-  train:         'TR',
-  temporal:      'TM',
-  chrono_shift:  'SH',
-  epoch_anchor:  'AN',
-  research:      'RS',
+  move:           'MV',
+  attack:         'AT',
+  gather:         'GR',
+  defend:         'DF',
+  build:          'BD',
+  train:          'TR',
+  temporal:       'TM',
+  chrono_shift:   'SH',
+  epoch_anchor:   'AN',
+  research:       'RS',
+  timeline_fork:  'FK',
+  chrono_scout:   'SC',
 };
 
 /** Short description of the command target. */
@@ -49,6 +53,10 @@ function cmdLabel(cmd: Command): string {
       return cmd.action === 'set' ? 'ANCHOR' : 'RECALL';
     case 'research':
       return 'TECH';
+    case 'timeline_fork':
+      return 'FORK';
+    case 'chrono_scout':
+      return 'SCOUT';
   }
 }
 
@@ -58,6 +66,7 @@ export default function CommandTray({
   lockedIn,
   lockInFlash,
   isMobile = false,
+  forkMode = false,
   onSlotClick,
   onSlotClear,
   onLockIn,
@@ -183,7 +192,9 @@ export default function CommandTray({
       >
         {lockedIn
           ? (isMobile ? 'LOCKED' : 'LOCKED IN')
-          : (isMobile ? 'LOCK' : 'LOCK IN +TE')}
+          : forkMode
+            ? (isMobile ? 'CONFIRM' : 'CONFIRM FORK')
+            : (isMobile ? 'LOCK' : 'LOCK IN +TE')}
       </button>
     </div>
   );

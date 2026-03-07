@@ -71,6 +71,8 @@ export interface PlayerState {
   instabilityEpochsLeft: number;
   /** Epoch Anchor bookmark, or null if none is set. */
   epochAnchor: AnchorSnapshot | null;
+  /** True once the player has used Timeline Fork this match (one use per match). */
+  timelineForkUsed: boolean;
 }
 
 export interface GameState {
@@ -205,6 +207,7 @@ export function createInitialState(seed?: number, difficulty: AIDifficulty = 'ad
     instabilityTier:      0,
     instabilityEpochsLeft: 0,
     epochAnchor:          null,
+    timelineForkUsed:     false,
   };
   };
 

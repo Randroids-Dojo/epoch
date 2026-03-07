@@ -26,9 +26,10 @@ import {
 } from './state';
 import {
   AttackCommand, BuildCommand, ChronoShiftCommand, CHRONO_SHIFT_COST,
+  ChronoScoutCommand, CHRONO_SCOUT_COST,
   Command, DefendCommand, EpochAnchorCommand, EPOCH_ANCHOR_ACTIVATE_COST,
   EPOCH_ANCHOR_SET_COST, GatherCommand, MoveCommand, ResearchCommand,
-  TemporalCommand, TrainCommand,
+  TemporalCommand, TimelineForkCommand, TIMELINE_FORK_COST, TrainCommand,
 } from './commands';
 import { PlayerId, PLAYER_IDS, opponent } from './player';
 import { UNIT_DEFS } from './units';
@@ -224,6 +225,43 @@ function stepTemporal(state: GameState, commands: CommandEntry[], log: string[])
       player.epochAnchor = null;
       log.push(`${owner} Epoch Anchor activated — ${revived} units restored (-${EPOCH_ANCHOR_ACTIVATE_COST} TE)`);
     }
+  }
+
+  // ── Timeline Fork ─────────────────────────────────────────────────────────
+  const forkCommands = commands.filter(
+    (e): e is { owner: PlayerId; command: TimelineForkCommand } => e.command.type === 'timeline_fork',
+  );
+  for (const { owner } of forkCommands) {
+    const player = state.players[owner];
+    if (player.resources.te < TIMELINE_FORK_COST) {
+      log.push(`${owner} Timeline Fork failed — insufficient TE`);
+      continue;
+    }
+    player.resources.te -= TIMELINE_FORK_COST;
+    // Simulation was already run in the UI layer; resolution just deducts TE.
+    log.push(`${owner} used Timeline Fork (-${TIMELINE_FORK_COST} TE)`);
+  }
+
+  // ── Chrono Scout ──────────────────────────────────────────────────────────
+  const scoutCommands = commands.filter(
+    (e): e is { owner: PlayerId; command: ChronoScoutCommand } => e.command.type === 'chrono_scout',
+  );
+  for (const { owner } of scoutCommands) {
+    const player = state.players[owner];
+    const hasSpire = [...state.structures.values()].some(
+      (s) => s.owner === owner && s.type === 'chrono_spire' && isComplete(s),
+    );
+    if (!hasSpire) {
+      log.push(`${owner} Chrono Scout failed — requires Chrono Spire`);
+      continue;
+    }
+    if (player.resources.te < CHRONO_SCOUT_COST) {
+      log.push(`${owner} Chrono Scout failed — insufficient TE`);
+      continue;
+    }
+    player.resources.te -= CHRONO_SCOUT_COST;
+    // Prediction overlay was already computed in the UI layer; resolution just deducts TE.
+    log.push(`${owner} used Chrono Scout (-${CHRONO_SCOUT_COST} TE)`);
   }
 }
 
@@ -696,7 +734,9 @@ function countTemporalAbilities(commands: CommandEntry[], owner: PlayerId): numb
     if (e.owner === owner && (
       e.command.type === 'temporal' ||
       e.command.type === 'chrono_shift' ||
-      e.command.type === 'epoch_anchor'
+      e.command.type === 'epoch_anchor' ||
+      e.command.type === 'timeline_fork' ||
+      e.command.type === 'chrono_scout'
     )) count++;
   }
   return count;
@@ -801,7 +841,11 @@ function stepPostResolution(state: GameState, commands: CommandEntry[]): void {
         else if (cmd.type === 'train') counts.train++;
         else if (cmd.type === 'move') counts.move++;
         else if (cmd.type === 'attack') counts.attack++;
-        else if (cmd.type === 'temporal' || cmd.type === 'chrono_shift' || cmd.type === 'epoch_anchor') {
+        else if (
+          cmd.type === 'temporal' || cmd.type === 'chrono_shift' ||
+          cmd.type === 'epoch_anchor' || cmd.type === 'timeline_fork' ||
+          cmd.type === 'chrono_scout'
+        ) {
           counts.temporal++;
         }
       }
