@@ -38,6 +38,7 @@ import PlanningBar from '../hud/PlanningBar';
 import CommandTray from '../hud/CommandTray';
 import CommandPicker from '../hud/CommandPicker';
 import UnitActionPanel from '../hud/UnitActionPanel';
+import GameStatsPanel from '../hud/GameStatsPanel';
 import ExecutionOverlay from '../hud/ExecutionOverlay';
 import Minimap from '../hud/Minimap';
 
@@ -785,6 +786,9 @@ export default function GameView() {
             onOrderClear={handleUnitOrderClear}
           />
         )}
+
+        {/* Stats panel — right sidebar, always visible */}
+        <GameStatsPanel gameState={gameState} />
 
         <Minimap
           gameState={gameState}
