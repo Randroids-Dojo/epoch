@@ -465,10 +465,10 @@ export default function GameCanvas({
         </div>
       )}
 
-      {/* Controls hint — hidden on small screens and during execution */}
+      {/* Controls hint — offset right of UnitActionPanel (180px wide) to avoid overlap */}
       {!animation && <div
-        className="pointer-events-none absolute left-4 top-4 hidden rounded border border-slate-700 px-3 py-2 font-mono text-xs sm:block"
-        style={{ background: 'rgba(10,14,26,0.85)', color: '#475569' }}
+        className="pointer-events-none absolute top-4 hidden rounded border border-slate-700 px-3 py-2 font-mono text-xs sm:block"
+        style={{ left: 196, background: 'rgba(10,14,26,0.85)', color: '#475569' }}
       >
         <div>Drag / WASD — pan</div>
         <div>Scroll / pinch / ± — zoom</div>

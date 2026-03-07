@@ -51,35 +51,64 @@ async function clickCanvasHex(page: Page, target: Hex, playerStart: Hex): Promis
   });
 }
 
-async function tryQueue(
+/** Click the first unassigned unit card and assign it a given action from the picker.
+ *  Returns true if successfully assigned, false if picker didn't appear or action unavailable. */
+async function assignNextUnit(
   page: Page,
-  slotNum: number,
-  commandLabel: string,
+  action: string,
   target: Hex | null,
   playerStart: Hex,
-  extra?: () => Promise<void>,
 ): Promise<boolean> {
-  await page.keyboard.press(String(slotNum));
-  const menu = page.getByRole('menu', { name: /command picker/i });
+  const unassigned = page.locator('text=TAP TO ASSIGN');
+  if (await unassigned.count() === 0) return false;
+
+  await unassigned.first().click({ force: true });
+
+  const menu = page.getByRole('menu');
   try { await menu.waitFor({ state: 'visible', timeout: 1500 }); } catch { return false; }
 
-  const item = page.getByRole('menuitem', { name: commandLabel });
+  const item = page.getByRole('menuitem', { name: new RegExp(action, 'i') });
   if (!await item.isEnabled().catch(() => false)) {
     await page.keyboard.press('Escape');
     return false;
   }
   await item.click();
 
-  if (extra) await extra();
-
   if (target) await clickCanvasHex(page, target, playerStart);
   return true;
 }
 
-async function fillSlots(page: Page): Promise<void> {
-  // Snap camera home so click coordinates are valid.
-  await page.keyboard.press('Home');
+/** Assign build to the next unassigned unit card. */
+async function assignBuild(
+  page: Page,
+  structureType: string,
+  buildTarget: Hex,
+  playerStart: Hex,
+): Promise<boolean> {
+  const unassigned = page.locator('text=TAP TO ASSIGN');
+  if (await unassigned.count() === 0) return false;
 
+  await unassigned.first().click({ force: true });
+
+  const menu = page.getByRole('menu');
+  try { await menu.waitFor({ state: 'visible', timeout: 1500 }); } catch { return false; }
+
+  const item = page.getByRole('menuitem', { name: /Build/i });
+  if (!await item.isEnabled().catch(() => false)) {
+    await page.keyboard.press('Escape');
+    return false;
+  }
+  await item.click();
+
+  const buildOption = page.getByTestId(`build-option-${structureType}`);
+  try { await buildOption.waitFor({ state: 'visible', timeout: 1500 }); } catch { return false; }
+  await buildOption.click({ force: true });
+
+  await clickCanvasHex(page, buildTarget, playerStart);
+  return true;
+}
+
+async function fillEpoch(page: Page): Promise<void> {
   const snap = await getSnapshot(page);
   if (snap.phase !== 'planning') return;
 
@@ -94,61 +123,86 @@ async function fillSlots(page: Page): Promise<void> {
     getTargets(page, 'build'),
   ]);
 
-  // Sort move targets closest-to-AI; others closest-to-playerStart.
-  const moveTargets   = sortClosestTo(moveHexes, aiStart);
-  const attackTargets = sortClosestTo(attackHexes, playerStart);
-  const gatherTargets = sortClosestTo(gatherHexes, playerStart);
-  const buildTargets  = sortClosestTo(buildHexes, playerStart);
+  const moveTarget   = sortClosestTo(moveHexes, aiStart)[0] ?? null;
+  const attackTarget = sortClosestTo(attackHexes, playerStart)[0] ?? null;
+  const gatherTarget = sortClosestTo(gatherHexes, playerStart)[0] ?? null;
+  const buildTarget  = sortClosestTo(buildHexes, playerStart)[0] ?? null;
 
-  let slot = 1;
+  let gatherUsed  = false;
+  let buildUsed   = false;
+  let attackUsed  = false;
+  let moveUsed    = false;
 
-  // Move toward the enemy.
-  if (slot <= 5 && moveTargets.length > 0) {
-    await tryQueue(page, slot, 'Move', moveTargets[0], playerStart);
-    slot++;
+  // Assign orders to every unassigned unit card
+  for (let attempt = 0; attempt < 10; attempt++) {
+    if (await page.locator('text=TAP TO ASSIGN').count() === 0) break;
+
+    // Priority 1: Attack a visible enemy
+    if (!attackUsed && attackTarget) {
+      if (await assignNextUnit(page, 'Attack', attackTarget, playerStart)) {
+        attackUsed = true;
+        continue;
+      }
+    }
+
+    // Priority 2: Build extractor if none + affordable
+    if (!buildUsed && !hasExtractor && resources.cc >= 3 && buildTarget) {
+      if (await assignBuild(page, 'crystal_extractor', buildTarget, playerStart)) {
+        buildUsed = true;
+        continue;
+      }
+    }
+
+    // Priority 3: Build barracks if none + affordable
+    if (!buildUsed && !hasBarracks && resources.cc >= 5 && buildTarget) {
+      if (await assignBuild(page, 'barracks', buildTarget, playerStart)) {
+        buildUsed = true;
+        continue;
+      }
+    }
+
+    // Priority 4: Gather from nearest crystal/extractor
+    if (!gatherUsed && gatherTarget) {
+      if (await assignNextUnit(page, 'Gather', gatherTarget, playerStart)) {
+        gatherUsed = true;
+        continue;
+      }
+    }
+
+    // Priority 5: Move toward AI
+    if (!moveUsed && moveTarget) {
+      if (await assignNextUnit(page, 'Move', moveTarget, playerStart)) {
+        moveUsed = true;
+        continue;
+      }
+    }
+
+    // Fallback: Defend
+    if (!await assignNextUnit(page, 'Defend', null, playerStart)) break;
   }
 
-  // Attack any visible enemy unit or structure.
-  if (slot <= 5 && attackTargets.length > 0) {
-    await tryQueue(page, slot, 'Attack', attackTargets[0], playerStart);
-    slot++;
-  }
-
-  // Gather from the nearest crystal node.
-  if (slot <= 5 && gatherTargets.length > 0) {
-    await tryQueue(page, slot, 'Gather', gatherTargets[0], playerStart);
-    slot++;
-  }
-
-  // Build a Barracks if we don't have one and can afford it.
-  if (slot <= 5 && !hasBarracks && resources.cc >= 5 && buildTargets.length > 0) {
-    await tryQueue(page, slot, 'Build', buildTargets[0], playerStart, async () => {
-      await page.getByTestId('build-option-barracks').click();
-    });
-    slot++;
-  }
-
-  // Build a Crystal Extractor if we don't have one and can afford it.
-  if (slot <= 5 && !hasExtractor && resources.cc >= 3 && buildTargets.length > 0) {
-    await tryQueue(page, slot, 'Build', buildTargets[0], playerStart, async () => {
-      await page.getByTestId('build-option-crystal_extractor').click();
-    });
-    slot++;
-  }
-
-  // Train a Pulse Sentry if we have a Barracks and can afford it.
-  if (slot <= 5 && hasBarracks && resources.cc >= 4) {
-    await tryQueue(page, slot, 'Train', null, playerStart, async () => {
-      const unitMenu = page.getByRole('menuitem', { name: /Pulse Sentry/i });
-      if (await unitMenu.isVisible().catch(() => false)) await unitMenu.click();
-    });
-    slot++;
-  }
-
-  // Fill remaining slots with Defend (grants TE income).
-  while (slot <= 5) {
-    await tryQueue(page, slot, 'Defend', null, playerStart);
-    slot++;
+  // Global slot 0: Train a combat unit if affordable
+  if (hasBarracks && resources.cc >= 4) {
+    const slot0 = page.getByTestId('command-slot-0');
+    if (await slot0.isVisible().catch(() => false)) {
+      await slot0.click({ force: true });
+      const menu = page.getByRole('menu');
+      try {
+        await menu.waitFor({ state: 'visible', timeout: 1500 });
+        const trainItem = page.getByRole('menuitem', { name: /Train/i });
+        if (await trainItem.isEnabled().catch(() => false)) {
+          await trainItem.click();
+          const sentryItem = page.getByRole('menuitem', { name: /Pulse Sentry/i });
+          if (await sentryItem.isEnabled().catch(() => false)) {
+            await sentryItem.click();
+          } else {
+            await page.keyboard.press('Escape');
+          }
+        } else {
+          await page.keyboard.press('Escape');
+        }
+      } catch { /* noop */ }
+    }
   }
 }
 
@@ -161,17 +215,22 @@ async function waitForPlanningOrGameOver(page: Page): Promise<'planning' | 'over
   return isOver ? 'over' : 'planning';
 }
 
-test('smoke: player can play full match headlessly from planning to game-over @smoke', async ({ page }) => {
+test('smoke: player can play full match from planning to game-over @smoke', async ({ page }) => {
   test.setTimeout(300_000);
 
   await page.goto('/');
-  await expect(page.getByTestId('command-slot-0')).toBeVisible();
+
+  // Dismiss the difficulty-picker setup overlay
+  await expect(page.getByTestId('difficulty-picker')).toBeVisible({ timeout: 10_000 });
+  await page.getByTestId('start-game-btn').click({ force: true });
+
+  await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 5_000 });
 
   for (let epoch = 0; epoch < 15; epoch++) {
     const snap = await getSnapshot(page);
     if (snap.phase === 'over') break;
 
-    await fillSlots(page);
+    await fillEpoch(page);
 
     await page.getByTestId('lock-in-btn').click({ force: true });
     await expect(page.getByTestId('phase-label')).toBeVisible({ timeout: 5_000 });
@@ -180,7 +239,7 @@ test('smoke: player can play full match headlessly from planning to game-over @s
     if (result === 'over') break;
   }
 
-  // Deterministic finish if the match didn't end naturally.
+  // Force game-over if the match hasn't ended naturally within 15 epochs
   const isOver = await page.getByTestId('game-over-overlay').isVisible().catch(() => false);
   if (!isOver) {
     await expect
