@@ -32,6 +32,7 @@ const ORDER_BADGE: Record<string, string> = {
   defend:       'DF',
   build:        'BD',
   chrono_shift: 'SH',
+  phase_surge:  'SG',
 };
 
 function orderLabel(cmd: UnitCommand): string {
@@ -39,6 +40,7 @@ function orderLabel(cmd: UnitCommand): string {
     case 'move':
     case 'attack':
     case 'gather':
+    case 'phase_surge':
       return `(${cmd.targetHex.q},${cmd.targetHex.r})`;
     case 'build':
       return cmd.structureType.slice(0, 3).toUpperCase();

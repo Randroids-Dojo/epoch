@@ -28,7 +28,8 @@ import {
   AttackCommand, BuildCommand, ChronoShiftCommand, CHRONO_SHIFT_COST,
   ChronoScoutCommand, CHRONO_SCOUT_COST,
   Command, GlobalCommand, DefendCommand, EpochAnchorCommand, EPOCH_ANCHOR_ACTIVATE_COST,
-  EPOCH_ANCHOR_SET_COST, GatherCommand, MoveCommand, ResearchCommand,
+  EPOCH_ANCHOR_SET_COST, GatherCommand, MoveCommand, PhaseSurgeCommand,
+  PHASE_SURGE_COST, PHASE_SURGE_SPEED_BONUS, ResearchCommand,
   TemporalCommand, TimelineForkCommand, TIMELINE_FORK_COST, TrainCommand,
 } from './commands';
 import { PlayerId, PLAYER_IDS, opponent } from './player';
@@ -266,6 +267,7 @@ function stepTemporal(state: GameState, commands: CommandEntry[], log: string[])
     // Prediction overlay was already computed in the UI layer; resolution just deducts TE.
     log.push(`${owner} used Chrono Scout (-${CHRONO_SCOUT_COST} TE)`);
   }
+
 }
 
 // ── Step 3: Move ─────────────────────────────────────────────────────────────
@@ -280,12 +282,25 @@ function stepMove(state: GameState, commands: CommandEntry[], log: string[]): vo
       return mapOrder(ua.hex, ub.hex);
     });
 
+  // Phase Surge: collect surge commands alongside regular moves.
+  const surges = commands.filter(
+    (e): e is { owner: PlayerId; command: PhaseSurgeCommand } => e.command.type === 'phase_surge',
+  );
+
   // Build blocked set once; update it as units move so later movers see vacated hexes.
   // Structures don't block movement.
   const blocked = new Set<string>();
   for (const u of state.units.values()) blocked.add(hexKey(u.hex));
 
-  for (const { owner, command } of moves) {
+  type MoveEntry = { owner: PlayerId; command: MoveCommand | PhaseSurgeCommand };
+  const allMoves: MoveEntry[] = [...moves, ...surges].sort((a, b) => {
+    const ua = state.units.get(a.command.unitId);
+    const ub = state.units.get(b.command.unitId);
+    if (!ua || !ub) return 0;
+    return mapOrder(ua.hex, ub.hex);
+  });
+
+  for (const { owner, command } of allMoves) {
     const unit = state.units.get(command.unitId);
     if (!unit || unit.owner !== owner) continue;
 
@@ -295,7 +310,20 @@ function stepMove(state: GameState, commands: CommandEntry[], log: string[]): vo
 
     // Temporal Instability: -25% movement speed (Tier 1+).
     const instability = state.players[owner].instabilityTier;
-    const effectiveSpeed = instability > 0 ? Math.max(1, Math.floor(def.speed * 0.75)) : def.speed;
+    const baseSpeed = instability > 0 ? Math.max(1, Math.floor(def.speed * 0.75)) : def.speed;
+
+    // Phase Surge: deduct TE and apply speed bonus.
+    let effectiveSpeed = baseSpeed;
+    if (command.type === 'phase_surge') {
+      const player = state.players[owner];
+      if (player.resources.te >= PHASE_SURGE_COST) {
+        player.resources.te -= PHASE_SURGE_COST;
+        effectiveSpeed = baseSpeed + PHASE_SURGE_SPEED_BONUS;
+        log.push(`${owner} Phase Surge: ${unit.type} moves at speed ${effectiveSpeed}`);
+      } else {
+        log.push(`${owner} Phase Surge failed — insufficient TE, moving normally`);
+      }
+    }
 
     const path  = bfsPath(unit.hex, command.targetHex, state, blocked);
     const steps = path.slice(0, effectiveSpeed);

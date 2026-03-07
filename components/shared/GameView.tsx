@@ -545,6 +545,12 @@ export default function GameView() {
         return;
       }
 
+      if (type === 'phase_surge') {
+        const eligibleKeys = computeEligibleHexes(state, 'move');
+        setMode({ kind: 'targeting', unitId, commandType: 'phase_surge', eligibleKeys });
+        return;
+      }
+
       if (type === 'move' || type === 'attack' || type === 'gather') {
         const cmdType = type as TargetingCommandType;
         const eligibleKeys = computeEligibleHexes(state, cmdType);
@@ -682,6 +688,8 @@ export default function GameView() {
         newCmd = { type: 'move', unitId, targetHex: hex };
       } else if (commandType === 'attack') {
         newCmd = { type: 'attack', unitId, targetHex: hex };
+      } else if (commandType === 'phase_surge') {
+        newCmd = { type: 'phase_surge', unitId, targetHex: hex };
       } else if (commandType === 'chrono_shift') {
         const snap = getOldestSnapshot(state);
         let shiftTarget: Unit | undefined;

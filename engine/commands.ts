@@ -55,6 +55,8 @@ export const EPOCH_ANCHOR_SET_COST = 5;
 export const EPOCH_ANCHOR_ACTIVATE_COST = 3;
 export const TIMELINE_FORK_COST = 4;
 export const CHRONO_SCOUT_COST = 2;
+export const PHASE_SURGE_COST = 2;
+export const PHASE_SURGE_SPEED_BONUS = 3;
 
 /** Activate a temporal ability (Temporal Echo). */
 export interface TemporalCommand {
@@ -105,6 +107,16 @@ export interface ChronoScoutCommand {
   readonly type: 'chrono_scout';
 }
 
+/**
+ * Phase Surge — move a unit at speed + PHASE_SURGE_SPEED_BONUS this epoch.
+ * Functions like Move but faster. Cost: PHASE_SURGE_COST TE.
+ */
+export interface PhaseSurgeCommand {
+  readonly type: 'phase_surge';
+  readonly unitId: string;
+  readonly targetHex: Hex;
+}
+
 // ── Command categories ────────────────────────────────────────────────────────
 
 /** Commands tied to a specific unit (one per unit per epoch). */
@@ -114,7 +126,8 @@ export type UnitCommand =
   | GatherCommand
   | DefendCommand
   | BuildCommand
-  | ChronoShiftCommand;
+  | ChronoShiftCommand
+  | PhaseSurgeCommand;
 
 /** Commands not tied to a specific unit (train, research, temporal abilities). */
 export type GlobalCommand =

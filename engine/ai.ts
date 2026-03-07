@@ -15,7 +15,7 @@
 
 import { GameState, findUnitAt, findStructureAt, findNexus, AIArchetype, getOldestSnapshot } from './state';
 import { Hex, hexKey, hexDistance, hexEqual, hexesInRange, hexNeighbors } from './hex';
-import { Command, UnitCommand, GlobalCommand } from './commands';
+import { Command, UnitCommand, GlobalCommand, PHASE_SURGE_COST } from './commands';
 import { Unit, UNIT_DEFS, UnitType } from './units';
 import { Structure, StructureType, STRUCTURE_DEFS, isComplete, isHarvestable } from './structures';
 import { TERRAIN } from './terrain';
@@ -106,7 +106,8 @@ function blendedWeight(
 function isUnitOrderCommand(cmd: Command): cmd is UnitCommand {
   return (
     cmd.type === 'move' || cmd.type === 'attack' || cmd.type === 'gather' ||
-    cmd.type === 'defend' || cmd.type === 'build' || cmd.type === 'chrono_shift'
+    cmd.type === 'defend' || cmd.type === 'build' || cmd.type === 'chrono_shift' ||
+    cmd.type === 'phase_surge'
   );
 }
 
@@ -625,6 +626,24 @@ function generateCandidates(
             unitIds: [unit.id],
           });
         }
+      }
+    }
+
+    // Phase Surge: boost the leading combat unit (closest to enemy base) each epoch.
+    if (ai.resources.te >= PHASE_SURGE_COST) {
+      const combatAiUnits = aiUnits.filter((u) => UNIT_DEFS[u.type].range > 0);
+      const playerStart = state.map.playerStart;
+      const leader = [...combatAiUnits].sort(
+        (a, b) => hexDistance(a.hex, playerStart) - hexDistance(b.hex, playerStart),
+      )[0];
+      if (leader) {
+        candidates.push({
+          command: { type: 'phase_surge', unitId: leader.id, targetHex: playerStart },
+          category: 'temporal',
+          basePriority: 6,
+          costCC: 0, costFX: 0, costTE: PHASE_SURGE_COST,
+          unitIds: [leader.id],
+        });
       }
     }
   }

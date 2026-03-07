@@ -86,7 +86,7 @@ describe('Move step', () => {
       owner: 'player', type: 'pulse_sentry',
       hex: { q: -8, r: 0 }, hp: 40,
     });
-    // Target 4 hexes east; speed = 2, should end up 2 steps east
+    // Target 4 hexes east; should end up speed steps east (capped at distance to target)
     const target = { q: -4, r: 0 };
     queueCommand(s, 'player', 0, { type: 'move', unitId: sentry.id, targetHex: target });
 
@@ -94,9 +94,8 @@ describe('Move step', () => {
 
     const moved = s.units.get(sentry.id);
     expect(moved).toBeDefined();
-    // Should have moved exactly 2 steps eastward
     const dist = Math.abs(moved!.hex.q - (-8));
-    expect(dist).toBeLessThanOrEqual(2);
+    expect(dist).toBeLessThanOrEqual(UNIT_DEFS.pulse_sentry.speed);
     expect(dist).toBeGreaterThan(0);
   });
 

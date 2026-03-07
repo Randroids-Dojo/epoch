@@ -38,6 +38,7 @@ export type InteractionMode =
       failureFeedback: string | null;
     }
 
+
 export type Phase = 'planning' | 'temporal' | 'execution'
 
 export interface PlayerResources {

@@ -4,7 +4,7 @@ import { hexKey } from './hex';
 import { TERRAIN } from './terrain';
 import { StructureType, isComplete, isHarvestable } from './structures';
 
-export type TargetingCommandType = 'move' | 'attack' | 'gather' | 'defend' | 'chrono_shift';
+export type TargetingCommandType = 'move' | 'attack' | 'gather' | 'defend' | 'chrono_shift' | 'phase_surge';
 export type BuildStructureType = Exclude<StructureType, 'command_nexus'>;
 
 /** Returns the first player-owned unit eligible for the given command type. */
@@ -16,6 +16,7 @@ export function getFirstEligibleUnit(
     if (unit.owner !== 'player') continue;
     if (type === 'attack' && UNIT_DEFS[unit.type].range === 0) continue;
     if (type === 'gather' && unit.type !== 'drone') continue;
+    if (type === 'phase_surge' && unit.type === 'drone') continue;
     if (type === 'chrono_shift') {
       // Only units that have a snapshot from 2 epochs ago can be shifted.
       if (!getOldestSnapshot(state)?.has(unit.id)) continue;
@@ -70,6 +71,7 @@ export function computeEligibleHexes(
     }
     return eligible;
   }
+
 
   for (const [key, cell] of state.map.cells) {
     if (cell.fog === 'unexplored') continue;

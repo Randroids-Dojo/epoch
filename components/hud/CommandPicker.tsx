@@ -4,7 +4,7 @@ import React, { useEffect, useRef } from 'react';
 import {
   CommandType, CHRONO_SHIFT_COST, CHRONO_SCOUT_COST,
   EPOCH_ANCHOR_ACTIVATE_COST, EPOCH_ANCHOR_SET_COST,
-  TEMPORAL_ECHO_COST, TIMELINE_FORK_COST,
+  TEMPORAL_ECHO_COST, TIMELINE_FORK_COST, PHASE_SURGE_COST,
 } from '@/engine/commands';
 import { UnitType, UNIT_DEFS } from '@/engine/units';
 import { TRAINABLE_UNIT_TYPES } from '@/components/shared/trainFlow';
@@ -142,6 +142,16 @@ export default function CommandPicker(props: CommandPickerProps) {
         ? playerTechTier < 1 ? 'Requires Tech Tier 1'
           : playerTE < CHRONO_SHIFT_COST ? `Need ${CHRONO_SHIFT_COST} TE`
           : 'No 2-epoch history for this unit'
+        : undefined,
+    },
+    {
+      type: 'phase_surge',
+      label: 'Surge',
+      cost: `${PHASE_SURGE_COST}TE`,
+      enabled: unitType !== 'drone' && playerTE >= PHASE_SURGE_COST,
+      disabledReason: unitType === 'drone'
+        ? 'Drones cannot surge'
+        : playerTE < PHASE_SURGE_COST ? `Need ${PHASE_SURGE_COST} TE`
         : undefined,
     },
   ] : [];

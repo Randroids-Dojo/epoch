@@ -41,13 +41,13 @@ export const UNIT_DEFS: Readonly<Record<UnitType, UnitDef>> = {
   pulse_sentry: {
     type: 'pulse_sentry', label: 'Pulse Sentry',
     costCC: 4, costFX: 0, techTierRequired: 0,
-    maxHp: 40, attack: 12, speed: 2, range: 1, visionRadius: 2,
+    maxHp: 40, attack: 12, speed: 3, range: 1, visionRadius: 2,
     producedAt: 'barracks',
   },
   arc_ranger: {
     type: 'arc_ranger',   label: 'Arc Ranger',
     costCC: 5, costFX: 0, techTierRequired: 0,
-    maxHp: 30, attack: 10, speed: 2, range: 3, visionRadius: 3,
+    maxHp: 30, attack: 10, speed: 3, range: 3, visionRadius: 3,
     producedAt: 'barracks',
   },
   phase_walker: {
@@ -59,13 +59,13 @@ export const UNIT_DEFS: Readonly<Record<UnitType, UnitDef>> = {
   temporal_warden: {
     type: 'temporal_warden', label: 'Temporal Warden',
     costCC: 5, costFX: 2, techTierRequired: 1,
-    maxHp: 35, attack: 6, speed: 2, range: 2, visionRadius: 4,
+    maxHp: 35, attack: 6, speed: 3, range: 2, visionRadius: 4,
     producedAt: 'barracks',
   },
   void_striker: {
     type: 'void_striker', label: 'Void Striker',
     costCC: 8, costFX: 3, techTierRequired: 2,
-    maxHp: 50, attack: 18, speed: 1, range: 2, visionRadius: 2,
+    maxHp: 50, attack: 18, speed: 2, range: 2, visionRadius: 2,
     producedAt: 'war_foundry',
   },
   flux_weaver: {
