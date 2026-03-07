@@ -312,6 +312,13 @@ describe('generateAICommands — archetypes', () => {
     const state = makeStateWithDifficulty('adept');
     state.aiConfig.archetypeBlend = { expander: 0, aggressor: 0, technologist: 1, fortress: 0 };
     state.players.ai.resources.cc = 20;
+    // Barracks is a prerequisite for tech lab — add one so the candidate is generated.
+    const nexus = findNexus(state, 'ai')!;
+    const bkId = newId('s');
+    state.structures.set(bkId, {
+      id: bkId, owner: 'ai', type: 'barracks', hex: { q: nexus.hex.q - 1, r: nexus.hex.r },
+      hp: STRUCTURE_DEFS.barracks.maxHp, buildProgress: 0, assignedDroneId: null,
+    });
 
     generateAICommands(state);
     const cmds = allAICmds(state);

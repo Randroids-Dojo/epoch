@@ -348,7 +348,8 @@ function generateCandidates(
     }
 
     // ── Build Tech (Tech Lab + Chrono Spire) ──────────────────────────────
-    if (!aiStructures.some((s) => s.type === 'tech_lab')) {
+    // Tech lab requires barracks first — no point researching without an army.
+    if (aiStructures.some((s) => s.type === 'barracks') && !aiStructures.some((s) => s.type === 'tech_lab')) {
       const def = STRUCTURE_DEFS.tech_lab;
       const bHex = findEmptyPassableHex(state, nexus.hex);
       if (bHex) {
@@ -356,7 +357,8 @@ function generateCandidates(
         if (drone) candidates.push({
           command: { type: 'build', unitId: drone.id, targetHex: bHex, structureType: 'tech_lab' },
           category: 'buildTech',
-          basePriority: 9,
+          // Elevated priority so it beats moveExpand (2.0×5=10) even for Expander (0.5×22=11).
+          basePriority: 22,
           costCC: def.costCC, costFX: def.costFX, costTE: 0,
           unitIds: [drone.id],
           buildHexKey: hexKey(bHex),
@@ -424,7 +426,16 @@ function generateCandidates(
   const freeDrones = aiUnits.filter(
     (u) => u.type === 'drone' && !u.assignedExtractorId,
   ).length;
-  const needDrones = unstaffedCount > freeDrones;
+  // Also need a drone if critical builds are pending and none are idle —
+  // train one extra drone to free the gatherer from double-duty as builder.
+  // Cap at one spare: only trigger if total drones ≤ total extractors, preventing
+  // a runaway loop where each new drone builds another extractor, needing another drone.
+  const criticalBuildPending = nexus !== null && !aiStructures.some((s) => s.type === 'tech_lab');
+  const totalDrones = aiUnits.filter((u) => u.type === 'drone').length;
+  const allExtractorCount = aiStructures.filter((s) => isHarvestable(s)).length;
+  const needDrones =
+    unstaffedCount > freeDrones ||
+    (criticalBuildPending && idleDrones.length === 0 && totalDrones <= allExtractorCount);
 
   if (barracks) {
     if (needDrones) {

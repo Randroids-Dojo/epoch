@@ -123,6 +123,7 @@ export default function UnitActionPanel({
         return (
           <div
             key={unit.id}
+            data-testid={order ? undefined : 'unit-card-unassigned'}
             ref={(el) => {
               if (el) cardRefs.current.set(unit.id, el);
               else cardRefs.current.delete(unit.id);

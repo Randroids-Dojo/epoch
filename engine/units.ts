@@ -47,7 +47,7 @@ export const UNIT_DEFS: Readonly<Record<UnitType, UnitDef>> = {
   arc_ranger: {
     type: 'arc_ranger',   label: 'Arc Ranger',
     costCC: 5, costFX: 0, techTierRequired: 0,
-    maxHp: 25, attack: 8, speed: 2, range: 3, visionRadius: 3,
+    maxHp: 30, attack: 10, speed: 2, range: 3, visionRadius: 3,
     producedAt: 'barracks',
   },
   phase_walker: {

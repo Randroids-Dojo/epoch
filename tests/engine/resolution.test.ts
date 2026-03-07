@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createInitialState, findNexus, resetIdSeq, GameState } from '@/engine/state';
 import { resolveEpoch } from '@/engine/resolution';
-import { Unit } from '@/engine/units';
+import { Unit, UNIT_DEFS } from '@/engine/units';
 import { Structure } from '@/engine/structures';
 import { newId } from '@/engine/state';
 import { queueCommand } from './helpers';
@@ -195,7 +195,7 @@ describe('Attack step', () => {
 
     resolveEpoch(s);
 
-    expect(s.units.get(target.id)!.hp).toBe(40 - 8);
+    expect(s.units.get(target.id)!.hp).toBe(40 - UNIT_DEFS.arc_ranger.attack);
   });
 
   it('attack out of range deals no damage', () => {

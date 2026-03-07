@@ -20,7 +20,7 @@ type GameSnapshot = {
   winner: string | null;
   player: PlayerSnap;
   ai: PlayerSnap;
-  crystalNodeStreak: { player: number; ai: number };
+
   playerStart: Hex;
   aiStart: Hex;
   playerStructureTypes: string[];
@@ -70,7 +70,7 @@ async function assignNextUnit(
   target: Hex | null,
   playerStart: Hex,
 ): Promise<boolean> {
-  const unassigned = page.locator('text=TAP TO ASSIGN');
+  const unassigned = page.locator('[data-testid="unit-card-unassigned"]');
   if (await unassigned.count() === 0) return false;
 
   await unassigned.first().click({ force: true });
@@ -96,7 +96,7 @@ async function assignBuild(
   buildTarget: Hex,
   playerStart: Hex,
 ): Promise<boolean> {
-  const unassigned = page.locator('text=TAP TO ASSIGN');
+  const unassigned = page.locator('[data-testid="unit-card-unassigned"]');
   if (await unassigned.count() === 0) return false;
 
   await unassigned.first().click({ force: true });
@@ -120,6 +120,11 @@ async function assignBuild(
 }
 
 async function fillEpoch(page: Page): Promise<void> {
+  // Wait for at least one unassigned unit card to be present before snapping state.
+  // On slower/mobile viewports the UnitActionPanel may render a frame after the
+  // CommandTray (which gated entry to this function).
+  await page.locator('[data-testid="unit-card-unassigned"]').first().waitFor({ state: 'visible', timeout: 3000 }).catch(() => {});
+
   const snap = await getSnapshot(page);
   if (snap.phase !== 'planning') return;
 
@@ -129,26 +134,35 @@ async function fillEpoch(page: Page): Promise<void> {
   const hasExtractor = playerStructureTypes.includes('crystal_extractor');
   const hasTechLab   = playerStructureTypes.includes('tech_lab');
 
-  const [moveHexes, attackHexes, gatherHexes, buildHexes] = await Promise.all([
+  const [moveHexes, attackHexes, gatherHexes, buildHexes, chronoHexes] = await Promise.all([
     getTargets(page, 'move'),
     getTargets(page, 'attack'),
     getTargets(page, 'gather'),
     getTargets(page, 'build'),
+    getTargets(page, 'chrono_shift'),
   ]);
 
   const moveTarget   = sortClosestTo(moveHexes, aiStart)[0] ?? null;
-  const attackTarget = sortClosestTo(attackHexes, playerStart)[0] ?? null;
+  // Attack toward the enemy base (closest to aiStart) so units punch through
+  // to the nexus rather than always fighting units closest to our own base.
+  const attackTarget = sortClosestTo(attackHexes, aiStart)[0] ?? null;
   const gatherTarget = sortClosestTo(gatherHexes, playerStart)[0] ?? null;
   const buildTarget  = sortClosestTo(buildHexes, playerStart)[0] ?? null;
 
   let buildUsed   = false;
   let gatherUsed  = false;
+  const chronoTarget = chronoHexes[0] ?? null;
 
   // Assign orders to every unassigned unit card.
   // Attack and Move have no per-epoch cap — every unit that can attack does so,
   // and every remaining unit advances toward the enemy.
   for (let attempt = 0; attempt < 20; attempt++) {
-    if (await page.locator('text=TAP TO ASSIGN').count() === 0) break;
+    if (await page.locator('[data-testid="unit-card-unassigned"]').count() === 0) break;
+
+    // Priority 0: Chrono Shift a damaged unit (T1+, costs 3 TE, never spend below 6)
+    if (player.techTier >= 1 && resources.te >= 6 && chronoTarget) {
+      if (await assignNextUnit(page, 'Shift', chronoTarget, playerStart)) continue;
+    }
 
     // Priority 1: Attack a visible enemy (unlimited — every eligible unit attacks)
     if (attackTarget) {
@@ -259,7 +273,7 @@ test('smoke: player can play full match from planning to game-over @smoke', asyn
 
   await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 5_000 });
 
-  for (let epoch = 0; epoch < 15; epoch++) {
+  for (let epoch = 0; epoch < 20; epoch++) {
     const snap = await getSnapshot(page);
     if (snap.phase === 'over') break;
 
@@ -285,7 +299,7 @@ test('smoke: player can play full match from planning to game-over @smoke', asyn
     if (result === 'over') break;
   }
 
-  // Force game-over if the match hasn't ended naturally within 15 epochs
+  // Force game-over if the match hasn't ended naturally within 20 epochs
   const isOver = await page.getByTestId('game-over-overlay').isVisible().catch(() => false);
   if (!isOver) {
     await expect
