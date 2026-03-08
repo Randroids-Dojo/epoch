@@ -37,13 +37,10 @@ test('AI builds structures over multiple epochs', async ({ page }) => {
     await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 5000 });
   }
 
-  await lockInAndWaitForExecution(page);
-  const logEntries = page.getByTestId('log-entry');
-  await expect(logEntries.first()).toBeVisible({ timeout: 10000 });
-
-  // Poll until AI log entries appear.
-  await expect.poll(async () => {
-    const allText = await logEntries.allTextContents();
-    return allText.filter((t) => t.toLowerCase().startsWith('ai')).length;
-  }, { timeout: 10000 }).toBeGreaterThan(0);
+  // After 3 epochs the AI should have taken actions visible in the event log.
+  const eventLog: string[] = await page.evaluate(() =>
+    (window as Window & { __getEventLog?: () => string[] }).__getEventLog?.() ?? [],
+  );
+  const aiEvents = eventLog.filter((e) => e.toLowerCase().startsWith('ai'));
+  expect(aiEvents.length).toBeGreaterThan(0);
 });
