@@ -1,12 +1,18 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { INITIAL_GLOBAL_SLOTS } from '@/engine/state';
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => { (window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__ = true; });
 });
 
+/** Wait for the difficulty picker to be dismissed before interacting. */
+async function waitForGameReady(page: Page): Promise<void> {
+  await expect(page.getByTestId('difficulty-picker')).not.toBeVisible({ timeout: 5000 });
+}
+
 test('global command slots are visible @smoke', async ({ page }) => {
   await page.goto('/');
+  await waitForGameReady(page);
   for (let i = 0; i < INITIAL_GLOBAL_SLOTS; i++) {
     await expect(page.getByTestId(`command-slot-${i}`)).toBeVisible();
   }
@@ -14,6 +20,7 @@ test('global command slots are visible @smoke', async ({ page }) => {
 
 test('timer is visible @smoke', async ({ page }) => {
   await page.goto('/');
+  await waitForGameReady(page);
   await expect(page.getByTestId('timer-value')).toBeVisible();
   const text = await page.getByTestId('timer-value').textContent();
   expect(text).toMatch(/\d+s/);
@@ -21,6 +28,7 @@ test('timer is visible @smoke', async ({ page }) => {
 
 test('lock-in button is visible and enabled initially', async ({ page }) => {
   await page.goto('/');
+  await waitForGameReady(page);
   const btn = page.getByTestId('lock-in-btn');
   await expect(btn).toBeVisible();
   await expect(btn).not.toBeDisabled();
@@ -28,6 +36,7 @@ test('lock-in button is visible and enabled initially', async ({ page }) => {
 
 test('lock-in button disables after lock-in action', async ({ page, isMobile }) => {
   await page.goto('/');
+  await waitForGameReady(page);
   const btn = page.getByTestId('lock-in-btn');
 
   if (isMobile) {
@@ -42,9 +51,10 @@ test('lock-in button disables after lock-in action', async ({ page, isMobile }) 
 
 test('keyboard shortcut 1 opens picker for slot 0 and slot is highlighted', async ({ page }) => {
   await page.goto('/');
+  await waitForGameReady(page);
   // The 1–N keys open the picker for the corresponding global slot.
   await page.keyboard.press('1');
-  await expect(page.getByRole('menu', { name: /command picker/i })).toBeVisible();
+  await expect(page.getByRole('menu', { name: /SLOT 1/i })).toBeVisible();
   // Slot 0 should be highlighted (selected).
   const slot = page.getByTestId('command-slot-0');
   await expect(slot).toBeVisible();
@@ -52,32 +62,36 @@ test('keyboard shortcut 1 opens picker for slot 0 and slot is highlighted', asyn
 
 test('Escape deselects slot / closes picker', async ({ page }) => {
   await page.goto('/');
+  await waitForGameReady(page);
   // Open picker via keyboard (works on all devices).
   await page.keyboard.press('1');
-  await expect(page.getByRole('menu', { name: /command picker/i })).toBeVisible();
+  await expect(page.getByRole('menu', { name: /SLOT 1/i })).toBeVisible();
   // Press Escape.
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('menu', { name: /command picker/i })).not.toBeVisible();
+  await expect(page.getByRole('menu', { name: /SLOT 1/i })).not.toBeVisible();
 });
 
 test('number key 1 opens picker for slot 0', async ({ page }) => {
   await page.goto('/');
+  await waitForGameReady(page);
   await page.keyboard.press('1');
-  await expect(page.getByRole('menu', { name: /command picker/i })).toBeVisible();
+  await expect(page.getByRole('menu', { name: /SLOT 1/i })).toBeVisible();
 });
 
 test('clicking a slot opens command picker (desktop)', async ({ page, isMobile }) => {
   // This test runs only on desktop where click interactions are reliable.
   test.skip(isMobile, 'Desktop-only: use keyboard shortcut test for mobile');
   await page.goto('/');
+  await waitForGameReady(page);
   const slot = page.getByTestId('command-slot-0');
   await slot.click({ force: true });
-  await expect(page.getByRole('menu', { name: /command picker/i })).toBeVisible();
+  await expect(page.getByRole('menu', { name: /SLOT 1/i })).toBeVisible();
 });
 
 test('unit action panel shows units with action picker', async ({ page, isMobile }) => {
   test.skip(isMobile, 'Desktop-only interaction for unit picker');
   await page.goto('/');
+  await waitForGameReady(page);
 
   // Click the first unassigned unit card to open the unit action picker.
   const unassigned = page.locator('[data-testid="unit-card-unassigned"]');

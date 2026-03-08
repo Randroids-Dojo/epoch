@@ -4,7 +4,12 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => { (window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__ = true; });
 });
 
+async function waitForGameReady(page: Page): Promise<void> {
+  await expect(page.getByTestId('difficulty-picker')).not.toBeVisible({ timeout: 5000 });
+}
+
 async function enterExecution(page: Page): Promise<void> {
+  await waitForGameReady(page);
   await page.keyboard.press('Space');
   await expect(page.getByTestId('phase-label')).toBeVisible({ timeout: 10000 });
 }

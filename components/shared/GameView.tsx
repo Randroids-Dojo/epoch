@@ -55,10 +55,7 @@ const DIFFICULTY_OPTIONS: { value: AIDifficulty; label: string; desc: string }[]
 ];
 
 export default function GameView() {
-  const [showSetup, setShowSetup]   = useState(() => {
-    if (typeof window !== 'undefined' && (window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__) return false;
-    return true;
-  });
+  const [showSetup, setShowSetup]   = useState(true);
   const [difficulty, setDifficulty] = useState<AIDifficulty>('adept');
   const [gameState, setGameState]   = useState<GameState>(() => createInitialState(42));
   const [mode, setMode]             = useState<InteractionMode>({ kind: 'idle' });
@@ -85,6 +82,13 @@ export default function GameView() {
 
   const timeLeftRef = useRef(timeLeft);
   timeLeftRef.current = timeLeft;
+
+  // ── Test: auto-dismiss difficulty picker ──────────────────────────────────
+  useEffect(() => {
+    if ((window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__) {
+      setShowSetup(false);
+    }
+  }, []);
 
   useEffect(() => {
     const testMutator = (window as Window & {
