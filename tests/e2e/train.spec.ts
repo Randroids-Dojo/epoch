@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => { (window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__ = true; });
+});
+
 test('queues a train command when barracks and CC are available', async ({ page }) => {
   await page.addInitScript(() => {
     const testWindow = window as Window & { __EPOCH_TEST_MUTATOR__?: (state: unknown) => void };
@@ -23,6 +27,7 @@ test('queues a train command when barracks and CC are available', async ({ page 
   });
 
   await page.goto('/');
+  await expect(page.getByTestId('difficulty-picker')).not.toBeVisible({ timeout: 5000 });
   await page.keyboard.press('1');
   await page.getByRole('menuitem', { name: 'Train' }).click();
   await page.getByRole('menuitem', { name: 'Pulse Sentry' }).click();
@@ -34,6 +39,7 @@ test('queues a train command when barracks and CC are available', async ({ page 
 
 test('train button is disabled when no barracks exists', async ({ page }) => {
   await page.goto('/');
+  await expect(page.getByTestId('difficulty-picker')).not.toBeVisible({ timeout: 5000 });
   await page.keyboard.press('1');
   const trainBtn = page.getByRole('menuitem', { name: 'Train' });
   await expect(trainBtn).toBeDisabled();
@@ -63,6 +69,7 @@ test('shows feedback when barracks exists but CC is insufficient', async ({ page
   });
 
   await page.goto('/');
+  await expect(page.getByTestId('difficulty-picker')).not.toBeVisible({ timeout: 5000 });
   await page.keyboard.press('1');
   await page.getByRole('menuitem', { name: 'Train' }).click();
 
@@ -114,6 +121,7 @@ test('shows feedback when barracks spawn space is blocked', async ({ page }) => 
   });
 
   await page.goto('/');
+  await expect(page.getByTestId('difficulty-picker')).not.toBeVisible({ timeout: 5000 });
   await page.keyboard.press('1');
   await page.getByRole('menuitem', { name: 'Train' }).click();
 

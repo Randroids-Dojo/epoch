@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "test:e2e": "node scripts/run-if-deps.mjs playwright test",
     "test:smoke": "node scripts/run-if-deps.mjs playwright test --grep @smoke",
-    "test:smoke:full-game": "node scripts/run-if-deps.mjs playwright test --project=chromium --grep \"full match headlessly\""
+    "test:smoke:full-game": "node scripts/run-if-deps.mjs playwright test --project=chromium --grep \"full match from planning\""
   },
   "dependencies": {
     "next": "15.2.9",

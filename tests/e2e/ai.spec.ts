@@ -1,6 +1,15 @@
 import { test, expect, Page } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => { (window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__ = true; });
+});
+
+async function waitForGameReady(page: Page): Promise<void> {
+  await expect(page.getByTestId('difficulty-picker')).not.toBeVisible({ timeout: 5000 });
+}
+
 async function lockInAndWaitForExecution(page: Page): Promise<void> {
+  await waitForGameReady(page);
   await page.keyboard.press('Space');
   await expect(page.getByTestId('phase-label')).toBeVisible({ timeout: 10000 });
 }
@@ -9,11 +18,15 @@ test('AI takes actions during execution @smoke', async ({ page }) => {
   await page.goto('/');
   await lockInAndWaitForExecution(page);
 
-  const logEntries = page.getByTestId('log-entry');
-  await expect(logEntries.first()).toBeVisible({ timeout: 10000 });
-  const allText = await logEntries.allTextContents();
-  const aiEntries = allText.filter((t) => t.toLowerCase().startsWith('ai'));
-  expect(aiEntries.length).toBeGreaterThan(0);
+  // Skip execution so the resolved event log is available in game state.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 5000 });
+
+  const eventLog: string[] = await page.evaluate(() =>
+    (window as Window & { __getEventLog?: () => string[] }).__getEventLog?.() ?? [],
+  );
+  const aiEvents = eventLog.filter((e) => e.toLowerCase().startsWith('ai'));
+  expect(aiEvents.length).toBeGreaterThan(0);
 });
 
 test('AI builds structures over multiple epochs', async ({ page }) => {
@@ -25,10 +38,10 @@ test('AI builds structures over multiple epochs', async ({ page }) => {
     await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 5000 });
   }
 
-  await lockInAndWaitForExecution(page);
-  const logEntries = page.getByTestId('log-entry');
-  await expect(logEntries.first()).toBeVisible({ timeout: 10000 });
-  const allText = await logEntries.allTextContents();
-  const aiEntries = allText.filter((t) => t.toLowerCase().startsWith('ai'));
-  expect(aiEntries.length).toBeGreaterThan(0);
+  // After 3 epochs the AI should have taken actions visible in the event log.
+  const eventLog: string[] = await page.evaluate(() =>
+    (window as Window & { __getEventLog?: () => string[] }).__getEventLog?.() ?? [],
+  );
+  const aiEvents = eventLog.filter((e) => e.toLowerCase().startsWith('ai'));
+  expect(aiEvents.length).toBeGreaterThan(0);
 });

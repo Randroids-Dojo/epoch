@@ -83,6 +83,13 @@ export default function GameView() {
   const timeLeftRef = useRef(timeLeft);
   timeLeftRef.current = timeLeft;
 
+  // ── Test: auto-dismiss difficulty picker ──────────────────────────────────
+  useEffect(() => {
+    if ((window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__) {
+      setShowSetup(false);
+    }
+  }, []);
+
   useEffect(() => {
     const testMutator = (window as Window & {
       __EPOCH_TEST_MUTATOR__?: (state: GameState) => void;
@@ -398,8 +405,9 @@ export default function GameView() {
 
   // ── Play Again / Start ────────────────────────────────────────────────────
   const handlePlayAgain = useCallback(() => {
+    const skipSetup = typeof window !== 'undefined' && !!(window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__;
     setGameState(createInitialState(42));
-    setShowSetup(true);
+    setShowSetup(!skipSetup);
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
   }, []);
@@ -488,6 +496,7 @@ export default function GameView() {
   const handleGlobalSlotClick = useCallback((i: number) => {
     const state = gameStateRef.current;
     if (state.players.player.lockedIn) return;
+    if (i >= state.players.player.globalCommands.length) return;
     setMode({ kind: 'global_picker_open', slotIndex: i });
   }, []);
 
@@ -725,7 +734,14 @@ export default function GameView() {
     }
   }, [commitUnitOrder, lockedIn]);
 
-  // ── Escape key closes picker ──────────────────────────────────────────────
+  // ── Keyboard shortcuts ───────────────────────────────────────────────────
+  const handleLockInRef = useRef(handleLockIn);
+  handleLockInRef.current = handleLockIn;
+  const handleGlobalSlotClickRef = useRef(handleGlobalSlotClick);
+  handleGlobalSlotClickRef.current = handleGlobalSlotClick;
+  const showSetupRef = useRef(showSetup);
+  showSetupRef.current = showSetup;
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -735,9 +751,26 @@ export default function GameView() {
         } else {
           setMode({ kind: 'idle' });
         }
-      } else if (e.key === ' ' && animationRef.current !== null) {
+        return;
+      }
+
+      // Block game shortcuts while difficulty picker is shown.
+      if (showSetupRef.current) return;
+
+      if (e.key === ' ') {
         e.preventDefault();
-        finishExecutionRef.current();
+        if (animationRef.current !== null) {
+          finishExecutionRef.current();
+        } else {
+          handleLockInRef.current();
+        }
+        return;
+      }
+
+      // Number keys 1–9 open the corresponding global slot picker.
+      const digit = parseInt(e.key, 10);
+      if (digit >= 1 && digit <= 9) {
+        handleGlobalSlotClickRef.current(digit - 1);
       }
     };
     window.addEventListener('keydown', handler);
