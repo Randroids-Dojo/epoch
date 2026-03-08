@@ -1,6 +1,10 @@
 import { test, expect, Page } from '@playwright/test';
 import { PlayerId } from '@/engine/player';
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => { (window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__ = true; });
+});
+
 async function triggerGameOver(page: Page, winner: PlayerId): Promise<void> {
   await page.waitForFunction(() => {
     return typeof (window as Window & { __triggerGameOver?: unknown }).__triggerGameOver === 'function';
@@ -42,7 +46,6 @@ test('command tray is hidden when game is over', async ({ page }) => {
 
 test('Play Again resets to planning phase', async ({ page }) => {
   await page.goto('/');
-  await page.getByTestId('start-game-btn').click();
   await triggerGameOver(page, 'ai');
   await expect(page.getByTestId('game-over-overlay')).toBeVisible();
 

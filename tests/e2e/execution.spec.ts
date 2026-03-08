@@ -1,5 +1,9 @@
 import { test, expect, Page } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => { (window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__ = true; });
+});
+
 async function enterExecution(page: Page): Promise<void> {
   await page.keyboard.press('Space');
   await expect(page.getByTestId('phase-label')).toBeVisible({ timeout: 10000 });
