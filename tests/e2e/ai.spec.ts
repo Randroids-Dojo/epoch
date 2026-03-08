@@ -18,14 +18,15 @@ test('AI takes actions during execution @smoke', async ({ page }) => {
   await page.goto('/');
   await lockInAndWaitForExecution(page);
 
-  const logEntries = page.getByTestId('log-entry');
-  await expect(logEntries.first()).toBeVisible({ timeout: 10000 });
+  // Skip execution so the resolved event log is available in game state.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 5000 });
 
-  // Poll until AI log entries appear (execution animation streams entries over time).
-  await expect.poll(async () => {
-    const allText = await logEntries.allTextContents();
-    return allText.filter((t) => t.toLowerCase().startsWith('ai')).length;
-  }, { timeout: 10000 }).toBeGreaterThan(0);
+  const eventLog: string[] = await page.evaluate(() =>
+    (window as Window & { __getEventLog?: () => string[] }).__getEventLog?.() ?? [],
+  );
+  const aiEvents = eventLog.filter((e) => e.toLowerCase().startsWith('ai'));
+  expect(aiEvents.length).toBeGreaterThan(0);
 });
 
 test('AI builds structures over multiple epochs', async ({ page }) => {
