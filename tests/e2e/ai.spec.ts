@@ -20,9 +20,12 @@ test('AI takes actions during execution @smoke', async ({ page }) => {
 
   const logEntries = page.getByTestId('log-entry');
   await expect(logEntries.first()).toBeVisible({ timeout: 10000 });
-  const allText = await logEntries.allTextContents();
-  const aiEntries = allText.filter((t) => t.toLowerCase().startsWith('ai'));
-  expect(aiEntries.length).toBeGreaterThan(0);
+
+  // Poll until AI log entries appear (execution animation streams entries over time).
+  await expect.poll(async () => {
+    const allText = await logEntries.allTextContents();
+    return allText.filter((t) => t.toLowerCase().startsWith('ai')).length;
+  }, { timeout: 10000 }).toBeGreaterThan(0);
 });
 
 test('AI builds structures over multiple epochs', async ({ page }) => {
@@ -37,7 +40,10 @@ test('AI builds structures over multiple epochs', async ({ page }) => {
   await lockInAndWaitForExecution(page);
   const logEntries = page.getByTestId('log-entry');
   await expect(logEntries.first()).toBeVisible({ timeout: 10000 });
-  const allText = await logEntries.allTextContents();
-  const aiEntries = allText.filter((t) => t.toLowerCase().startsWith('ai'));
-  expect(aiEntries.length).toBeGreaterThan(0);
+
+  // Poll until AI log entries appear.
+  await expect.poll(async () => {
+    const allText = await logEntries.allTextContents();
+    return allText.filter((t) => t.toLowerCase().startsWith('ai')).length;
+  }, { timeout: 10000 }).toBeGreaterThan(0);
 });

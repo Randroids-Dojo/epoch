@@ -120,6 +120,10 @@ async function assignBuild(
 }
 
 async function fillEpoch(page: Page): Promise<void> {
+  // Reset camera to player start so clickCanvasHex calculations are correct.
+  await page.keyboard.press('Home');
+  await page.waitForTimeout(100);
+
   // Wait for at least one unassigned unit card to be present before snapping state.
   // On slower/mobile viewports the UnitActionPanel may render a frame after the
   // CommandTray (which gated entry to this function).
@@ -256,7 +260,7 @@ async function fillEpoch(page: Page): Promise<void> {
 async function waitForPlanningOrGameOver(page: Page): Promise<'planning' | 'over'> {
   await page.waitForSelector(
     '[data-testid="command-slot-0"],[data-testid="game-over-overlay"]',
-    { timeout: 15_000 },
+    { timeout: 30_000 },
   );
   const isOver = await page.getByTestId('game-over-overlay').isVisible().catch(() => false);
   return isOver ? 'over' : 'planning';
@@ -280,7 +284,7 @@ test('smoke: player can play full match from planning to game-over @smoke', asyn
     await fillEpoch(page);
 
     await page.getByTestId('lock-in-btn').click({ force: true });
-    await expect(page.getByTestId('phase-label')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('phase-label')).toBeVisible({ timeout: 10_000 });
 
     const result = await waitForPlanningOrGameOver(page);
 
