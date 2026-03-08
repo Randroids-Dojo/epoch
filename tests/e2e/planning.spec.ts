@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
-import { BASE_HEX_SIZE } from '@/renderer/drawHex';
-import { DEFAULT_ZOOM } from '@/renderer/camera';
-import { createInitialState } from '@/engine/state';
-import { computeEligibleBuildHexes } from '@/engine/targeting';
-import { hexDistance, hexToPixel } from '@/engine/hex';
+import { INITIAL_GLOBAL_SLOTS } from '@/engine/state';
 
-test('5 command slots are visible @smoke', async ({ page }) => {
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => { (window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__ = true; });
+});
+
+test('global command slots are visible @smoke', async ({ page }) => {
   await page.goto('/');
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < INITIAL_GLOBAL_SLOTS; i++) {
     await expect(page.getByTestId(`command-slot-${i}`)).toBeVisible();
   }
 });
@@ -42,7 +42,7 @@ test('lock-in button disables after lock-in action', async ({ page, isMobile }) 
 
 test('keyboard shortcut 1 opens picker for slot 0 and slot is highlighted', async ({ page }) => {
   await page.goto('/');
-  // The 1–5 keys open the picker for the corresponding slot.
+  // The 1–N keys open the picker for the corresponding global slot.
   await page.keyboard.press('1');
   await expect(page.getByRole('menu', { name: /command picker/i })).toBeVisible();
   // Slot 0 should be highlighted (selected).
@@ -75,46 +75,23 @@ test('clicking a slot opens command picker (desktop)', async ({ page, isMobile }
   await expect(page.getByRole('menu', { name: /command picker/i })).toBeVisible();
 });
 
-test('build flow: choose structure, target hex, then clear command', async ({ page, isMobile }) => {
-  test.skip(isMobile, 'Desktop-only interaction for canvas clicking');
+test('unit action panel shows units with action picker', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'Desktop-only interaction for unit picker');
   await page.goto('/');
-  await page.getByTestId('start-game-btn').click();
 
-  await page.keyboard.press('1');
-  await page.getByRole('menuitem', { name: 'Build' }).click();
-  await expect(page.getByRole('dialog', { name: /build structure picker/i })).toBeVisible();
-  await page.getByTestId('build-option-barracks').click();
+  // Click the first unassigned unit card to open the unit action picker.
+  const unassigned = page.locator('[data-testid="unit-card-unassigned"]');
+  await expect(unassigned.first()).toBeVisible({ timeout: 5000 });
+  await unassigned.first().click({ force: true });
 
-  const state = createInitialState(42);
-  const eligibleHexes = [...computeEligibleBuildHexes(state)]
-    .map((key) => state.map.cells.get(key)!.hex)
-    .sort((a, b) => hexDistance(a, state.map.playerStart) - hexDistance(b, state.map.playerStart));
-  const targetHex = eligibleHexes[0];
-  expect(targetHex).toBeDefined();
+  const menu = page.getByRole('menu');
+  await expect(menu).toBeVisible({ timeout: 3000 });
 
-  const canvas = page.getByTestId('game-canvas');
-  await expect(canvas).toBeVisible();
-  const box = await canvas.boundingBox();
-  expect(box).not.toBeNull();
+  // Unit picker should show Move and Defend as always-enabled actions.
+  await expect(page.getByRole('menuitem', { name: 'Move' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Defend' })).toBeVisible();
 
-  const startPx = hexToPixel(state.map.playerStart, BASE_HEX_SIZE);
-  const targetPx = hexToPixel(targetHex, BASE_HEX_SIZE);
-
-  const clickX = box!.width / 2 + (targetPx.x - startPx.x) * DEFAULT_ZOOM;
-  const clickY = box!.height / 2 + (targetPx.y - startPx.y) * DEFAULT_ZOOM;
-
-  await canvas.click({
-    position: {
-      x: Math.min(box!.width - 2, Math.max(2, clickX)),
-      y: Math.min(box!.height - 2, Math.max(2, clickY)),
-    },
-    force: true,
-  });
-
-  const slot = page.getByTestId('command-slot-0');
-  await expect(slot).toContainText('BD');
-
-  await slot.hover();
-  await slot.getByRole('button', { name: /clear slot 1/i }).click();
-  await expect(slot.getByText('BD')).not.toBeVisible();
+  // Press Escape to close.
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toBeVisible();
 });

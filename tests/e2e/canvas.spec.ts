@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => { (window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__ = true; });
+});
+
 test('homepage loads with game canvas @smoke', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveTitle(/Epoch/);

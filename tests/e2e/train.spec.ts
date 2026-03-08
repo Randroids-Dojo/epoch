@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => { (window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__ = true; });
+});
+
 test('queues a train command when barracks and CC are available', async ({ page }) => {
   await page.addInitScript(() => {
     const testWindow = window as Window & { __EPOCH_TEST_MUTATOR__?: (state: unknown) => void };
