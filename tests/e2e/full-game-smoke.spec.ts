@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { hexToPixel } from '@/engine/hex';
+import { hexToPixel, hexDistance } from '@/engine/hex';
 import { BASE_HEX_SIZE } from '@/renderer/drawHex';
 import { DEFAULT_ZOOM } from '@/renderer/camera';
 
@@ -26,12 +26,8 @@ type GameSnapshot = {
   playerStructureTypes: string[];
 };
 
-function hexDist(a: Hex, b: Hex): number {
-  return (Math.abs(a.q - b.q) + Math.abs(a.q + a.r - b.q - b.r) + Math.abs(a.r - b.r)) / 2;
-}
-
 function sortClosestTo(hexes: Hex[], target: Hex): Hex[] {
-  return [...hexes].sort((a, b) => hexDist(a, target) - hexDist(b, target));
+  return [...hexes].sort((a, b) => hexDistance(a, target) - hexDistance(b, target));
 }
 
 async function getSnapshot(page: Page): Promise<GameSnapshot> {

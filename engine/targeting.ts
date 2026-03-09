@@ -72,11 +72,11 @@ export function computeEligibleHexes(
     return eligible;
   }
 
-
   for (const [key, cell] of state.map.cells) {
     if (cell.fog === 'unexplored') continue;
 
     switch (type) {
+      case 'phase_surge':
       case 'move':
         // All passable visible/explored hexes not occupied by own units.
         if (!TERRAIN[cell.terrain].passable) continue;

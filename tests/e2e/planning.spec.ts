@@ -1,14 +1,8 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { INITIAL_GLOBAL_SLOTS } from '@/engine/state';
+import { skipSetup, waitForGameReady } from './helpers';
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => { (window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__ = true; });
-});
-
-/** Wait for the difficulty picker to be dismissed before interacting. */
-async function waitForGameReady(page: Page): Promise<void> {
-  await expect(page.getByTestId('difficulty-picker')).not.toBeVisible({ timeout: 5000 });
-}
+test.beforeEach(async ({ page }) => { await skipSetup(page); });
 
 test('global command slots are visible @smoke', async ({ page }) => {
   await page.goto('/');

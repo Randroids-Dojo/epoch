@@ -631,14 +631,16 @@ function generateCandidates(
 
     // Phase Surge: boost the leading combat unit (closest to enemy base) each epoch.
     if (ai.resources.te >= PHASE_SURGE_COST) {
-      const combatAiUnits = aiUnits.filter((u) => UNIT_DEFS[u.type].range > 0);
-      const playerStart = state.map.playerStart;
-      const leader = [...combatAiUnits].sort(
-        (a, b) => hexDistance(a.hex, playerStart) - hexDistance(b.hex, playerStart),
-      )[0];
+      const enemyBase = state.map.playerStart;
+      let leader: Unit | undefined;
+      let leaderDist = Infinity;
+      for (const u of combatUnits) {
+        const d = hexDistance(u.hex, enemyBase);
+        if (d < leaderDist) { leaderDist = d; leader = u; }
+      }
       if (leader) {
         candidates.push({
-          command: { type: 'phase_surge', unitId: leader.id, targetHex: playerStart },
+          command: { type: 'phase_surge', unitId: leader.id, targetHex: enemyBase },
           category: 'temporal',
           basePriority: 6,
           costCC: 0, costFX: 0, costTE: PHASE_SURGE_COST,

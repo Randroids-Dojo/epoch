@@ -1,9 +1,8 @@
 import { test, expect, Page } from '@playwright/test';
 import { PlayerId } from '@/engine/player';
+import { skipSetup } from './helpers';
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => { (window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__ = true; });
-});
+test.beforeEach(async ({ page }) => { await skipSetup(page); });
 
 async function triggerGameOver(page: Page, winner: PlayerId): Promise<void> {
   await page.waitForFunction(() => {

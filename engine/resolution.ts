@@ -273,32 +273,17 @@ function stepTemporal(state: GameState, commands: CommandEntry[], log: string[])
 // ── Step 3: Move ─────────────────────────────────────────────────────────────
 
 function stepMove(state: GameState, commands: CommandEntry[], log: string[]): void {
-  const moves = commands
-    .filter((e): e is { owner: PlayerId; command: MoveCommand } => e.command.type === 'move')
-    .sort((a, b) => {
-      const ua = state.units.get(a.command.unitId);
-      const ub = state.units.get(b.command.unitId);
-      if (!ua || !ub) return 0;
-      return mapOrder(ua.hex, ub.hex);
-    });
-
-  // Phase Surge: collect surge commands alongside regular moves.
-  const surges = commands.filter(
-    (e): e is { owner: PlayerId; command: PhaseSurgeCommand } => e.command.type === 'phase_surge',
-  );
+  type MoveEntry = { owner: PlayerId; command: MoveCommand | PhaseSurgeCommand };
+  const allMoves: MoveEntry[] = commands
+    .filter((e): e is MoveEntry => e.command.type === 'move' || e.command.type === 'phase_surge')
+    .map((e) => ({ e, hex: state.units.get(e.command.unitId)?.hex }))
+    .sort((a, b) => (a.hex && b.hex ? mapOrder(a.hex, b.hex) : 0))
+    .map(({ e }) => e);
 
   // Build blocked set once; update it as units move so later movers see vacated hexes.
   // Structures don't block movement.
   const blocked = new Set<string>();
   for (const u of state.units.values()) blocked.add(hexKey(u.hex));
-
-  type MoveEntry = { owner: PlayerId; command: MoveCommand | PhaseSurgeCommand };
-  const allMoves: MoveEntry[] = [...moves, ...surges].sort((a, b) => {
-    const ua = state.units.get(a.command.unitId);
-    const ub = state.units.get(b.command.unitId);
-    if (!ua || !ub) return 0;
-    return mapOrder(ua.hex, ub.hex);
-  });
 
   for (const { owner, command } of allMoves) {
     const unit = state.units.get(command.unitId);

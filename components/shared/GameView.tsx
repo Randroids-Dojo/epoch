@@ -54,6 +54,13 @@ const DIFFICULTY_OPTIONS: { value: AIDifficulty; label: string; desc: string }[]
   { value: 'epoch_master', label: 'Epoch Master',  desc: 'Full archetype blend · All abilities' },
 ];
 
+// Module-level code in 'use client' files can still run during SSR prerender,
+// so the typeof-window guard is needed here even though call sites are client-only.
+function isSkipSetup(): boolean {
+  return typeof window !== 'undefined' &&
+    !!(window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__;
+}
+
 export default function GameView() {
   const [showSetup, setShowSetup]   = useState(true);
   const [difficulty, setDifficulty] = useState<AIDifficulty>('adept');
@@ -85,9 +92,7 @@ export default function GameView() {
 
   // ── Test: auto-dismiss difficulty picker ──────────────────────────────────
   useEffect(() => {
-    if ((window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__) {
-      setShowSetup(false);
-    }
+    if (isSkipSetup()) setShowSetup(false);
   }, []);
 
   useEffect(() => {
@@ -405,9 +410,8 @@ export default function GameView() {
 
   // ── Play Again / Start ────────────────────────────────────────────────────
   const handlePlayAgain = useCallback(() => {
-    const skipSetup = typeof window !== 'undefined' && !!(window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__;
     setGameState(createInitialState(42));
-    setShowSetup(!skipSetup);
+    setShowSetup(!isSkipSetup());
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
   }, []);
@@ -555,7 +559,7 @@ export default function GameView() {
       }
 
       if (type === 'phase_surge') {
-        const eligibleKeys = computeEligibleHexes(state, 'move');
+        const eligibleKeys = computeEligibleHexes(state, 'phase_surge');
         setMode({ kind: 'targeting', unitId, commandType: 'phase_surge', eligibleKeys });
         return;
       }
@@ -768,9 +772,8 @@ export default function GameView() {
       }
 
       // Number keys 1–9 open the corresponding global slot picker.
-      const digit = parseInt(e.key, 10);
-      if (digit >= 1 && digit <= 9) {
-        handleGlobalSlotClickRef.current(digit - 1);
+      if (e.key >= '1' && e.key <= '9') {
+        handleGlobalSlotClickRef.current(parseInt(e.key, 10) - 1);
       }
     };
     window.addEventListener('keydown', handler);

@@ -1,12 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
+import { skipSetup, waitForGameReady } from './helpers';
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => { (window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__ = true; });
-});
-
-async function waitForGameReady(page: Page): Promise<void> {
-  await expect(page.getByTestId('difficulty-picker')).not.toBeVisible({ timeout: 5000 });
-}
+test.beforeEach(async ({ page }) => { await skipSetup(page); });
 
 async function lockInAndWaitForExecution(page: Page): Promise<void> {
   await waitForGameReady(page);
