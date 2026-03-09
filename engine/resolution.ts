@@ -276,9 +276,11 @@ function stepMove(state: GameState, commands: CommandEntry[], log: string[]): vo
   type MoveEntry = { owner: PlayerId; command: MoveCommand | PhaseSurgeCommand };
   const allMoves: MoveEntry[] = commands
     .filter((e): e is MoveEntry => e.command.type === 'move' || e.command.type === 'phase_surge')
-    .map((e) => ({ e, hex: state.units.get(e.command.unitId)?.hex }))
-    .sort((a, b) => (a.hex && b.hex ? mapOrder(a.hex, b.hex) : 0))
-    .map(({ e }) => e);
+    .sort((a, b) => {
+      const ha = state.units.get(a.command.unitId)?.hex;
+      const hb = state.units.get(b.command.unitId)?.hex;
+      return ha && hb ? mapOrder(ha, hb) : 0;
+    });
 
   // Build blocked set once; update it as units move so later movers see vacated hexes.
   // Structures don't block movement.
