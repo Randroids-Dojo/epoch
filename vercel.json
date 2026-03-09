@@ -5,7 +5,8 @@
       "source": "/(.*)",
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-Frame-Options", "value": "ALLOW-FROM https://randroid.dev" },
+        { "key": "Content-Security-Policy", "value": "frame-ancestors 'self' https://randroid.dev https://www.randroid.dev" },
         { "key": "X-XSS-Protection", "value": "1; mode=block" }
       ]
     }
