@@ -119,7 +119,7 @@ export default function UnitActionPanel({
         flexDirection: 'column',
         gap: 4,
         padding: '8px 6px',
-        background: 'linear-gradient(to right, rgba(10,14,26,0.92) 0%, rgba(10,14,26,0.72) 80%, transparent 100%)',
+        background: 'transparent',
         pointerEvents: 'auto',
       }}
     >
