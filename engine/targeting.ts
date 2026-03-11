@@ -214,6 +214,9 @@ function isValidBuildTerrain(
     });
   }
 
+  // All other structures may NOT be placed on harvesting terrain.
+  if (cell.terrain === 'crystal_node' || cell.terrain === 'flux_vent') return false;
+
   return true;
 }
 
