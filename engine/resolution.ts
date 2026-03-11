@@ -554,6 +554,32 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
 
     player.resources.cc -= def.costCC;
     player.resources.fx -= def.costFX;
+
+    // Move the drone adjacent to the build site when building at range > 1.
+    const dist = hexDistance(drone.hex, command.targetHex);
+    if (dist > 1) {
+      // Pick the neighbor of the target hex closest to the drone's current position.
+      const neighbors = hexNeighbors(command.targetHex);
+      let bestHex = drone.hex;
+      let bestDist = Infinity;
+      for (const nb of neighbors) {
+        const d = hexDistance(drone.hex, nb);
+        const nbKey = hexKey(nb);
+        const cell2 = state.map.cells.get(nbKey);
+        if (!cell2 || !TERRAIN[cell2.terrain].passable) continue;
+        if (findUnitAt(state, nb)) continue;
+        if (findStructureAt(state, nb)) continue;
+        if (d < bestDist) {
+          bestDist = d;
+          bestHex = nb;
+        }
+      }
+      if (!hexEqual(bestHex, drone.hex)) {
+        drone.hex = bestHex;
+        log.push(`${owner} Drone moved to (${bestHex.q},${bestHex.r}) for build`);
+      }
+    }
+
     const id = newId('s');
     state.structures.set(id, {
       id,
