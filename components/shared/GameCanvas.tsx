@@ -6,7 +6,7 @@ import { GameState } from '@/engine/state';
 import { Hex, hexKey, hexToPixel, pixelToHex } from '@/engine/hex';
 import { Camera, DEFAULT_ZOOM, zoomToward, canvasToWorld } from '@/renderer/camera';
 import { BASE_HEX_SIZE, drawBackground, drawHexCell } from '@/renderer/drawHex';
-import { drawUnits, drawStructures, drawTargetingOverlay, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawEchoOverlay, drawTimelineForkOverlay, drawChronoScoutOverlay } from '@/renderer/drawEntities';
+import { drawUnits, drawStructures, drawTargetingOverlay, drawCommandArrows, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawEchoOverlay, drawTimelineForkOverlay, drawChronoScoutOverlay } from '@/renderer/drawEntities';
 import { TimelineForkResult, ChronoScoutResult } from '@/engine/simulation';
 import { InteractionMode } from '@/lib/types';
 import { ExecutionAnimation } from '@/renderer/animation';
@@ -168,6 +168,12 @@ export default function GameCanvas({
       drawStructures(ctx, gs.structures, cam);
       const activeUnitId = ('unitId' in m) ? m.unitId : null;
       drawUnits(ctx, gs.units, cam, activeUnitId);
+    }
+
+    // ── Command arrows (planning phase only) ──────────────────────────────────
+    if (!anim) {
+      const player = gs.players.player;
+      drawCommandArrows(ctx, gs.units, player.unitOrders, player.defaultOrderUnitIds, cam);
     }
 
     // ── Temporal Echo overlay (planning phase only) ───────────────────────────
