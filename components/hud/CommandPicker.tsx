@@ -272,7 +272,11 @@ export default function CommandPicker(props: CommandPickerProps) {
                 {entry.cost}
               </span>
             )}
-            {isTutorial && <span className="tutorial-tooltip" style={{ top: -20, left: 4 }}>SELECT BUILD</span>}
+            {isTutorial && (
+              <span className="tutorial-tooltip" style={{ top: -20, left: 4 }}>
+                {entry.type === 'gather' ? 'SELECT GATHER' : 'SELECT BUILD'}
+              </span>
+            )}
           </button>
         );
       })}

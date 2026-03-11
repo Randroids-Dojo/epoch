@@ -8,6 +8,8 @@ import type { Hex } from '@/engine/hex';
 
 interface GatherTargetPickerProps {
   targets: GatherTarget[];
+  /** Highlight the first target for tutorial guidance. */
+  tutorialHighlight?: boolean;
   onSelect(hex: Hex): void;
   onClose(): void;
 }
@@ -16,6 +18,7 @@ interface GatherTargetPickerProps {
 
 export default function GatherTargetPicker({
   targets,
+  tutorialHighlight = false,
   onSelect,
   onClose,
 }: GatherTargetPickerProps) {
@@ -64,12 +67,14 @@ export default function GatherTargetPicker({
           No harvestable structures in range
         </div>
       ) : (
-        targets.map((t) => (
+        targets.map((t, i) => {
+          const isTutorial = tutorialHighlight && i === 0;
+          return (
           <button
             key={t.structureId}
             type="button"
             onClick={() => onSelect(t.hex)}
-            className="flex w-full items-center justify-between px-3 py-2 text-left"
+            className={`flex w-full items-center justify-between px-3 py-2 text-left${isTutorial ? ' tutorial-highlight' : ''}`}
             style={{
               background: 'transparent',
               border: 'none',
@@ -78,6 +83,7 @@ export default function GatherTargetPicker({
               fontFamily: 'inherit',
               fontSize: 'inherit',
               transition: 'background 0.12s ease',
+              position: isTutorial ? 'relative' as const : undefined,
             }}
             onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,212,255,0.08)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
@@ -91,8 +97,10 @@ export default function GatherTargetPicker({
             <span style={{ color: '#fbbf24', fontSize: '0.6rem' }}>
               {t.distance === 0 ? 'here' : `${t.distance}hex`}
             </span>
+            {isTutorial && <span className="tutorial-tooltip" style={{ top: -20, left: 4 }}>GATHER HERE</span>}
           </button>
-        ))
+          );
+        })
       )}
     </div>
   );

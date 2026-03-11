@@ -166,8 +166,15 @@ export default function GameView() {
   const buildOptions = playerTechTier >= 2 ? TIER2_BUILD_OPTIONS : playerTechTier >= 1 ? TIER1_BUILD_OPTIONS : BASE_BUILD_OPTIONS;
 
   // ── Tutorial auto-advance ─────────────────────────────────────────────────
-  // Tutorial is active only on epoch 1 when the player hasn't built a crystal extractor yet.
-  const tutorialActive = tutorialStep !== null && gameState.epoch === 1;
+  const tutorialActive = tutorialStep !== null;
+
+  // Does the player own a barracks (complete or under construction)?
+  const hasBarracks = useMemo(() => {
+    for (const s of gameState.structures.values()) {
+      if (s.owner === 'player' && s.type === 'barracks') return true;
+    }
+    return false;
+  }, [gameState]);
 
   // Find the first idle drone for tutorial targeting.
   const tutorialDroneId = useMemo(() => {
@@ -182,12 +189,73 @@ export default function GameView() {
     return null;
   }, [tutorialActive, gameState]);
 
+  // Transition tutorial between epoch phases when a new planning phase starts.
+  useEffect(() => {
+    if (!tutorialActive || gameState.phase !== 'planning' || lockedIn) return;
+
+    // After epoch 1 lock-in: advance to the "wait" / gather / barracks phases.
+    if (tutorialStep === null) return;
+
+    // If we're in a "locked in" terminal step and a new epoch started, pick the next phase.
+    // This runs on every planning-phase render, so gate on idle steps only.
+    const isPhaseStart =
+      tutorialStep === 'wait_lock_in' ||
+      tutorialStep === 'gather_lock_in' ||
+      tutorialStep === 'barracks_lock_in';
+    if (isPhaseStart) return; // still in current phase, handled by mode watcher below
+
+    // Auto-enter the right phase for the current game state.
+    if (
+      tutorialStep === 'select_drone' ||
+      tutorialStep === 'select_build' ||
+      tutorialStep === 'select_extractor' ||
+      tutorialStep === 'select_hex' ||
+      tutorialStep === 'lock_in'
+    ) {
+      return; // epoch 1 build-extractor phase still active
+    }
+  }, [tutorialActive, tutorialStep, gameState.phase, lockedIn]);
+
+  // When lock-in completes, decide the next tutorial phase for the upcoming epoch.
+  const prevLockedInRef = useRef(false);
+  useEffect(() => {
+    if (!tutorialActive) { prevLockedInRef.current = lockedIn; return; }
+
+    // Detect rising edge of lockedIn → true.
+    const justLocked = lockedIn && !prevLockedInRef.current;
+    prevLockedInRef.current = lockedIn;
+    if (!justLocked) return;
+
+    switch (tutorialStep) {
+      case 'lock_in':
+        // Extractor is being built — next epoch just lock in.
+        setTutorialStep('wait_lock_in');
+        break;
+      case 'wait_lock_in':
+        // Extractor should be done — teach gather.
+        setTutorialStep('gather_select_drone');
+        break;
+      case 'gather_lock_in':
+        // After gather, teach barracks if affordable and not yet built.
+        if (!hasBarracks && gameState.players.player.resources.cc >= 5) {
+          setTutorialStep('barracks_select_drone');
+        } else {
+          setTutorialStep(null); // tutorial complete
+        }
+        break;
+      case 'barracks_lock_in':
+        setTutorialStep(null); // tutorial complete
+        break;
+    }
+  }, [tutorialActive, tutorialStep, lockedIn, hasBarracks, gameState]);
+
+  // Mode-driven step advancement (runs on mode / gameState changes).
   useEffect(() => {
     if (!tutorialActive) return;
 
     switch (tutorialStep) {
+      // ── Epoch 1: build extractor ──────────────────────────
       case 'select_drone':
-        // Advance when a unit picker opens for a drone.
         if (mode.kind === 'unit_picker_open') {
           const u = gameState.units.get(mode.unitId);
           if (u?.type === 'drone') setTutorialStep('select_build');
@@ -201,8 +269,7 @@ export default function GameView() {
           setTutorialStep('select_hex');
         }
         break;
-      case 'select_hex': {
-        // Advance once a build order for crystal_extractor is committed.
+      case 'select_hex':
         for (const cmd of gameState.players.player.unitOrders.values()) {
           if (cmd.type === 'build' && cmd.structureType === 'crystal_extractor') {
             setTutorialStep('lock_in');
@@ -210,17 +277,51 @@ export default function GameView() {
           }
         }
         break;
-      }
-      case 'lock_in':
-        if (lockedIn) setTutorialStep(null);
+
+      // ── Epoch 3+: gather ──────────────────────────────────
+      case 'gather_select_drone':
+        if (mode.kind === 'unit_picker_open') {
+          const u = gameState.units.get(mode.unitId);
+          if (u?.type === 'drone') setTutorialStep('gather_select_gather');
+        }
+        break;
+      case 'gather_select_gather':
+        if (mode.kind === 'gather_picker') setTutorialStep('gather_select_target');
+        break;
+      case 'gather_select_target':
+        for (const cmd of gameState.players.player.unitOrders.values()) {
+          if (cmd.type === 'gather') {
+            setTutorialStep('gather_lock_in');
+            break;
+          }
+        }
+        break;
+
+      // ── Barracks build ────────────────────────────────────
+      case 'barracks_select_drone':
+        if (mode.kind === 'unit_picker_open') {
+          const u = gameState.units.get(mode.unitId);
+          if (u?.type === 'drone') setTutorialStep('barracks_select_build');
+        }
+        break;
+      case 'barracks_select_build':
+        if (mode.kind === 'build_select') setTutorialStep('barracks_select_barracks');
+        break;
+      case 'barracks_select_barracks':
+        if (mode.kind === 'build_targeting' && mode.structureType === 'barracks') {
+          setTutorialStep('barracks_select_hex');
+        }
+        break;
+      case 'barracks_select_hex':
+        for (const cmd of gameState.players.player.unitOrders.values()) {
+          if (cmd.type === 'build' && cmd.structureType === 'barracks') {
+            setTutorialStep('barracks_lock_in');
+            break;
+          }
+        }
         break;
     }
-  }, [tutorialActive, tutorialStep, mode, gameState, lockedIn]);
-
-  // Dismiss tutorial once we leave epoch 1.
-  useEffect(() => {
-    if (gameState.epoch > 1 && tutorialStep !== null) setTutorialStep(null);
-  }, [gameState.epoch, tutorialStep]);
+  }, [tutorialActive, tutorialStep, mode, gameState]);
 
   // ── Execution animation ref ───────────────────────────────────────────────
   const animationRef = useRef<ExecutionAnimation | null>(null);
@@ -960,7 +1061,10 @@ export default function GameView() {
             gameState={gameState}
             mode={mode}
             lockedIn={lockedIn}
-            tutorialHighlightUnitId={tutorialStep === 'select_drone' ? tutorialDroneId : null}
+            tutorialHighlightUnitId={
+              tutorialStep === 'select_drone' || tutorialStep === 'gather_select_drone' || tutorialStep === 'barracks_select_drone'
+                ? tutorialDroneId : null
+            }
             onUnitClick={handleUnitCardClick}
             onOrderClear={handleUnitOrderClear}
           />
@@ -995,7 +1099,11 @@ export default function GameView() {
             canGather={unitPickerProps.canGather}
             canBuild={unitPickerProps.canBuild}
             canChronoShift={unitPickerProps.canChronoShift}
-            tutorialHighlightType={tutorialStep === 'select_build' ? 'build' : undefined}
+            tutorialHighlightType={
+              tutorialStep === 'select_build' || tutorialStep === 'barracks_select_build' ? 'build'
+              : tutorialStep === 'gather_select_gather' ? 'gather'
+              : undefined
+            }
             onSelect={handleCommandPick}
             onEpochAnchorAction={handleEpochAnchorAction}
             onClose={() => setMode({ kind: 'idle' })}
@@ -1092,7 +1200,9 @@ export default function GameView() {
               const isEnabled = ccOk && fxOk;
               const costLabel = sDef.costFX > 0 ? `${sDef.costCC}CC ${sDef.costFX}FX` : `${sDef.costCC}CC`;
               const disabledLabel = !ccOk ? 'no CC' : !fxOk ? 'no FX' : undefined;
-              const isTutorial = tutorialStep === 'select_extractor' && opt === 'crystal_extractor';
+              const isTutorial =
+                (tutorialStep === 'select_extractor' && opt === 'crystal_extractor') ||
+                (tutorialStep === 'barracks_select_barracks' && opt === 'barracks');
               return (
                 <button
                   key={opt}
@@ -1157,6 +1267,7 @@ export default function GameView() {
           <div style={{ position: 'absolute', top: unitPickerTop, left: 188 }}>
             <GatherTargetPicker
               targets={mode.targets}
+              tutorialHighlight={tutorialStep === 'gather_select_target'}
               onSelect={handleGatherSelect}
               onClose={() => setMode({ kind: 'idle' })}
             />
@@ -1253,7 +1364,12 @@ export default function GameView() {
           lockInFlash={lockInFlash}
           isMobile={isMobile}
           forkMode={timelineForkActive}
-          tutorialHighlightLockIn={tutorialStep === 'lock_in'}
+          tutorialHighlightLockIn={
+            tutorialStep === 'lock_in' ||
+            tutorialStep === 'wait_lock_in' ||
+            tutorialStep === 'gather_lock_in' ||
+            tutorialStep === 'barracks_lock_in'
+          }
           onSlotClick={handleGlobalSlotClick}
           onSlotClear={handleGlobalSlotClear}
           onLockIn={handleLockIn}

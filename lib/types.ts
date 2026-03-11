@@ -47,13 +47,27 @@ export type InteractionMode =
 
 // ── Tutorial Steps ───────────────────────────────────────────────────────────
 
-/** Steps for the epoch-1 build-extractor tutorial. null = tutorial complete/inactive. */
+/** Steps for the opening tutorial. null = tutorial complete/inactive. */
 export type TutorialStep =
+  // Epoch 1: build a crystal extractor
   | 'select_drone'
   | 'select_build'
   | 'select_extractor'
   | 'select_hex'
   | 'lock_in'
+  // Epoch 2: building is constructing, just lock in
+  | 'wait_lock_in'
+  // Epoch 3+: assign a drone to gather from the extractor
+  | 'gather_select_drone'
+  | 'gather_select_gather'
+  | 'gather_select_target'
+  | 'gather_lock_in'
+  // When affordable: build a barracks
+  | 'barracks_select_drone'
+  | 'barracks_select_build'
+  | 'barracks_select_barracks'
+  | 'barracks_select_hex'
+  | 'barracks_lock_in'
   | null;
 
 export type Phase = 'planning' | 'temporal' | 'execution'
