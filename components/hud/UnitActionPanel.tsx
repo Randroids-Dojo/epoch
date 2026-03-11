@@ -91,10 +91,7 @@ export default function UnitActionPanel({
   );
   const unitOrders = gameState.players.player.unitOrders;
   const activeUnitId = getActiveUnitId(mode);
-  const hasDefaultUnits = playerUnits.some((u) => defaultIds.has(u.id));
-  const firstDefaultIdx = hasDefaultUnits
-    ? playerUnits.findIndex((u) => defaultIds.has(u.id))
-    : -1;
+  const firstDefaultIdx = playerUnits.findIndex((u) => defaultIds.has(u.id));
 
   // Scroll active card into view when it changes.
   const panelRef = useRef<HTMLDivElement>(null);
