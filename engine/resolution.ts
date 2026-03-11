@@ -870,6 +870,16 @@ function stepPostResolution(state: GameState, commands: CommandEntry[]): void {
     p.unitOrders = new Map();
     p.globalCommands = Array(p.commandSlots).fill(null);
     p.lockedIn = false;
+    p.defaultOrderUnitIds = new Set();
+
+    // Auto-populate gather orders for drones still assigned to extractors.
+    for (const unit of state.units.values()) {
+      if (unit.owner !== pid || unit.type !== 'drone' || !unit.assignedExtractorId) continue;
+      const extractor = state.structures.get(unit.assignedExtractorId);
+      if (!extractor) continue;
+      p.unitOrders.set(unit.id, { type: 'gather', unitId: unit.id, targetHex: extractor.hex });
+      p.defaultOrderUnitIds.add(unit.id);
+    }
   }
 
   // Recompute fog of war based on unit vision (collected above) + structure vision.

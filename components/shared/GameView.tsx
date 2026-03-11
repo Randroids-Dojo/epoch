@@ -474,6 +474,7 @@ export default function GameView() {
   const commitUnitOrder = useCallback((unitId: string, cmd: UnitCommand) => {
     const state = gameStateRef.current;
     state.players.player.unitOrders.set(unitId, cmd);
+    state.players.player.defaultOrderUnitIds.delete(unitId);
     setGameState({ ...state });
     setMode({ kind: 'idle' });
     audioEngine.playFillSlot(0);
@@ -483,6 +484,7 @@ export default function GameView() {
     const state = gameStateRef.current;
     if (state.players.player.lockedIn) return;
     state.players.player.unitOrders.delete(unitId);
+    state.players.player.defaultOrderUnitIds.delete(unitId);
     // If clearing a chrono_scout unit, clear the scout result
     // (chrono_scout is global, but handle defensively)
     setGameState({ ...state });

@@ -77,6 +77,8 @@ export interface PlayerState {
   epochAnchor: AnchorSnapshot | null;
   /** True once the player has used Timeline Fork this match (one use per match). */
   timelineForkUsed: boolean;
+  /** Unit IDs whose orders were auto-populated as default tasks (e.g. drones gathering). */
+  defaultOrderUnitIds: Set<string>;
 }
 
 export interface GameState {
@@ -210,6 +212,7 @@ export function createInitialState(seed?: number, difficulty: AIDifficulty = 'ad
       instabilityEpochsLeft: 0,
       epochAnchor:          null,
       timelineForkUsed:     false,
+      defaultOrderUnitIds:  new Set(),
     };
   };
 

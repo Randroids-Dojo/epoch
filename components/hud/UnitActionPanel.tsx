@@ -52,8 +52,12 @@ function orderLabel(cmd: UnitCommand): string {
 }
 
 /** Sort player units: drones first, then by unit ID for stable ordering. */
-function sortUnits(units: Unit[]): Unit[] {
+function sortUnits(units: Unit[], defaultIds: Set<string>): Unit[] {
   return [...units].sort((a, b) => {
+    // Default-order units sink to the bottom.
+    const aDef = defaultIds.has(a.id) ? 1 : 0;
+    const bDef = defaultIds.has(b.id) ? 1 : 0;
+    if (aDef !== bDef) return aDef - bDef;
     if (a.type === 'drone' && b.type !== 'drone') return -1;
     if (a.type !== 'drone' && b.type === 'drone') return 1;
     return a.id < b.id ? -1 : 1;
@@ -80,11 +84,17 @@ export default function UnitActionPanel({
   onUnitClick,
   onOrderClear,
 }: UnitActionPanelProps) {
+  const defaultIds = gameState.players.player.defaultOrderUnitIds;
   const playerUnits = sortUnits(
     [...gameState.units.values()].filter((u) => u.owner === 'player'),
+    defaultIds,
   );
   const unitOrders = gameState.players.player.unitOrders;
   const activeUnitId = getActiveUnitId(mode);
+  const hasDefaultUnits = playerUnits.some((u) => defaultIds.has(u.id));
+  const firstDefaultIdx = hasDefaultUnits
+    ? playerUnits.findIndex((u) => defaultIds.has(u.id))
+    : -1;
 
   // Scroll active card into view when it changes.
   const panelRef = useRef<HTMLDivElement>(null);
@@ -115,96 +125,117 @@ export default function UnitActionPanel({
         pointerEvents: 'auto',
       }}
     >
-      {playerUnits.map((unit) => {
+      {playerUnits.map((unit, idx) => {
         const order = unitOrders.get(unit.id);
+        const isDefault = defaultIds.has(unit.id);
         const isActive = activeUnitId === unit.id;
-        const def = UNIT_DEFS[unit.type];
-        const hpPct = Math.max(0, Math.min(1, unit.hp / def.maxHp));
+        const unitDef = UNIT_DEFS[unit.type];
+        const hpPct = Math.max(0, Math.min(1, unit.hp / unitDef.maxHp));
         const hpColor = hpPct > 0.6 ? '#22c55e' : hpPct > 0.3 ? '#fbbf24' : '#ef4444';
 
         return (
-          <div
-            key={unit.id}
-            data-testid={order ? undefined : 'unit-card-unassigned'}
-            ref={(el) => {
-              if (el) cardRefs.current.set(unit.id, el);
-              else cardRefs.current.delete(unit.id);
-            }}
-            onClick={() => !lockedIn && onUnitClick(unit.id)}
-            style={{
-              borderRadius: 5,
-              border: isActive
-                ? '1.5px solid #00d4ff'
-                : order
-                  ? '1px solid #1e3a4a'
-                  : '1px solid #334155',
-              background: isActive
-                ? 'rgba(0,212,255,0.08)'
-                : order
-                  ? 'rgba(15,25,40,0.7)'
-                  : 'rgba(20,32,50,0.85)',
-              boxShadow: isActive ? '0 0 8px rgba(0,212,255,0.25)' : undefined,
-              cursor: lockedIn ? 'not-allowed' : 'pointer',
-              opacity: lockedIn ? 0.5 : 1,
-              transition: 'border-color 0.15s ease, background 0.15s ease',
-              animation: !order && !isActive && !lockedIn ? 'pulse-border 2.5s ease-in-out infinite' : undefined,
-              overflow: 'hidden',
-              flexShrink: 0,
-            }}
-          >
-            {order ? (
-              // ── Compact assigned card ──────────────────────────────────────
+          <div key={unit.id}>
+            {/* Separator before default-task section */}
+            {idx === firstDefaultIdx && (
               <div
-                className="flex items-center justify-between px-2"
-                style={{ height: 32, gap: 4 }}
+                data-testid="default-task-separator"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 0',
+                  marginBottom: 4,
+                }}
               >
-                <span style={{ color: '#94a3b8', fontSize: '0.65rem', minWidth: 44, fontWeight: 600 }}>
-                  {UNIT_LABEL[unit.type] ?? unit.type}
+                <div style={{ flex: 1, height: 1, background: '#334155' }} />
+                <span style={{ color: '#475569', fontSize: '0.55rem', letterSpacing: '0.1em', whiteSpace: 'nowrap' }}>
+                  DEFAULT TASKS
                 </span>
-                <span style={{ color: '#00d4ff', fontSize: '0.65rem', fontWeight: 700 }}>
-                  {ORDER_BADGE[order.type]}
-                </span>
-                <span style={{ color: '#475569', fontSize: '0.6rem', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                  {orderLabel(order)}
-                </span>
-                {!lockedIn && (
-                  <span
-                    role="button"
-                    aria-label={`Clear order for ${UNIT_LABEL[unit.type]}`}
-                    onClick={(e) => { e.stopPropagation(); onOrderClear(unit.id); }}
-                    style={{
-                      color: '#475569',
-                      fontSize: '0.75rem',
-                      lineHeight: 1,
-                      cursor: 'pointer',
-                      padding: '0 2px',
-                      flexShrink: 0,
-                    }}
-                  >
-                    ×
-                  </span>
-                )}
-              </div>
-            ) : (
-              // ── Full unassigned card ───────────────────────────────────────
-              <div className="px-2 py-1.5" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div className="flex items-center justify-between">
-                  <span style={{ color: isActive ? '#00d4ff' : '#cbd5e1', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.05em' }}>
-                    {UNIT_LABEL[unit.type] ?? unit.type}
-                  </span>
-                  <span style={{ color: '#475569', fontSize: '0.6rem' }}>
-                    {unit.hp}/{def.maxHp}
-                  </span>
-                </div>
-                {/* HP bar */}
-                <div style={{ height: 3, background: '#1e293b', borderRadius: 2, overflow: 'hidden' }}>
-                  <div style={{ width: `${hpPct * 100}%`, height: '100%', background: hpColor, borderRadius: 2, transition: 'width 0.3s ease' }} />
-                </div>
-                <div style={{ color: '#334155', fontSize: '0.6rem', letterSpacing: '0.08em' }}>
-                  {isActive ? 'CHOOSE ACTION…' : 'TAP TO ASSIGN'}
-                </div>
+                <div style={{ flex: 1, height: 1, background: '#334155' }} />
               </div>
             )}
+            <div
+              data-testid={order ? (isDefault ? 'unit-card-default' : undefined) : 'unit-card-unassigned'}
+              ref={(el) => {
+                if (el) cardRefs.current.set(unit.id, el);
+                else cardRefs.current.delete(unit.id);
+              }}
+              onClick={() => !lockedIn && onUnitClick(unit.id)}
+              style={{
+                borderRadius: 5,
+                border: isActive
+                  ? '1.5px solid #00d4ff'
+                  : order
+                    ? isDefault ? '1px solid #1e3a3a' : '1px solid #1e3a4a'
+                    : '1px solid #334155',
+                background: isActive
+                  ? 'rgba(0,212,255,0.08)'
+                  : order
+                    ? isDefault ? 'rgba(12,20,32,0.6)' : 'rgba(15,25,40,0.7)'
+                    : 'rgba(20,32,50,0.85)',
+                boxShadow: isActive ? '0 0 8px rgba(0,212,255,0.25)' : undefined,
+                cursor: lockedIn ? 'not-allowed' : 'pointer',
+                opacity: lockedIn ? 0.5 : isDefault ? 0.7 : 1,
+                transition: 'border-color 0.15s ease, background 0.15s ease',
+                animation: !order && !isActive && !lockedIn ? 'pulse-border 2.5s ease-in-out infinite' : undefined,
+                overflow: 'hidden',
+                flexShrink: 0,
+              }}
+            >
+              {order ? (
+                // ── Compact assigned card ──────────────────────────────────────
+                <div
+                  className="flex items-center justify-between px-2"
+                  style={{ height: 32, gap: 4 }}
+                >
+                  <span style={{ color: isDefault ? '#64748b' : '#94a3b8', fontSize: '0.65rem', minWidth: 44, fontWeight: 600 }}>
+                    {UNIT_LABEL[unit.type] ?? unit.type}
+                  </span>
+                  <span style={{ color: isDefault ? '#0891b2' : '#00d4ff', fontSize: '0.65rem', fontWeight: 700 }}>
+                    {ORDER_BADGE[order.type]}
+                  </span>
+                  <span style={{ color: '#475569', fontSize: '0.6rem', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                    {orderLabel(order)}
+                  </span>
+                  {!lockedIn && (
+                    <span
+                      role="button"
+                      aria-label={`Clear order for ${UNIT_LABEL[unit.type]}`}
+                      onClick={(e) => { e.stopPropagation(); onOrderClear(unit.id); }}
+                      style={{
+                        color: '#475569',
+                        fontSize: '0.75rem',
+                        lineHeight: 1,
+                        cursor: 'pointer',
+                        padding: '0 2px',
+                        flexShrink: 0,
+                      }}
+                    >
+                      ×
+                    </span>
+                  )}
+                </div>
+              ) : (
+                // ── Full unassigned card ───────────────────────────────────────
+                <div className="px-2 py-1.5" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div className="flex items-center justify-between">
+                    <span style={{ color: isActive ? '#00d4ff' : '#cbd5e1', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.05em' }}>
+                      {UNIT_LABEL[unit.type] ?? unit.type}
+                    </span>
+                    <span style={{ color: '#475569', fontSize: '0.6rem' }}>
+                      {unit.hp}/{unitDef.maxHp}
+                    </span>
+                  </div>
+                  {/* HP bar */}
+                  <div style={{ height: 3, background: '#1e293b', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{ width: `${hpPct * 100}%`, height: '100%', background: hpColor, borderRadius: 2, transition: 'width 0.3s ease' }} />
+                  </div>
+                  <div style={{ color: '#334155', fontSize: '0.6rem', letterSpacing: '0.08em' }}>
+                    {isActive ? 'CHOOSE ACTION…' : 'TAP TO ASSIGN'}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         );
       })}
