@@ -434,6 +434,7 @@ export function drawUnits(
   ctx: CanvasRenderingContext2D,
   units: Map<string, Unit>,
   cam: Camera,
+  selectedUnitId?: string | null,
 ): void {
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
   const prevAlpha = ctx.globalAlpha;
@@ -447,6 +448,18 @@ export function drawUnits(
     ctx.globalAlpha = 0.85;
     paintUnit(ctx, sx, sy, r, unit.type, color);
     drawHpBar(ctx, sx, sy, r, unit.hp, UNIT_DEFS[unit.type].maxHp);
+
+    // Highlight ring for the selected/active unit.
+    if (unit.id === selectedUnitId) {
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = '#00d4ff';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.arc(sx, sy, r + 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }
 
   ctx.globalAlpha = prevAlpha;

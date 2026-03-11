@@ -166,7 +166,8 @@ export default function GameCanvas({
       drawAnimatedUnits(ctx, anim, cam, elapsed);
     } else {
       drawStructures(ctx, gs.structures, cam);
-      drawUnits(ctx, gs.units, cam);
+      const activeUnitId = ('unitId' in m) ? m.unitId : null;
+      drawUnits(ctx, gs.units, cam, activeUnitId);
     }
 
     // ── Temporal Echo overlay (planning phase only) ───────────────────────────
