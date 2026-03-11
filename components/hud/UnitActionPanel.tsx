@@ -10,6 +10,8 @@ interface UnitActionPanelProps {
   gameState: GameState;
   mode: InteractionMode;
   lockedIn: boolean;
+  /** Unit ID to highlight for tutorial guidance. */
+  tutorialHighlightUnitId?: string | null;
   onUnitClick(unitId: string): void;
   onOrderClear(unitId: string): void;
 }
@@ -82,6 +84,7 @@ export default function UnitActionPanel({
   gameState,
   mode,
   lockedIn,
+  tutorialHighlightUnitId,
   onUnitClick,
   onOrderClear,
 }: UnitActionPanelProps) {
@@ -127,6 +130,7 @@ export default function UnitActionPanel({
         const order = unitOrders.get(unit.id);
         const isDefault = defaultIds.has(unit.id);
         const isActive = activeUnitId === unit.id;
+        const isTutorialTarget = tutorialHighlightUnitId === unit.id;
         const unitDef = UNIT_DEFS[unit.type];
         const hpPct = Math.max(0, Math.min(1, unit.hp / unitDef.maxHp));
         const hpColor = hpPct > 0.6 ? '#22c55e' : hpPct > 0.3 ? '#fbbf24' : '#ef4444';
@@ -154,6 +158,7 @@ export default function UnitActionPanel({
             )}
             <div
               data-testid={order ? (isDefault ? 'unit-card-default' : undefined) : 'unit-card-unassigned'}
+              className={isTutorialTarget ? 'tutorial-highlight' : undefined}
               ref={(el) => {
                 if (el) cardRefs.current.set(unit.id, el);
                 else cardRefs.current.delete(unit.id);
@@ -175,11 +180,17 @@ export default function UnitActionPanel({
                 cursor: lockedIn ? 'not-allowed' : 'pointer',
                 opacity: lockedIn ? 0.5 : isDefault ? 0.7 : 1,
                 transition: 'border-color 0.15s ease, background 0.15s ease',
-                animation: !order && !isActive && !lockedIn ? 'pulse-border 2.5s ease-in-out infinite' : undefined,
+                animation: !order && !isActive && !lockedIn && !isTutorialTarget ? 'pulse-border 2.5s ease-in-out infinite' : undefined,
                 overflow: 'hidden',
                 flexShrink: 0,
+                position: isTutorialTarget ? 'relative' as const : undefined,
               }}
             >
+              {isTutorialTarget && (
+                <span className="tutorial-tooltip" style={{ top: -22, left: 4 }}>
+                  TAP THIS DRONE
+                </span>
+              )}
               {order ? (
                 // ── Compact assigned card ──────────────────────────────────────
                 <div

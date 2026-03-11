@@ -26,7 +26,7 @@ import { generateAICommands } from '@/engine/ai';
 import { isComplete, STRUCTURE_DEFS } from '@/engine/structures';
 import { PlayerId } from '@/engine/player';
 import { COLORS, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
-import { InteractionMode } from '@/lib/types';
+import { InteractionMode, TutorialStep } from '@/lib/types';
 import { Unit, UNIT_DEFS } from '@/engine/units';
 import { findUnitAt } from '@/engine/state';
 import { getPlayerTrainEligibility, getTrainFailureReason } from './trainFlow';
@@ -80,6 +80,9 @@ export default function GameView() {
   const [cameraSnapshot, setCameraSnapshot] = useState<CameraSnapshot | null>(null);
   const [centerRequest, setCenterRequest] = useState<{ nonce: number; worldX: number; worldY: number } | null>(null);
   const centerNonceRef = useRef(0);
+
+  // ── Tutorial state ──────────────────────────────────────────────────────
+  const [tutorialStep, setTutorialStep] = useState<TutorialStep>('select_drone');
 
   // ── Timeline Fork + Chrono Scout state ────────────────────────────────────
   const [timelineForkResult, setTimelineForkResult] = useState<TimelineForkResult | null>(null);
@@ -161,6 +164,63 @@ export default function GameView() {
   const instabilityTier = gameState.players.player.instabilityTier;
   const instabilityEpochsLeft = gameState.players.player.instabilityEpochsLeft;
   const buildOptions = playerTechTier >= 2 ? TIER2_BUILD_OPTIONS : playerTechTier >= 1 ? TIER1_BUILD_OPTIONS : BASE_BUILD_OPTIONS;
+
+  // ── Tutorial auto-advance ─────────────────────────────────────────────────
+  // Tutorial is active only on epoch 1 when the player hasn't built a crystal extractor yet.
+  const tutorialActive = tutorialStep !== null && gameState.epoch === 1;
+
+  // Find the first idle drone for tutorial targeting.
+  const tutorialDroneId = useMemo(() => {
+    if (!tutorialActive) return null;
+    for (const u of gameState.units.values()) {
+      if (u.owner === 'player' && u.type === 'drone' && !gameState.players.player.unitOrders.has(u.id)) return u.id;
+    }
+    // Fallback to any player drone.
+    for (const u of gameState.units.values()) {
+      if (u.owner === 'player' && u.type === 'drone') return u.id;
+    }
+    return null;
+  }, [tutorialActive, gameState]);
+
+  useEffect(() => {
+    if (!tutorialActive) return;
+
+    switch (tutorialStep) {
+      case 'select_drone':
+        // Advance when a unit picker opens for a drone.
+        if (mode.kind === 'unit_picker_open') {
+          const u = gameState.units.get(mode.unitId);
+          if (u?.type === 'drone') setTutorialStep('select_build');
+        }
+        break;
+      case 'select_build':
+        if (mode.kind === 'build_select') setTutorialStep('select_extractor');
+        break;
+      case 'select_extractor':
+        if (mode.kind === 'build_targeting' && mode.structureType === 'crystal_extractor') {
+          setTutorialStep('select_hex');
+        }
+        break;
+      case 'select_hex': {
+        // Advance once a build order for crystal_extractor is committed.
+        for (const cmd of gameState.players.player.unitOrders.values()) {
+          if (cmd.type === 'build' && cmd.structureType === 'crystal_extractor') {
+            setTutorialStep('lock_in');
+            break;
+          }
+        }
+        break;
+      }
+      case 'lock_in':
+        if (lockedIn) setTutorialStep(null);
+        break;
+    }
+  }, [tutorialActive, tutorialStep, mode, gameState, lockedIn]);
+
+  // Dismiss tutorial once we leave epoch 1.
+  useEffect(() => {
+    if (gameState.epoch > 1 && tutorialStep !== null) setTutorialStep(null);
+  }, [gameState.epoch, tutorialStep]);
 
   // ── Execution animation ref ───────────────────────────────────────────────
   const animationRef = useRef<ExecutionAnimation | null>(null);
@@ -900,6 +960,7 @@ export default function GameView() {
             gameState={gameState}
             mode={mode}
             lockedIn={lockedIn}
+            tutorialHighlightUnitId={tutorialStep === 'select_drone' ? tutorialDroneId : null}
             onUnitClick={handleUnitCardClick}
             onOrderClear={handleUnitOrderClear}
           />
@@ -934,6 +995,7 @@ export default function GameView() {
             canGather={unitPickerProps.canGather}
             canBuild={unitPickerProps.canBuild}
             canChronoShift={unitPickerProps.canChronoShift}
+            tutorialHighlightType={tutorialStep === 'select_build' ? 'build' : undefined}
             onSelect={handleCommandPick}
             onEpochAnchorAction={handleEpochAnchorAction}
             onClose={() => setMode({ kind: 'idle' })}
@@ -1030,6 +1092,7 @@ export default function GameView() {
               const isEnabled = ccOk && fxOk;
               const costLabel = sDef.costFX > 0 ? `${sDef.costCC}CC ${sDef.costFX}FX` : `${sDef.costCC}CC`;
               const disabledLabel = !ccOk ? 'no CC' : !fxOk ? 'no FX' : undefined;
+              const isTutorial = tutorialStep === 'select_extractor' && opt === 'crystal_extractor';
               return (
                 <button
                   key={opt}
@@ -1038,18 +1101,20 @@ export default function GameView() {
                   disabled={!isEnabled}
                   title={disabledLabel}
                   onClick={() => isEnabled && handleBuildStructureSelect(opt)}
-                  className="flex w-full items-center justify-between px-3 py-2 text-left"
+                  className={`flex w-full items-center justify-between px-3 py-2 text-left${isTutorial ? ' tutorial-highlight' : ''}`}
                   style={{
                     border: 'none',
                     background: 'transparent',
                     color: isEnabled ? '#e2e8f0' : '#334155',
                     cursor: isEnabled ? 'pointer' : 'not-allowed',
+                    position: isTutorial ? 'relative' as const : undefined,
                   }}
                 >
                   <span>{sDef.label}</span>
                   <span style={{ color: isEnabled ? '#fbbf24' : '#334155', fontSize: '0.6rem', marginLeft: 16 }}>
                     {disabledLabel ?? costLabel}
                   </span>
+                  {isTutorial && <span className="tutorial-tooltip" style={{ top: -20, left: 4 }}>BUILD THIS</span>}
                 </button>
               );
             })}
@@ -1188,6 +1253,7 @@ export default function GameView() {
           lockInFlash={lockInFlash}
           isMobile={isMobile}
           forkMode={timelineForkActive}
+          tutorialHighlightLockIn={tutorialStep === 'lock_in'}
           onSlotClick={handleGlobalSlotClick}
           onSlotClear={handleGlobalSlotClear}
           onLockIn={handleLockIn}

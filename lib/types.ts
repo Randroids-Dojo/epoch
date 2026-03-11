@@ -45,6 +45,17 @@ export type InteractionMode =
       failureFeedback: string | null;
     }
 
+// ── Tutorial Steps ───────────────────────────────────────────────────────────
+
+/** Steps for the epoch-1 build-extractor tutorial. null = tutorial complete/inactive. */
+export type TutorialStep =
+  | 'select_drone'
+  | 'select_build'
+  | 'select_extractor'
+  | 'select_hex'
+  | 'lock_in'
+  | null;
+
 export type Phase = 'planning' | 'temporal' | 'execution'
 
 export interface PlayerResources {
