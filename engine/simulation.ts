@@ -64,6 +64,7 @@ function copyPlayer(p: PlayerState): PlayerState {
     globalCommands: [...p.globalCommands] as Array<GlobalCommand | null>,
     temporalEpochCounts: [...p.temporalEpochCounts],
     epochAnchor: p.epochAnchor ? copyAnchor(p.epochAnchor) : null,
+    defaultOrderUnitIds: new Set(p.defaultOrderUnitIds),
   };
 }
 

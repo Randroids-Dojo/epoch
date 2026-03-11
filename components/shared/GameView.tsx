@@ -14,6 +14,11 @@ import { runTimelineForkSimulation, computeChronoScout, TimelineForkResult, Chro
 import {
   computeEligibleHexes,
   computeEligibleBuildHexes,
+  computeUnitMoveTargets,
+  computeUnitAttackTargets,
+  computeUnitPhaseSurgeTargets,
+  computeUnitBuildTargets,
+  computeUnitGatherTargets,
   TargetingCommandType,
   BuildStructureType,
 } from '@/engine/targeting';
@@ -21,7 +26,7 @@ import { generateAICommands } from '@/engine/ai';
 import { isComplete, STRUCTURE_DEFS } from '@/engine/structures';
 import { PlayerId } from '@/engine/player';
 import { COLORS, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
-import { InteractionMode } from '@/lib/types';
+import { InteractionMode, TutorialStep } from '@/lib/types';
 import { Unit, UNIT_DEFS } from '@/engine/units';
 import { findUnitAt } from '@/engine/state';
 import { getPlayerTrainEligibility, getTrainFailureReason } from './trainFlow';
@@ -41,6 +46,8 @@ import UnitActionPanel from '../hud/UnitActionPanel';
 import GameStatsPanel from '../hud/GameStatsPanel';
 import ExecutionOverlay from '../hud/ExecutionOverlay';
 import Minimap from '../hud/Minimap';
+import HexTargetPicker from '../hud/HexTargetPicker';
+import GatherTargetPicker from '../hud/GatherTargetPicker';
 
 const PLANNING_DURATION = GAME_CONSTANTS.PLANNING_PHASE_DURATION_MS / 1000;
 const BASE_BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks', 'tech_lab', 'watchtower'];
@@ -73,6 +80,9 @@ export default function GameView() {
   const [cameraSnapshot, setCameraSnapshot] = useState<CameraSnapshot | null>(null);
   const [centerRequest, setCenterRequest] = useState<{ nonce: number; worldX: number; worldY: number } | null>(null);
   const centerNonceRef = useRef(0);
+
+  // ── Tutorial state ──────────────────────────────────────────────────────
+  const [tutorialStep, setTutorialStep] = useState<TutorialStep>('select_drone');
 
   // ── Timeline Fork + Chrono Scout state ────────────────────────────────────
   const [timelineForkResult, setTimelineForkResult] = useState<TimelineForkResult | null>(null);
@@ -154,6 +164,164 @@ export default function GameView() {
   const instabilityTier = gameState.players.player.instabilityTier;
   const instabilityEpochsLeft = gameState.players.player.instabilityEpochsLeft;
   const buildOptions = playerTechTier >= 2 ? TIER2_BUILD_OPTIONS : playerTechTier >= 1 ? TIER1_BUILD_OPTIONS : BASE_BUILD_OPTIONS;
+
+  // ── Tutorial auto-advance ─────────────────────────────────────────────────
+  const tutorialActive = tutorialStep !== null;
+
+  // Find the first idle drone for tutorial targeting.
+  const tutorialDroneId = useMemo(() => {
+    if (!tutorialActive) return null;
+    for (const u of gameState.units.values()) {
+      if (u.owner === 'player' && u.type === 'drone' && !gameState.players.player.unitOrders.has(u.id)) return u.id;
+    }
+    // Fallback to any player drone.
+    for (const u of gameState.units.values()) {
+      if (u.owner === 'player' && u.type === 'drone') return u.id;
+    }
+    return null;
+  }, [tutorialActive, gameState]);
+
+  // When lock-in completes, decide the next tutorial phase for the upcoming epoch.
+  const prevLockedInRef = useRef(false);
+  useEffect(() => {
+    if (!tutorialActive) { prevLockedInRef.current = lockedIn; return; }
+
+    // Detect rising edge of lockedIn → true.
+    const justLocked = lockedIn && !prevLockedInRef.current;
+    prevLockedInRef.current = lockedIn;
+    if (!justLocked) return;
+
+    switch (tutorialStep) {
+      case 'lock_in':
+        // Barracks is building — next epoch build the extractor.
+        setTutorialStep('extractor_select_drone');
+        break;
+      case 'extractor_lock_in':
+        // Both buildings constructing — next epoch just lock in.
+        setTutorialStep('wait_lock_in');
+        break;
+      case 'wait_lock_in':
+        // Extractor should be done — teach gather + train on same turn.
+        setTutorialStep('gather_select_drone');
+        break;
+      case 'train_lock_in':
+        setTutorialStep(null); // tutorial complete
+        break;
+    }
+  }, [tutorialActive, tutorialStep, lockedIn, gameState]);
+
+  // Mode-driven step advancement (runs on mode / gameState changes).
+  useEffect(() => {
+    if (!tutorialActive) return;
+
+    switch (tutorialStep) {
+      // ── Phase 1: build barracks ─────────────────────────────
+      case 'select_drone':
+        if (mode.kind === 'unit_picker_open') {
+          const u = gameState.units.get(mode.unitId);
+          if (u?.type === 'drone') setTutorialStep('select_build');
+        }
+        break;
+      case 'select_build':
+        if (mode.kind === 'build_select') setTutorialStep('select_barracks');
+        break;
+      case 'select_barracks':
+        if (mode.kind === 'build_targeting' && mode.structureType === 'barracks') {
+          setTutorialStep('select_hex');
+        }
+        break;
+      case 'select_hex':
+        for (const cmd of gameState.players.player.unitOrders.values()) {
+          if (cmd.type === 'build' && cmd.structureType === 'barracks') {
+            setTutorialStep('lock_in');
+            break;
+          }
+        }
+        break;
+
+      // ── Phase 2: build extractor ────────────────────────────
+      case 'extractor_select_drone':
+        if (mode.kind === 'unit_picker_open') {
+          const u = gameState.units.get(mode.unitId);
+          if (u?.type === 'drone') setTutorialStep('extractor_select_build');
+        }
+        break;
+      case 'extractor_select_build':
+        if (mode.kind === 'build_select') setTutorialStep('extractor_select_extractor');
+        break;
+      case 'extractor_select_extractor':
+        if (mode.kind === 'build_targeting' && mode.structureType === 'crystal_extractor') {
+          setTutorialStep('extractor_select_hex');
+        }
+        break;
+      case 'extractor_select_hex':
+        for (const cmd of gameState.players.player.unitOrders.values()) {
+          if (cmd.type === 'build' && cmd.structureType === 'crystal_extractor') {
+            // Guide to training a sentry if barracks is ready and player can afford it.
+            const canTrainSentry =
+              getPlayerTrainEligibility(gameState).length > 0 &&
+              gameState.players.player.resources.cc >= UNIT_DEFS.pulse_sentry.costCC;
+            setTutorialStep(canTrainSentry ? 'extractor_train_select_slot' : 'extractor_lock_in');
+            break;
+          }
+        }
+        break;
+
+      // ── Phase 2b: train a sentry after extractor (if affordable) ─
+      case 'extractor_train_select_slot':
+        if (mode.kind === 'global_picker_open') setTutorialStep('extractor_train_select_train');
+        break;
+      case 'extractor_train_select_train':
+        if (mode.kind === 'train_picker') setTutorialStep('extractor_train_select_sentry');
+        break;
+      case 'extractor_train_select_sentry': {
+        for (const cmd of gameState.players.player.globalCommands) {
+          if (cmd?.type === 'train' && cmd.unitType === 'pulse_sentry') {
+            setTutorialStep('extractor_lock_in');
+            break;
+          }
+        }
+        break;
+      }
+
+      // ── Phase 4: gather then train (same turn) ─────────────
+      case 'gather_select_drone':
+        if (mode.kind === 'unit_picker_open') {
+          const u = gameState.units.get(mode.unitId);
+          if (u?.type === 'drone') setTutorialStep('gather_select_gather');
+        }
+        break;
+      case 'gather_select_gather':
+        if (mode.kind === 'gather_picker') setTutorialStep('gather_select_target');
+        break;
+      case 'gather_select_target':
+        for (const cmd of gameState.players.player.unitOrders.values()) {
+          if (cmd.type === 'gather') {
+            // Gather is set — now guide to the global tray to train.
+            setTutorialStep('train_select_slot');
+            break;
+          }
+        }
+        break;
+
+      // ── Train a Pulse Sentry (continues same turn) ─────────
+      case 'train_select_slot':
+        if (mode.kind === 'global_picker_open') setTutorialStep('train_select_train');
+        break;
+      case 'train_select_train':
+        if (mode.kind === 'train_picker') setTutorialStep('train_select_sentry');
+        break;
+      case 'train_select_sentry': {
+        for (const cmd of gameState.players.player.globalCommands) {
+          if (cmd?.type === 'train' && cmd.unitType === 'pulse_sentry') {
+            setTutorialStep('train_lock_in');
+            break;
+          }
+        }
+        break;
+      }
+    }
+  }, [tutorialActive, tutorialStep, mode, gameState]);
 
   // ── Execution animation ref ───────────────────────────────────────────────
   const animationRef = useRef<ExecutionAnimation | null>(null);
@@ -474,6 +642,7 @@ export default function GameView() {
   const commitUnitOrder = useCallback((unitId: string, cmd: UnitCommand) => {
     const state = gameStateRef.current;
     state.players.player.unitOrders.set(unitId, cmd);
+    state.players.player.defaultOrderUnitIds.delete(unitId);
     setGameState({ ...state });
     setMode({ kind: 'idle' });
     audioEngine.playFillSlot(0);
@@ -483,6 +652,7 @@ export default function GameView() {
     const state = gameStateRef.current;
     if (state.players.player.lockedIn) return;
     state.players.player.unitOrders.delete(unitId);
+    state.players.player.defaultOrderUnitIds.delete(unitId);
     // If clearing a chrono_scout unit, clear the scout result
     // (chrono_scout is global, but handle defensively)
     setGameState({ ...state });
@@ -494,7 +664,13 @@ export default function GameView() {
     const state = gameStateRef.current;
     if (state.players.player.lockedIn) return;
     setMode({ kind: 'unit_picker_open', unitId });
-  }, []);
+    // Pan camera to the selected unit so the highlight is visible.
+    const unit = state.units.get(unitId);
+    if (unit) {
+      const wp = hexToPixel(unit.hex, BASE_HEX_SIZE);
+      queueRecenter(wp.x, wp.y);
+    }
+  }, [queueRecenter]);
 
   // ── Global slot helpers ───────────────────────────────────────────────────
   const handleGlobalSlotClick = useCallback((i: number) => {
@@ -559,15 +735,26 @@ export default function GameView() {
       }
 
       if (type === 'phase_surge') {
-        const eligibleKeys = computeEligibleHexes(state, 'phase_surge');
+        const eligibleKeys = computeUnitPhaseSurgeTargets(state, unit);
         setMode({ kind: 'targeting', unitId, commandType: 'phase_surge', eligibleKeys });
         return;
       }
 
-      if (type === 'move' || type === 'attack' || type === 'gather') {
-        const cmdType = type as TargetingCommandType;
-        const eligibleKeys = computeEligibleHexes(state, cmdType);
-        setMode({ kind: 'targeting', unitId, commandType: cmdType, eligibleKeys });
+      if (type === 'gather') {
+        const targets = computeUnitGatherTargets(state, unit);
+        setMode({ kind: 'gather_picker', unitId, targets });
+        return;
+      }
+
+      if (type === 'move') {
+        const eligibleKeys = computeUnitMoveTargets(state, unit);
+        setMode({ kind: 'targeting', unitId, commandType: 'move', eligibleKeys });
+        return;
+      }
+
+      if (type === 'attack') {
+        const eligibleKeys = computeUnitAttackTargets(state, unit);
+        setMode({ kind: 'targeting', unitId, commandType: 'attack', eligibleKeys });
         return;
       }
 
@@ -654,7 +841,11 @@ export default function GameView() {
     const m = modeRef.current;
     if (m.kind !== 'build_select') return;
 
-    const eligibleKeys = computeEligibleBuildHexes(gameStateRef.current);
+    const state = gameStateRef.current;
+    const unit = state.units.get(m.unitId);
+    const eligibleKeys = unit
+      ? computeUnitBuildTargets(state, unit, structureType)
+      : computeEligibleBuildHexes(state);
     setMode({
       kind: 'build_targeting',
       unitId: m.unitId,
@@ -662,6 +853,28 @@ export default function GameView() {
       eligibleKeys,
     });
   }, []);
+
+  const handleGatherSelect = useCallback((hex: Hex) => {
+    const m = modeRef.current;
+    if (m.kind !== 'gather_picker') return;
+    commitUnitOrder(m.unitId, { type: 'gather', unitId: m.unitId, targetHex: hex });
+  }, [commitUnitOrder]);
+
+  const handleHexTargetSelect = useCallback((hex: Hex) => {
+    const m = modeRef.current;
+    if (m.kind === 'targeting') {
+      const { unitId, commandType } = m;
+      if (commandType === 'move') {
+        commitUnitOrder(unitId, { type: 'move', unitId, targetHex: hex });
+      } else if (commandType === 'attack') {
+        commitUnitOrder(unitId, { type: 'attack', unitId, targetHex: hex });
+      } else if (commandType === 'phase_surge') {
+        commitUnitOrder(unitId, { type: 'phase_surge', unitId, targetHex: hex });
+      }
+    } else if (m.kind === 'build_targeting') {
+      commitUnitOrder(m.unitId, { type: 'build', unitId: m.unitId, structureType: m.structureType, targetHex: hex });
+    }
+  }, [commitUnitOrder]);
 
   const handleTrainPick = useCallback((unitType: import('@/engine/units').UnitType) => {
     const m = modeRef.current;
@@ -789,7 +1002,7 @@ export default function GameView() {
   // ── Unit picker props (derived from current mode) ─────────────────────────
   const activeUnitId =
     mode.kind === 'unit_picker_open' ? mode.unitId :
-    mode.kind === 'targeting' || mode.kind === 'build_select' || mode.kind === 'build_targeting' ? mode.unitId :
+    mode.kind === 'targeting' || mode.kind === 'build_select' || mode.kind === 'build_targeting' || mode.kind === 'gather_picker' ? mode.unitId :
     null;
 
   const unitForPicker = activeUnitId ? gameState.units.get(activeUnitId) : null;
@@ -848,6 +1061,10 @@ export default function GameView() {
             gameState={gameState}
             mode={mode}
             lockedIn={lockedIn}
+            tutorialHighlightUnitId={
+              tutorialStep === 'select_drone' || tutorialStep === 'extractor_select_drone' || tutorialStep === 'gather_select_drone'
+                ? tutorialDroneId : null
+            }
             onUnitClick={handleUnitCardClick}
             onOrderClear={handleUnitOrderClear}
           />
@@ -882,6 +1099,11 @@ export default function GameView() {
             canGather={unitPickerProps.canGather}
             canBuild={unitPickerProps.canBuild}
             canChronoShift={unitPickerProps.canChronoShift}
+            tutorialHighlightType={
+              tutorialStep === 'select_build' || tutorialStep === 'extractor_select_build' ? 'build'
+              : tutorialStep === 'gather_select_gather' ? 'gather'
+              : undefined
+            }
             onSelect={handleCommandPick}
             onEpochAnchorAction={handleEpochAnchorAction}
             onClose={() => setMode({ kind: 'idle' })}
@@ -909,6 +1131,7 @@ export default function GameView() {
             canTimelineFork={canTimelineFork}
             timelineForkDisabledReason={timelineForkDisabledReason}
             canChronoScout={canChronoScout}
+            tutorialHighlightType={tutorialStep === 'train_select_train' || tutorialStep === 'extractor_train_select_train' ? 'train' : undefined}
             onSelect={handleCommandPick}
             onEpochAnchorAction={handleEpochAnchorAction}
             onClose={() => setMode({ kind: 'idle' })}
@@ -943,6 +1166,7 @@ export default function GameView() {
                 : undefined
             }
             feedback={mode.failureFeedback}
+            tutorialHighlightUnitType={tutorialStep === 'train_select_sentry' || tutorialStep === 'extractor_train_select_sentry' ? 'pulse_sentry' : undefined}
             onSelect={handleCommandPick}
             onEpochAnchorAction={handleEpochAnchorAction}
             onTrainSelect={handleTrainPick}
@@ -978,6 +1202,9 @@ export default function GameView() {
               const isEnabled = ccOk && fxOk;
               const costLabel = sDef.costFX > 0 ? `${sDef.costCC}CC ${sDef.costFX}FX` : `${sDef.costCC}CC`;
               const disabledLabel = !ccOk ? 'no CC' : !fxOk ? 'no FX' : undefined;
+              const isTutorial =
+                (tutorialStep === 'select_barracks' && opt === 'barracks') ||
+                (tutorialStep === 'extractor_select_extractor' && opt === 'crystal_extractor');
               return (
                 <button
                   key={opt}
@@ -986,21 +1213,66 @@ export default function GameView() {
                   disabled={!isEnabled}
                   title={disabledLabel}
                   onClick={() => isEnabled && handleBuildStructureSelect(opt)}
-                  className="flex w-full items-center justify-between px-3 py-2 text-left"
+                  className={`flex w-full items-center justify-between px-3 py-2 text-left${isTutorial ? ' tutorial-highlight' : ''}`}
                   style={{
                     border: 'none',
                     background: 'transparent',
                     color: isEnabled ? '#e2e8f0' : '#334155',
                     cursor: isEnabled ? 'pointer' : 'not-allowed',
+                    position: isTutorial ? 'relative' as const : undefined,
                   }}
                 >
                   <span>{sDef.label}</span>
                   <span style={{ color: isEnabled ? '#fbbf24' : '#334155', fontSize: '0.6rem', marginLeft: 16 }}>
                     {disabledLabel ?? costLabel}
                   </span>
+                  {isTutorial && <span className="tutorial-tooltip" style={{ top: -20, left: 4 }}>BUILD THIS</span>}
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {/* Hex target picker for move/attack targeting */}
+        {mode.kind === 'targeting' && !isExecuting && unitForPicker && (mode.commandType === 'move' || mode.commandType === 'attack') && (
+          <div style={{ position: 'absolute', top: unitPickerTop, left: 188 }}>
+            <HexTargetPicker
+              unitHex={unitForPicker.hex}
+              radius={mode.commandType === 'move'
+                ? UNIT_DEFS[unitForPicker.type].speed
+                : UNIT_DEFS[unitForPicker.type].speed + UNIT_DEFS[unitForPicker.type].range
+              }
+              eligibleKeys={mode.eligibleKeys}
+              header={mode.commandType === 'move' ? 'MOVE TARGET' : 'ATTACK TARGET'}
+              onSelect={handleHexTargetSelect}
+              onClose={() => setMode({ kind: 'idle' })}
+            />
+          </div>
+        )}
+
+        {/* Hex target picker for build placement */}
+        {mode.kind === 'build_targeting' && !isExecuting && unitForPicker && (
+          <div style={{ position: 'absolute', top: unitPickerTop, left: 188 }}>
+            <HexTargetPicker
+              unitHex={unitForPicker.hex}
+              radius={UNIT_DEFS[unitForPicker.type].speed}
+              eligibleKeys={mode.eligibleKeys}
+              header="BUILD LOCATION"
+              onSelect={handleHexTargetSelect}
+              onClose={() => setMode({ kind: 'idle' })}
+            />
+          </div>
+        )}
+
+        {/* Gather target list picker */}
+        {mode.kind === 'gather_picker' && !isExecuting && (
+          <div style={{ position: 'absolute', top: unitPickerTop, left: 188 }}>
+            <GatherTargetPicker
+              targets={mode.targets}
+              tutorialHighlight={tutorialStep === 'gather_select_target'}
+              onSelect={handleGatherSelect}
+              onClose={() => setMode({ kind: 'idle' })}
+            />
           </div>
         )}
 
@@ -1094,6 +1366,13 @@ export default function GameView() {
           lockInFlash={lockInFlash}
           isMobile={isMobile}
           forkMode={timelineForkActive}
+          tutorialHighlightLockIn={
+            tutorialStep === 'lock_in' ||
+            tutorialStep === 'extractor_lock_in' ||
+            tutorialStep === 'wait_lock_in' ||
+            tutorialStep === 'train_lock_in'
+          }
+          tutorialHighlightSlot={tutorialStep === 'train_select_slot' || tutorialStep === 'extractor_train_select_slot'}
           onSlotClick={handleGlobalSlotClick}
           onSlotClear={handleGlobalSlotClear}
           onLockIn={handleLockIn}

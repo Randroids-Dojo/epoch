@@ -28,7 +28,7 @@ export interface StructureDef {
 
 export const STRUCTURE_DEFS: Readonly<Record<StructureType, StructureDef>> = {
   command_nexus:     { type: 'command_nexus',     label: 'Command Nexus',     costCC: 0,  costFX: 0, techTierRequired: 0, maxHp: 100, buildEpochs: 0, visionRadius: 3 },
-  crystal_extractor: { type: 'crystal_extractor', label: 'Crystal Extractor', costCC: 3,  costFX: 0, techTierRequired: 0, maxHp: 30,  buildEpochs: 1, visionRadius: 0 },
+  crystal_extractor: { type: 'crystal_extractor', label: 'Crystal Extractor', costCC: 0,  costFX: 0, techTierRequired: 0, maxHp: 30,  buildEpochs: 1, visionRadius: 0 },
   barracks:          { type: 'barracks',          label: 'Barracks',          costCC: 5,  costFX: 0, techTierRequired: 0, maxHp: 40,  buildEpochs: 1, visionRadius: 0 },
   tech_lab:          { type: 'tech_lab',          label: 'Tech Lab',          costCC: 6,  costFX: 0, techTierRequired: 0, maxHp: 35,  buildEpochs: 1, visionRadius: 0 },
   watchtower:        { type: 'watchtower',        label: 'Watchtower',        costCC: 3,  costFX: 0, techTierRequired: 0, maxHp: 20,  buildEpochs: 1, visionRadius: 4 },

@@ -532,6 +532,13 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
       log.push(`${owner} Build ${command.structureType} failed — impassable hex`);
       continue;
     }
+    // Crystal Extractor must be on a Crystal Node.
+    if (command.structureType === 'crystal_extractor') {
+      if (cell.terrain !== 'crystal_node') {
+        log.push(`${owner} Build crystal_extractor failed — must be on a Crystal Node`);
+        continue;
+      }
+    }
     // Flux Conduit must be on or adjacent to a Flux Vent.
     if (command.structureType === 'flux_conduit') {
       const onVent = cell.terrain === 'flux_vent';
@@ -547,6 +554,32 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
 
     player.resources.cc -= def.costCC;
     player.resources.fx -= def.costFX;
+
+    // Move the drone adjacent to the build site when building at range > 1.
+    const dist = hexDistance(drone.hex, command.targetHex);
+    if (dist > 1) {
+      // Pick the neighbor of the target hex closest to the drone's current position.
+      const neighbors = hexNeighbors(command.targetHex);
+      let bestHex = drone.hex;
+      let bestDist = Infinity;
+      for (const nb of neighbors) {
+        const d = hexDistance(drone.hex, nb);
+        const nbKey = hexKey(nb);
+        const cell2 = state.map.cells.get(nbKey);
+        if (!cell2 || !TERRAIN[cell2.terrain].passable) continue;
+        if (findUnitAt(state, nb)) continue;
+        if (findStructureAt(state, nb)) continue;
+        if (d < bestDist) {
+          bestDist = d;
+          bestHex = nb;
+        }
+      }
+      if (!hexEqual(bestHex, drone.hex)) {
+        drone.hex = bestHex;
+        log.push(`${owner} Drone moved to (${bestHex.q},${bestHex.r}) for build`);
+      }
+    }
+
     const id = newId('s');
     state.structures.set(id, {
       id,
@@ -870,6 +903,16 @@ function stepPostResolution(state: GameState, commands: CommandEntry[]): void {
     p.unitOrders = new Map();
     p.globalCommands = Array(p.commandSlots).fill(null);
     p.lockedIn = false;
+    p.defaultOrderUnitIds = new Set();
+
+    // Auto-populate gather orders for drones still assigned to extractors.
+    for (const unit of state.units.values()) {
+      if (unit.owner !== pid || unit.type !== 'drone' || !unit.assignedExtractorId) continue;
+      const extractor = state.structures.get(unit.assignedExtractorId);
+      if (!extractor) continue;
+      p.unitOrders.set(unit.id, { type: 'gather', unitId: unit.id, targetHex: extractor.hex });
+      p.defaultOrderUnitIds.add(unit.id);
+    }
   }
 
   // Recompute fog of war based on unit vision (collected above) + structure vision.

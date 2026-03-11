@@ -1,7 +1,8 @@
 import { GameState, getOldestSnapshot } from './state';
 import { Unit, UNIT_DEFS } from './units';
-import { hexKey } from './hex';
+import { Hex, hexKey, hexDistance, hexesInRange, hexNeighbors } from './hex';
 import { TERRAIN } from './terrain';
+import { PHASE_SURGE_SPEED_BONUS } from './commands';
 import { StructureType, isComplete, isHarvestable } from './structures';
 
 export type TargetingCommandType = 'move' | 'attack' | 'gather' | 'defend' | 'chrono_shift' | 'phase_surge';
@@ -122,4 +123,132 @@ export function computeEligibleBuildHexes(
   }
 
   return eligible;
+}
+
+// ── Range-limited targeting for in-panel pickers ─────────────────────────────
+
+/** Eligible hexes within a unit's movement range (speed). */
+export function computeUnitMoveTargets(
+  state: GameState,
+  unit: Unit,
+): Set<string> {
+  const range = UNIT_DEFS[unit.type].speed;
+  const allEligible = computeEligibleHexes(state, 'move');
+  const inRange = new Set<string>();
+  for (const hex of hexesInRange(unit.hex, range)) {
+    const key = hexKey(hex);
+    if (allEligible.has(key)) inRange.add(key);
+  }
+  return inRange;
+}
+
+/** Eligible hexes within a unit's attack range from its current position. */
+export function computeUnitAttackTargets(
+  state: GameState,
+  unit: Unit,
+): Set<string> {
+  const def = UNIT_DEFS[unit.type];
+  const reach = def.range;
+  const allEligible = computeEligibleHexes(state, 'attack');
+  const inRange = new Set<string>();
+  for (const hex of hexesInRange(unit.hex, reach)) {
+    const key = hexKey(hex);
+    if (allEligible.has(key)) inRange.add(key);
+  }
+  return inRange;
+}
+
+/** Eligible hexes within a unit's phase surge range (speed + bonus). */
+export function computeUnitPhaseSurgeTargets(
+  state: GameState,
+  unit: Unit,
+): Set<string> {
+  const reach = UNIT_DEFS[unit.type].speed + PHASE_SURGE_SPEED_BONUS;
+  const allEligible = computeEligibleHexes(state, 'phase_surge');
+  const inRange = new Set<string>();
+  for (const hex of hexesInRange(unit.hex, reach)) {
+    const key = hexKey(hex);
+    if (allEligible.has(key)) inRange.add(key);
+  }
+  return inRange;
+}
+
+/** Eligible build hexes near a drone (within its speed radius), filtered by structure-specific terrain rules. */
+export function computeUnitBuildTargets(
+  state: GameState,
+  unit: Unit,
+  structureType?: StructureType,
+): Set<string> {
+  const range = UNIT_DEFS[unit.type].speed;
+  const allEligible = computeEligibleBuildHexes(state);
+  const inRange = new Set<string>();
+  for (const hex of hexesInRange(unit.hex, range)) {
+    const key = hexKey(hex);
+    if (!allEligible.has(key)) continue;
+    if (structureType && !isValidBuildTerrain(state, hex, structureType)) continue;
+    inRange.add(key);
+  }
+  return inRange;
+}
+
+/** Checks structure-specific terrain placement rules. */
+function isValidBuildTerrain(
+  state: GameState,
+  hex: Hex,
+  structureType: StructureType,
+): boolean {
+  const cell = state.map.cells.get(hexKey(hex));
+  if (!cell) return false;
+
+  // Crystal Extractor must be on a crystal_node.
+  if (structureType === 'crystal_extractor') {
+    return cell.terrain === 'crystal_node';
+  }
+
+  // Flux Conduit must be on or adjacent to a flux_vent.
+  if (structureType === 'flux_conduit') {
+    if (cell.terrain === 'flux_vent') return true;
+    return hexNeighbors(hex).some((nb) => {
+      const nbCell = state.map.cells.get(hexKey(nb));
+      return nbCell?.terrain === 'flux_vent';
+    });
+  }
+
+  // All other structures may NOT be placed on harvesting terrain.
+  if (cell.terrain === 'crystal_node' || cell.terrain === 'flux_vent') return false;
+
+  return true;
+}
+
+/** Info about a harvestable structure that a drone can gather from. */
+export interface GatherTarget {
+  structureId: string;
+  structureType: StructureType;
+  label: string;
+  hex: Hex;
+  distance: number;
+}
+
+/** Returns harvestable structures within a unit's speed range. */
+export function computeUnitGatherTargets(
+  state: GameState,
+  unit: Unit,
+): GatherTarget[] {
+  const range = UNIT_DEFS[unit.type].speed;
+  const targets: GatherTarget[] = [];
+  for (const s of state.structures.values()) {
+    if (s.owner !== 'player') continue;
+    if (!isHarvestable(s) || !isComplete(s)) continue;
+    const dist = hexDistance(unit.hex, s.hex);
+    if (dist > range) continue;
+    targets.push({
+      structureId: s.id,
+      structureType: s.type,
+      label: s.type === 'crystal_extractor' ? 'Crystal Extractor' : 'Flux Conduit',
+      hex: s.hex,
+      distance: dist,
+    });
+  }
+  targets.sort((a, b) => a.distance - b.distance);
+  return targets;
 }

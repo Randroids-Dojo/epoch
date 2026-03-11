@@ -1,5 +1,5 @@
 import { GAME_CONSTANTS } from './constants'
-import type { TargetingCommandType } from '../engine/targeting'
+import type { TargetingCommandType, GatherTarget } from '../engine/targeting'
 import type { StructureType } from '../engine/structures'
 
 // ── Interaction Mode (Planning Phase UI) ──────────────────────────────────────
@@ -30,6 +30,13 @@ export type InteractionMode =
       eligibleKeys: Set<string>;
     }
 
+  /** Drone selected gather; showing list of harvestable structures in range. */
+  | {
+      kind: 'gather_picker';
+      unitId: string;
+      targets: GatherTarget[];
+    }
+
   | {
       kind: 'train_picker';
       slotIndex: number;
@@ -37,6 +44,38 @@ export type InteractionMode =
       structureHex: { q: number; r: number };
       failureFeedback: string | null;
     }
+
+// ── Tutorial Steps ───────────────────────────────────────────────────────────
+
+/** Steps for the opening tutorial. null = tutorial complete/inactive. */
+export type TutorialStep =
+  // Phase 1 — Epoch 1: build a barracks
+  | 'select_drone'
+  | 'select_build'
+  | 'select_barracks'
+  | 'select_hex'
+  | 'lock_in'
+  // Phase 2 — Epoch 2: build a crystal extractor (barracks still constructing)
+  | 'extractor_select_drone'
+  | 'extractor_select_build'
+  | 'extractor_select_extractor'
+  | 'extractor_select_hex'
+  // Phase 2b — same epoch: train a Pulse Sentry (only if barracks is done + affordable)
+  | 'extractor_train_select_slot'
+  | 'extractor_train_select_train'
+  | 'extractor_train_select_sentry'
+  | 'extractor_lock_in'
+  // Phase 3 — Epoch 3: barracks done, extractor still building → just lock in
+  | 'wait_lock_in'
+  // Phase 4 — Epoch 4: extractor done → gather + train a Pulse Sentry (same turn)
+  | 'gather_select_drone'
+  | 'gather_select_gather'
+  | 'gather_select_target'
+  | 'train_select_slot'
+  | 'train_select_train'
+  | 'train_select_sentry'
+  | 'train_lock_in'
+  | null;
 
 export type Phase = 'planning' | 'temporal' | 'execution'
 

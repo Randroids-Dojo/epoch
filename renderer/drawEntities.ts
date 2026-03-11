@@ -1,11 +1,11 @@
 import { Camera, worldToCanvas } from './camera';
 import { BASE_HEX_SIZE, hexPath } from './drawHex';
-import { hexToPixel } from '../engine/hex';
+import { hexToPixel, hexEqual } from '../engine/hex';
 import { Unit, UnitType, UNIT_DEFS } from '../engine/units';
 import { Structure, StructureType, STRUCTURE_DEFS } from '../engine/structures';
 import { HexCell } from '../engine/map';
 import { TERRAIN } from '../engine/terrain';
-import { Command } from '../engine/commands';
+import { Command, UnitCommand } from '../engine/commands';
 import { TimelineForkResult, ChronoScoutResult } from '../engine/simulation';
 import {
   ExecutionAnimation,
@@ -434,6 +434,7 @@ export function drawUnits(
   ctx: CanvasRenderingContext2D,
   units: Map<string, Unit>,
   cam: Camera,
+  selectedUnitId?: string | null,
 ): void {
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
   const prevAlpha = ctx.globalAlpha;
@@ -447,6 +448,18 @@ export function drawUnits(
     ctx.globalAlpha = 0.85;
     paintUnit(ctx, sx, sy, r, unit.type, color);
     drawHpBar(ctx, sx, sy, r, unit.hp, UNIT_DEFS[unit.type].maxHp);
+
+    // Highlight ring for the selected/active unit.
+    if (unit.id === selectedUnitId) {
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = '#00d4ff';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.arc(sx, sy, r + 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }
 
   ctx.globalAlpha = prevAlpha;
@@ -519,6 +532,120 @@ export function drawTargetingOverlay(
     ctx.fillStyle = isEligible ? 'rgba(0,212,255,0.18)' : 'rgba(0,0,0,0.30)';
     ctx.fill();
   }
+}
+
+// ── Command arrow colours ───────────────────────────────────────────────────
+
+const ARROW_STYLES: Record<string, { color: string; dash: number[] }> = {
+  move:        { color: '#00d4ff', dash: [6, 4] },
+  attack:      { color: '#ff6b6b', dash: [] },
+  gather:      { color: '#22c55e', dash: [6, 4] },
+  build:       { color: '#fbbf24', dash: [4, 3] },
+  phase_surge: { color: '#c084fc', dash: [6, 4] },
+};
+
+/** Draw an arrowhead pointing from (fx,fy) → (tx,ty). */
+function drawArrowhead(
+  ctx: CanvasRenderingContext2D,
+  fx: number, fy: number,
+  tx: number, ty: number,
+  size: number,
+): void {
+  const angle = Math.atan2(ty - fy, tx - fx);
+  ctx.beginPath();
+  ctx.moveTo(tx, ty);
+  ctx.lineTo(
+    tx - size * Math.cos(angle - Math.PI / 6),
+    ty - size * Math.sin(angle - Math.PI / 6),
+  );
+  ctx.lineTo(
+    tx - size * Math.cos(angle + Math.PI / 6),
+    ty - size * Math.sin(angle + Math.PI / 6),
+  );
+  ctx.closePath();
+  ctx.fill();
+}
+
+/**
+ * Draw arrows from each unit to its committed order target.
+ * For build orders, also draws a ghost of the planned structure.
+ */
+export function drawCommandArrows(
+  ctx: CanvasRenderingContext2D,
+  units: Map<string, Unit>,
+  unitOrders: Map<string, UnitCommand>,
+  defaultOrderUnitIds: Set<string>,
+  cam: Camera,
+): void {
+  const prevAlpha = ctx.globalAlpha;
+  const r = BASE_HEX_SIZE * cam.zoom * 0.32;
+
+  for (const [unitId, cmd] of unitOrders) {
+    // Skip default (auto-populated) orders — keep the display clean.
+    if (defaultOrderUnitIds.has(unitId)) continue;
+
+    // Only commands with a targetHex get arrows.
+    if (!('targetHex' in cmd)) continue;
+
+    const unit = units.get(unitId);
+    if (!unit || unit.owner !== 'player') continue;
+    if (hexEqual(unit.hex, cmd.targetHex)) continue;
+
+    const style = ARROW_STYLES[cmd.type];
+    if (!style) continue;
+
+    const fromWp = hexToPixel(unit.hex, BASE_HEX_SIZE);
+    const toWp   = hexToPixel(cmd.targetHex, BASE_HEX_SIZE);
+    const fx = cam.x + fromWp.x * cam.zoom;
+    const fy = cam.y + fromWp.y * cam.zoom;
+    const tx = cam.x + toWp.x * cam.zoom;
+    const ty = cam.y + toWp.y * cam.zoom;
+
+    // Shorten arrow so it doesn't overlap source/target centers.
+    const dx = tx - fx;
+    const dy = ty - fy;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1) continue;
+    const ux = dx / len;
+    const uy = dy / len;
+    const inset = r + 2;
+    const sx = fx + ux * inset;
+    const sy = fy + uy * inset;
+    const ex = tx - ux * inset;
+    const ey = ty - uy * inset;
+
+    // Draw line.
+    ctx.globalAlpha = 0.7;
+    ctx.strokeStyle = style.color;
+    ctx.lineWidth = 2;
+    ctx.setLineDash(style.dash);
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw arrowhead.
+    ctx.fillStyle = style.color;
+    drawArrowhead(ctx, sx, sy, ex, ey, 7 * cam.zoom);
+
+    // Build orders: draw a ghost of the planned structure at the target.
+    if (cmd.type === 'build') {
+      ctx.globalAlpha = 0.3;
+      paintStructure(ctx, tx, ty, r, cmd.structureType, style.color);
+      // Dashed ring around the ghost.
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = style.color;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.arc(tx, ty, r + 3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  ctx.globalAlpha = prevAlpha;
 }
 
 // ── Animation draw helpers ─────────────────────────────────────────────────

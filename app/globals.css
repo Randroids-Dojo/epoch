@@ -54,6 +54,41 @@ body {
   }
 }
 
+/* ── Tutorial highlight ─────────────────────────────────────────────────── */
+
+@keyframes tutorial-glow {
+  0%, 100% {
+    box-shadow: 0 0 6px rgba(251, 191, 36, 0.3), 0 0 12px rgba(251, 191, 36, 0.15);
+    border-color: #fbbf24;
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(251, 191, 36, 0.6), 0 0 24px rgba(251, 191, 36, 0.25);
+    border-color: #fcd34d;
+  }
+}
+
+.tutorial-highlight {
+  animation: tutorial-glow 1.5s ease-in-out infinite !important;
+  border: 1.5px solid #fbbf24 !important;
+  position: relative;
+  z-index: 200;
+}
+
+.tutorial-tooltip {
+  position: absolute;
+  background: rgba(30, 20, 0, 0.92);
+  border: 1px solid #fbbf24;
+  border-radius: 4px;
+  color: #fcd34d;
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  padding: 4px 8px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 201;
+  animation: fadeIn 0.3s ease;
+}
+
 /* ── Feedback FAB ────────────────────────────────────────────────────────── */
 
 .epoch-fab {

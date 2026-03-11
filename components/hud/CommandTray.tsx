@@ -11,6 +11,10 @@ interface CommandTrayProps {
   isMobile?: boolean;
   /** When true (fork preview active), changes lock-in button to "CONFIRM FORK". */
   forkMode?: boolean;
+  /** Highlight the lock-in button for tutorial guidance. */
+  tutorialHighlightLockIn?: boolean;
+  /** Highlight the first empty slot for tutorial guidance. */
+  tutorialHighlightSlot?: boolean;
   onSlotClick(i: number): void;
   onSlotClear(i: number): void;
   onLockIn(): void;
@@ -44,11 +48,14 @@ export default function CommandTray({
   lockInFlash,
   isMobile = false,
   forkMode = false,
+  tutorialHighlightLockIn = false,
+  tutorialHighlightSlot = false,
   onSlotClick,
   onSlotClear,
   onLockIn,
 }: CommandTrayProps) {
   const slot = isMobile ? SLOT_LAYOUT.MOBILE : SLOT_LAYOUT.DESKTOP;
+  const firstEmptySlot = tutorialHighlightSlot ? globalCommands.findIndex((c) => c === null) : -1;
 
   return (
     <div
@@ -58,6 +65,7 @@ export default function CommandTray({
       {/* Global command slots */}
       {globalCommands.map((cmd, i) => {
         const isSelected = selectedGlobalSlot === i;
+        const isTutorial = i === firstEmptySlot;
         return (
           <button
             key={i}
@@ -65,7 +73,7 @@ export default function CommandTray({
             type="button"
             disabled={lockedIn}
             onClick={() => onSlotClick(i)}
-            className="relative flex items-center justify-center rounded text-xs select-none"
+            className={`relative flex items-center justify-center rounded text-xs select-none${isTutorial ? ' tutorial-highlight' : ''}`}
             style={{
               width: slot.width,
               height: slot.height,
@@ -136,6 +144,7 @@ export default function CommandTray({
                   {i + 1}
                 </span>
                 <span style={{ color: '#334155', fontSize: '1.1rem' }}>+</span>
+                {isTutorial && <span className="tutorial-tooltip" style={{ top: -24, left: -4 }}>CLICK TO ADD ORDER</span>}
               </>
             )}
           </button>
@@ -150,7 +159,7 @@ export default function CommandTray({
         data-testid="lock-in-btn"
         disabled={lockedIn}
         onClick={onLockIn}
-        className="rounded px-3 py-2 text-xs font-bold tracking-widest uppercase"
+        className={`rounded px-3 py-2 text-xs font-bold tracking-widest uppercase${tutorialHighlightLockIn ? ' tutorial-highlight' : ''}`}
         style={{
           background: lockedIn
             ? 'rgba(30,41,59,0.5)'
@@ -162,8 +171,10 @@ export default function CommandTray({
           cursor: lockedIn ? 'not-allowed' : 'pointer',
           transition: 'background 0.2s ease, border-color 0.2s ease',
           minWidth: isMobile ? 72 : 100,
+          position: tutorialHighlightLockIn ? 'relative' as const : undefined,
         }}
       >
+        {tutorialHighlightLockIn && <span className="tutorial-tooltip" style={{ top: -24, left: 0 }}>LOCK IN YOUR ORDERS</span>}
         {lockedIn
           ? (isMobile ? 'LOCKED' : 'LOCKED IN')
           : forkMode
