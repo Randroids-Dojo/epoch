@@ -49,30 +49,24 @@ export type InteractionMode =
 
 /** Steps for the opening tutorial. null = tutorial complete/inactive. */
 export type TutorialStep =
-  // Epoch 1: build a crystal extractor
+  // Phase 1 — Epoch 1: build a barracks
   | 'select_drone'
   | 'select_build'
-  | 'select_extractor'
+  | 'select_barracks'
   | 'select_hex'
   | 'lock_in'
-  // Epoch 2: building is constructing, just lock in
+  // Phase 2 — Epoch 2: build a crystal extractor (barracks still constructing)
+  | 'extractor_select_drone'
+  | 'extractor_select_build'
+  | 'extractor_select_extractor'
+  | 'extractor_select_hex'
+  | 'extractor_lock_in'
+  // Phase 3 — Epoch 3: barracks done, extractor still building → just lock in
   | 'wait_lock_in'
-  // Epoch 3+: assign a drone to gather from the extractor
+  // Phase 4 — Epoch 4: extractor done → gather + train a Pulse Sentry (same turn)
   | 'gather_select_drone'
   | 'gather_select_gather'
   | 'gather_select_target'
-  | 'gather_lock_in'
-  // When affordable: build a barracks
-  | 'barracks_select_drone'
-  | 'barracks_select_build'
-  | 'barracks_select_barracks'
-  | 'barracks_select_hex'
-  // After barracks is placed: re-assign drone to gather
-  | 'regather_select_drone'
-  | 'regather_select_gather'
-  | 'regather_select_target'
-  | 'regather_lock_in'
-  // After barracks completes: train a Pulse Sentry
   | 'train_select_slot'
   | 'train_select_train'
   | 'train_select_sentry'
