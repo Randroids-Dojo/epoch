@@ -141,13 +141,13 @@ export function computeUnitMoveTargets(
   return inRange;
 }
 
-/** Eligible hexes within a unit's attack range (range + speed for movement then attack). */
+/** Eligible hexes within a unit's attack range from its current position. */
 export function computeUnitAttackTargets(
   state: GameState,
   unit: Unit,
 ): Set<string> {
   const def = UNIT_DEFS[unit.type];
-  const reach = def.speed + def.range;
+  const reach = def.range;
   const allEligible = computeEligibleHexes(state, 'attack');
   const inRange = new Set<string>();
   for (const hex of hexesInRange(unit.hex, reach)) {
