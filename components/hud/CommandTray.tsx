@@ -13,6 +13,8 @@ interface CommandTrayProps {
   forkMode?: boolean;
   /** Highlight the lock-in button for tutorial guidance. */
   tutorialHighlightLockIn?: boolean;
+  /** Highlight the first empty slot for tutorial guidance. */
+  tutorialHighlightSlot?: boolean;
   onSlotClick(i: number): void;
   onSlotClear(i: number): void;
   onLockIn(): void;
@@ -47,11 +49,13 @@ export default function CommandTray({
   isMobile = false,
   forkMode = false,
   tutorialHighlightLockIn = false,
+  tutorialHighlightSlot = false,
   onSlotClick,
   onSlotClear,
   onLockIn,
 }: CommandTrayProps) {
   const slot = isMobile ? SLOT_LAYOUT.MOBILE : SLOT_LAYOUT.DESKTOP;
+  const firstEmptySlot = tutorialHighlightSlot ? globalCommands.findIndex((c) => c === null) : -1;
 
   return (
     <div
@@ -61,6 +65,7 @@ export default function CommandTray({
       {/* Global command slots */}
       {globalCommands.map((cmd, i) => {
         const isSelected = selectedGlobalSlot === i;
+        const isTutorial = i === firstEmptySlot;
         return (
           <button
             key={i}
@@ -68,7 +73,7 @@ export default function CommandTray({
             type="button"
             disabled={lockedIn}
             onClick={() => onSlotClick(i)}
-            className="relative flex items-center justify-center rounded text-xs select-none"
+            className={`relative flex items-center justify-center rounded text-xs select-none${isTutorial ? ' tutorial-highlight' : ''}`}
             style={{
               width: slot.width,
               height: slot.height,
@@ -139,6 +144,7 @@ export default function CommandTray({
                   {i + 1}
                 </span>
                 <span style={{ color: '#334155', fontSize: '1.1rem' }}>+</span>
+                {isTutorial && <span className="tutorial-tooltip" style={{ top: -24, left: -4 }}>CLICK TO ADD ORDER</span>}
               </>
             )}
           </button>

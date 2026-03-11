@@ -61,6 +61,8 @@ interface CommandPickerProps {
 
   /** Command type to highlight for tutorial guidance. */
   tutorialHighlightType?: string;
+  /** Unit type to highlight in the train picker for tutorial guidance. */
+  tutorialHighlightUnitType?: string;
 
   onSelect(type: CommandType): void;
   onEpochAnchorAction(action: 'set' | 'activate'): void;
@@ -112,6 +114,7 @@ export default function CommandPicker(props: CommandPickerProps) {
     canChronoScout = false, chronoScoutDisabledReason,
     mode = 'command', trainStructureLabel, feedback,
     tutorialHighlightType,
+    tutorialHighlightUnitType,
     onSelect, onEpochAnchorAction, onTrainSelect, onClose,
   } = props;
 
@@ -274,7 +277,7 @@ export default function CommandPicker(props: CommandPickerProps) {
             )}
             {isTutorial && (
               <span className="tutorial-tooltip" style={{ top: -20, left: 4 }}>
-                {entry.type === 'gather' ? 'SELECT GATHER' : 'SELECT BUILD'}
+                {entry.type === 'gather' ? 'SELECT GATHER' : entry.type === 'train' ? 'SELECT TRAIN' : 'SELECT BUILD'}
               </span>
             )}
           </button>
@@ -290,6 +293,7 @@ export default function CommandPicker(props: CommandPickerProps) {
         const isEnabled = !tierLocked && !needsWarFoundry && ccOk && fxOk;
         const costLabel = def.costFX > 0 ? `${def.costCC}CC ${def.costFX}FX` : `${def.costCC}CC`;
         const disabledLabel = tierLocked ? `T${def.techTierRequired}` : needsWarFoundry ? 'War Foundry' : !ccOk ? 'no CC' : !fxOk ? 'no FX' : undefined;
+        const isTutorial = tutorialHighlightUnitType === unitType;
 
         return (
           <button
@@ -297,8 +301,8 @@ export default function CommandPicker(props: CommandPickerProps) {
             role="menuitem"
             disabled={!isEnabled}
             onClick={() => isEnabled && onTrainSelect?.(unitType)}
-            className="flex w-full items-center justify-between px-3 py-2"
-            style={isEnabled ? BTN_ENABLED : BTN_DISABLED}
+            className={`flex w-full items-center justify-between px-3 py-2${isTutorial ? ' tutorial-highlight' : ''}`}
+            style={{ ...(isEnabled ? BTN_ENABLED : BTN_DISABLED), position: isTutorial ? 'relative' as const : undefined }}
             onMouseEnter={onMouseEnter}
             onMouseLeave={onMouseLeave}
           >
@@ -306,6 +310,7 @@ export default function CommandPicker(props: CommandPickerProps) {
             <span style={{ color: isEnabled ? '#fbbf24' : '#334155', fontSize: '0.6rem', marginLeft: 16 }}>
               {disabledLabel ?? costLabel}
             </span>
+            {isTutorial && <span className="tutorial-tooltip" style={{ top: -20, left: 4 }}>TRAIN THIS UNIT</span>}
           </button>
         );
       })}

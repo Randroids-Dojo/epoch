@@ -201,7 +201,8 @@ export default function GameView() {
     const isPhaseStart =
       tutorialStep === 'wait_lock_in' ||
       tutorialStep === 'gather_lock_in' ||
-      tutorialStep === 'barracks_lock_in';
+      tutorialStep === 'regather_lock_in' ||
+      tutorialStep === 'train_lock_in';
     if (isPhaseStart) return; // still in current phase, handled by mode watcher below
 
     // Auto-enter the right phase for the current game state.
@@ -243,7 +244,11 @@ export default function GameView() {
           setTutorialStep(null); // tutorial complete
         }
         break;
-      case 'barracks_lock_in':
+      case 'regather_lock_in':
+        // Barracks is building — next epoch teach training.
+        setTutorialStep('train_select_slot');
+        break;
+      case 'train_lock_in':
         setTutorialStep(null); // tutorial complete
         break;
     }
@@ -315,11 +320,49 @@ export default function GameView() {
       case 'barracks_select_hex':
         for (const cmd of gameState.players.player.unitOrders.values()) {
           if (cmd.type === 'build' && cmd.structureType === 'barracks') {
-            setTutorialStep('barracks_lock_in');
+            // After barracks is placed, guide the player to re-gather.
+            setTutorialStep('regather_select_drone');
             break;
           }
         }
         break;
+
+      // ── Re-gather after barracks placement ────────────────
+      case 'regather_select_drone':
+        if (mode.kind === 'unit_picker_open') {
+          const u = gameState.units.get(mode.unitId);
+          if (u?.type === 'drone') setTutorialStep('regather_select_gather');
+        }
+        break;
+      case 'regather_select_gather':
+        if (mode.kind === 'gather_picker') setTutorialStep('regather_select_target');
+        break;
+      case 'regather_select_target':
+        for (const cmd of gameState.players.player.unitOrders.values()) {
+          if (cmd.type === 'gather') {
+            setTutorialStep('regather_lock_in');
+            break;
+          }
+        }
+        break;
+
+      // ── Train a Pulse Sentry ──────────────────────────────
+      case 'train_select_slot':
+        if (mode.kind === 'global_picker_open') setTutorialStep('train_select_train');
+        break;
+      case 'train_select_train':
+        if (mode.kind === 'train_picker') setTutorialStep('train_select_sentry');
+        break;
+      case 'train_select_sentry': {
+        // Advance once a train command for pulse_sentry is committed.
+        for (const cmd of gameState.players.player.globalCommands) {
+          if (cmd?.type === 'train' && cmd.unitType === 'pulse_sentry') {
+            setTutorialStep('train_lock_in');
+            break;
+          }
+        }
+        break;
+      }
     }
   }, [tutorialActive, tutorialStep, mode, gameState]);
 
@@ -1062,7 +1105,7 @@ export default function GameView() {
             mode={mode}
             lockedIn={lockedIn}
             tutorialHighlightUnitId={
-              tutorialStep === 'select_drone' || tutorialStep === 'gather_select_drone' || tutorialStep === 'barracks_select_drone'
+              tutorialStep === 'select_drone' || tutorialStep === 'gather_select_drone' || tutorialStep === 'barracks_select_drone' || tutorialStep === 'regather_select_drone'
                 ? tutorialDroneId : null
             }
             onUnitClick={handleUnitCardClick}
@@ -1101,7 +1144,8 @@ export default function GameView() {
             canChronoShift={unitPickerProps.canChronoShift}
             tutorialHighlightType={
               tutorialStep === 'select_build' || tutorialStep === 'barracks_select_build' ? 'build'
-              : tutorialStep === 'gather_select_gather' ? 'gather'
+              : tutorialStep === 'gather_select_gather' || tutorialStep === 'regather_select_gather' ? 'gather'
+              : tutorialStep === 'train_select_train' ? 'train'
               : undefined
             }
             onSelect={handleCommandPick}
@@ -1131,6 +1175,7 @@ export default function GameView() {
             canTimelineFork={canTimelineFork}
             timelineForkDisabledReason={timelineForkDisabledReason}
             canChronoScout={canChronoScout}
+            tutorialHighlightType={tutorialStep === 'train_select_train' ? 'train' : undefined}
             onSelect={handleCommandPick}
             onEpochAnchorAction={handleEpochAnchorAction}
             onClose={() => setMode({ kind: 'idle' })}
@@ -1165,6 +1210,7 @@ export default function GameView() {
                 : undefined
             }
             feedback={mode.failureFeedback}
+            tutorialHighlightUnitType={tutorialStep === 'train_select_sentry' ? 'pulse_sentry' : undefined}
             onSelect={handleCommandPick}
             onEpochAnchorAction={handleEpochAnchorAction}
             onTrainSelect={handleTrainPick}
@@ -1267,7 +1313,7 @@ export default function GameView() {
           <div style={{ position: 'absolute', top: unitPickerTop, left: 188 }}>
             <GatherTargetPicker
               targets={mode.targets}
-              tutorialHighlight={tutorialStep === 'gather_select_target'}
+              tutorialHighlight={tutorialStep === 'gather_select_target' || tutorialStep === 'regather_select_target'}
               onSelect={handleGatherSelect}
               onClose={() => setMode({ kind: 'idle' })}
             />
@@ -1368,8 +1414,10 @@ export default function GameView() {
             tutorialStep === 'lock_in' ||
             tutorialStep === 'wait_lock_in' ||
             tutorialStep === 'gather_lock_in' ||
-            tutorialStep === 'barracks_lock_in'
+            tutorialStep === 'regather_lock_in' ||
+            tutorialStep === 'train_lock_in'
           }
+          tutorialHighlightSlot={tutorialStep === 'train_select_slot'}
           onSlotClick={handleGlobalSlotClick}
           onSlotClear={handleGlobalSlotClear}
           onLockIn={handleLockIn}

@@ -67,7 +67,16 @@ export type TutorialStep =
   | 'barracks_select_build'
   | 'barracks_select_barracks'
   | 'barracks_select_hex'
-  | 'barracks_lock_in'
+  // After barracks is placed: re-assign drone to gather
+  | 'regather_select_drone'
+  | 'regather_select_gather'
+  | 'regather_select_target'
+  | 'regather_lock_in'
+  // After barracks completes: train a Pulse Sentry
+  | 'train_select_slot'
+  | 'train_select_train'
+  | 'train_select_sentry'
+  | 'train_lock_in'
   | null;
 
 export type Phase = 'planning' | 'temporal' | 'execution'
