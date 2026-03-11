@@ -532,6 +532,13 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
       log.push(`${owner} Build ${command.structureType} failed — impassable hex`);
       continue;
     }
+    // Crystal Extractor must be on a Crystal Node.
+    if (command.structureType === 'crystal_extractor') {
+      if (cell.terrain !== 'crystal_node') {
+        log.push(`${owner} Build crystal_extractor failed — must be on a Crystal Node`);
+        continue;
+      }
+    }
     // Flux Conduit must be on or adjacent to a Flux Vent.
     if (command.structureType === 'flux_conduit') {
       const onVent = cell.terrain === 'flux_vent';

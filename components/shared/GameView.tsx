@@ -16,6 +16,7 @@ import {
   computeEligibleBuildHexes,
   computeUnitMoveTargets,
   computeUnitAttackTargets,
+  computeUnitPhaseSurgeTargets,
   computeUnitBuildTargets,
   computeUnitGatherTargets,
   TargetingCommandType,
@@ -573,7 +574,7 @@ export default function GameView() {
       }
 
       if (type === 'phase_surge') {
-        const eligibleKeys = computeEligibleHexes(state, 'phase_surge');
+        const eligibleKeys = computeUnitPhaseSurgeTargets(state, unit);
         setMode({ kind: 'targeting', unitId, commandType: 'phase_surge', eligibleKeys });
         return;
       }
@@ -682,7 +683,7 @@ export default function GameView() {
     const state = gameStateRef.current;
     const unit = state.units.get(m.unitId);
     const eligibleKeys = unit
-      ? computeUnitBuildTargets(state, unit)
+      ? computeUnitBuildTargets(state, unit, structureType)
       : computeEligibleBuildHexes(state);
     setMode({
       kind: 'build_targeting',
