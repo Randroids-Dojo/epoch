@@ -60,6 +60,10 @@ export type TutorialStep =
   | 'extractor_select_build'
   | 'extractor_select_extractor'
   | 'extractor_select_hex'
+  // Phase 2b — same epoch: train a Pulse Sentry (only if barracks is done + affordable)
+  | 'extractor_train_select_slot'
+  | 'extractor_train_select_train'
+  | 'extractor_train_select_sentry'
   | 'extractor_lock_in'
   // Phase 3 — Epoch 3: barracks done, extractor still building → just lock in
   | 'wait_lock_in'

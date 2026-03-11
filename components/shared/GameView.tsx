@@ -257,11 +257,32 @@ export default function GameView() {
       case 'extractor_select_hex':
         for (const cmd of gameState.players.player.unitOrders.values()) {
           if (cmd.type === 'build' && cmd.structureType === 'crystal_extractor') {
+            // Guide to training a sentry if barracks is ready and player can afford it.
+            const canTrainSentry =
+              getPlayerTrainEligibility(gameState).length > 0 &&
+              gameState.players.player.resources.cc >= UNIT_DEFS.pulse_sentry.costCC;
+            setTutorialStep(canTrainSentry ? 'extractor_train_select_slot' : 'extractor_lock_in');
+            break;
+          }
+        }
+        break;
+
+      // ── Phase 2b: train a sentry after extractor (if affordable) ─
+      case 'extractor_train_select_slot':
+        if (mode.kind === 'global_picker_open') setTutorialStep('extractor_train_select_train');
+        break;
+      case 'extractor_train_select_train':
+        if (mode.kind === 'train_picker') setTutorialStep('extractor_train_select_sentry');
+        break;
+      case 'extractor_train_select_sentry': {
+        for (const cmd of gameState.players.player.globalCommands) {
+          if (cmd?.type === 'train' && cmd.unitType === 'pulse_sentry') {
             setTutorialStep('extractor_lock_in');
             break;
           }
         }
         break;
+      }
 
       // ── Phase 4: gather then train (same turn) ─────────────
       case 'gather_select_drone':
@@ -1110,7 +1131,7 @@ export default function GameView() {
             canTimelineFork={canTimelineFork}
             timelineForkDisabledReason={timelineForkDisabledReason}
             canChronoScout={canChronoScout}
-            tutorialHighlightType={tutorialStep === 'train_select_train' ? 'train' : undefined}
+            tutorialHighlightType={tutorialStep === 'train_select_train' || tutorialStep === 'extractor_train_select_train' ? 'train' : undefined}
             onSelect={handleCommandPick}
             onEpochAnchorAction={handleEpochAnchorAction}
             onClose={() => setMode({ kind: 'idle' })}
@@ -1145,7 +1166,7 @@ export default function GameView() {
                 : undefined
             }
             feedback={mode.failureFeedback}
-            tutorialHighlightUnitType={tutorialStep === 'train_select_sentry' ? 'pulse_sentry' : undefined}
+            tutorialHighlightUnitType={tutorialStep === 'train_select_sentry' || tutorialStep === 'extractor_train_select_sentry' ? 'pulse_sentry' : undefined}
             onSelect={handleCommandPick}
             onEpochAnchorAction={handleEpochAnchorAction}
             onTrainSelect={handleTrainPick}
@@ -1351,7 +1372,7 @@ export default function GameView() {
             tutorialStep === 'wait_lock_in' ||
             tutorialStep === 'train_lock_in'
           }
-          tutorialHighlightSlot={tutorialStep === 'train_select_slot'}
+          tutorialHighlightSlot={tutorialStep === 'train_select_slot' || tutorialStep === 'extractor_train_select_slot'}
           onSlotClick={handleGlobalSlotClick}
           onSlotClear={handleGlobalSlotClear}
           onLockIn={handleLockIn}
