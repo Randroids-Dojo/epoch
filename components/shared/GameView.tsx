@@ -14,6 +14,10 @@ import { runTimelineForkSimulation, computeChronoScout, TimelineForkResult, Chro
 import {
   computeEligibleHexes,
   computeEligibleBuildHexes,
+  computeUnitMoveTargets,
+  computeUnitAttackTargets,
+  computeUnitBuildTargets,
+  computeUnitGatherTargets,
   TargetingCommandType,
   BuildStructureType,
 } from '@/engine/targeting';
@@ -41,6 +45,8 @@ import UnitActionPanel from '../hud/UnitActionPanel';
 import GameStatsPanel from '../hud/GameStatsPanel';
 import ExecutionOverlay from '../hud/ExecutionOverlay';
 import Minimap from '../hud/Minimap';
+import HexTargetPicker from '../hud/HexTargetPicker';
+import GatherTargetPicker from '../hud/GatherTargetPicker';
 
 const PLANNING_DURATION = GAME_CONSTANTS.PLANNING_PHASE_DURATION_MS / 1000;
 const BASE_BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks', 'tech_lab', 'watchtower'];
@@ -572,10 +578,21 @@ export default function GameView() {
         return;
       }
 
-      if (type === 'move' || type === 'attack' || type === 'gather') {
-        const cmdType = type as TargetingCommandType;
-        const eligibleKeys = computeEligibleHexes(state, cmdType);
-        setMode({ kind: 'targeting', unitId, commandType: cmdType, eligibleKeys });
+      if (type === 'gather') {
+        const targets = computeUnitGatherTargets(state, unit);
+        setMode({ kind: 'gather_picker', unitId, targets });
+        return;
+      }
+
+      if (type === 'move') {
+        const eligibleKeys = computeUnitMoveTargets(state, unit);
+        setMode({ kind: 'targeting', unitId, commandType: 'move', eligibleKeys });
+        return;
+      }
+
+      if (type === 'attack') {
+        const eligibleKeys = computeUnitAttackTargets(state, unit);
+        setMode({ kind: 'targeting', unitId, commandType: 'attack', eligibleKeys });
         return;
       }
 
@@ -662,7 +679,11 @@ export default function GameView() {
     const m = modeRef.current;
     if (m.kind !== 'build_select') return;
 
-    const eligibleKeys = computeEligibleBuildHexes(gameStateRef.current);
+    const state = gameStateRef.current;
+    const unit = state.units.get(m.unitId);
+    const eligibleKeys = unit
+      ? computeUnitBuildTargets(state, unit)
+      : computeEligibleBuildHexes(state);
     setMode({
       kind: 'build_targeting',
       unitId: m.unitId,
@@ -670,6 +691,28 @@ export default function GameView() {
       eligibleKeys,
     });
   }, []);
+
+  const handleGatherSelect = useCallback((hex: Hex) => {
+    const m = modeRef.current;
+    if (m.kind !== 'gather_picker') return;
+    commitUnitOrder(m.unitId, { type: 'gather', unitId: m.unitId, targetHex: hex });
+  }, [commitUnitOrder]);
+
+  const handleHexTargetSelect = useCallback((hex: Hex) => {
+    const m = modeRef.current;
+    if (m.kind === 'targeting') {
+      const { unitId, commandType } = m;
+      if (commandType === 'move') {
+        commitUnitOrder(unitId, { type: 'move', unitId, targetHex: hex });
+      } else if (commandType === 'attack') {
+        commitUnitOrder(unitId, { type: 'attack', unitId, targetHex: hex });
+      } else if (commandType === 'phase_surge') {
+        commitUnitOrder(unitId, { type: 'phase_surge', unitId, targetHex: hex });
+      }
+    } else if (m.kind === 'build_targeting') {
+      commitUnitOrder(m.unitId, { type: 'build', unitId: m.unitId, structureType: m.structureType, targetHex: hex });
+    }
+  }, [commitUnitOrder]);
 
   const handleTrainPick = useCallback((unitType: import('@/engine/units').UnitType) => {
     const m = modeRef.current;
@@ -797,7 +840,7 @@ export default function GameView() {
   // ── Unit picker props (derived from current mode) ─────────────────────────
   const activeUnitId =
     mode.kind === 'unit_picker_open' ? mode.unitId :
-    mode.kind === 'targeting' || mode.kind === 'build_select' || mode.kind === 'build_targeting' ? mode.unitId :
+    mode.kind === 'targeting' || mode.kind === 'build_select' || mode.kind === 'build_targeting' || mode.kind === 'gather_picker' ? mode.unitId :
     null;
 
   const unitForPicker = activeUnitId ? gameState.units.get(activeUnitId) : null;
@@ -1009,6 +1052,48 @@ export default function GameView() {
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {/* Hex target picker for move/attack targeting */}
+        {mode.kind === 'targeting' && !isExecuting && unitForPicker && (mode.commandType === 'move' || mode.commandType === 'attack') && (
+          <div style={{ position: 'absolute', top: unitPickerTop, left: 188 }}>
+            <HexTargetPicker
+              unitHex={unitForPicker.hex}
+              radius={mode.commandType === 'move'
+                ? UNIT_DEFS[unitForPicker.type].speed
+                : UNIT_DEFS[unitForPicker.type].speed + UNIT_DEFS[unitForPicker.type].range
+              }
+              eligibleKeys={mode.eligibleKeys}
+              header={mode.commandType === 'move' ? 'MOVE TARGET' : 'ATTACK TARGET'}
+              onSelect={handleHexTargetSelect}
+              onClose={() => setMode({ kind: 'idle' })}
+            />
+          </div>
+        )}
+
+        {/* Hex target picker for build placement */}
+        {mode.kind === 'build_targeting' && !isExecuting && unitForPicker && (
+          <div style={{ position: 'absolute', top: unitPickerTop, left: 188 }}>
+            <HexTargetPicker
+              unitHex={unitForPicker.hex}
+              radius={UNIT_DEFS[unitForPicker.type].speed}
+              eligibleKeys={mode.eligibleKeys}
+              header="BUILD LOCATION"
+              onSelect={handleHexTargetSelect}
+              onClose={() => setMode({ kind: 'idle' })}
+            />
+          </div>
+        )}
+
+        {/* Gather target list picker */}
+        {mode.kind === 'gather_picker' && !isExecuting && (
+          <div style={{ position: 'absolute', top: unitPickerTop, left: 188 }}>
+            <GatherTargetPicker
+              targets={mode.targets}
+              onSelect={handleGatherSelect}
+              onClose={() => setMode({ kind: 'idle' })}
+            />
           </div>
         )}
 

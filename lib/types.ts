@@ -1,5 +1,5 @@
 import { GAME_CONSTANTS } from './constants'
-import type { TargetingCommandType } from '../engine/targeting'
+import type { TargetingCommandType, GatherTarget } from '../engine/targeting'
 import type { StructureType } from '../engine/structures'
 
 // ── Interaction Mode (Planning Phase UI) ──────────────────────────────────────
@@ -28,6 +28,13 @@ export type InteractionMode =
       unitId: string;
       structureType: Exclude<StructureType, 'command_nexus'>;
       eligibleKeys: Set<string>;
+    }
+
+  /** Drone selected gather; showing list of harvestable structures in range. */
+  | {
+      kind: 'gather_picker';
+      unitId: string;
+      targets: GatherTarget[];
     }
 
   | {

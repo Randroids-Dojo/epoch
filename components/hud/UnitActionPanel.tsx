@@ -70,7 +70,8 @@ function getActiveUnitId(mode: InteractionMode): string | null {
     mode.kind === 'unit_picker_open' ||
     mode.kind === 'targeting' ||
     mode.kind === 'build_select' ||
-    mode.kind === 'build_targeting'
+    mode.kind === 'build_targeting' ||
+    mode.kind === 'gather_picker'
   ) {
     return mode.unitId;
   }
