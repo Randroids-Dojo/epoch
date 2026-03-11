@@ -496,7 +496,13 @@ export default function GameView() {
     const state = gameStateRef.current;
     if (state.players.player.lockedIn) return;
     setMode({ kind: 'unit_picker_open', unitId });
-  }, []);
+    // Pan camera to the selected unit so the highlight is visible.
+    const unit = state.units.get(unitId);
+    if (unit) {
+      const wp = hexToPixel(unit.hex, BASE_HEX_SIZE);
+      queueRecenter(wp.x, wp.y);
+    }
+  }, [queueRecenter]);
 
   // ── Global slot helpers ───────────────────────────────────────────────────
   const handleGlobalSlotClick = useCallback((i: number) => {
