@@ -971,7 +971,8 @@ export default function GameView() {
     setPaused((prev) => {
       const next = !prev;
       if (next) {
-        // Entering pause — record when we paused (for animation offset).
+        // Entering pause — close any open menus/pickers and freeze everything.
+        setMode({ kind: 'idle' });
         pausedAtRef.current = performance.now();
         audioEngine.suspend();
       } else {
