@@ -3,7 +3,6 @@ import { createInitialState, newId, resetIdSeq, GameState } from '@/engine/state
 import { resolveEpoch, computeMergeBonus } from '@/engine/resolution';
 import { Unit, UNIT_DEFS, effectiveMaxHp, effectiveAttack } from '@/engine/units';
 import { computeUnitMergeTargets } from '@/engine/targeting';
-import { MERGE_RANGE } from '@/engine/commands';
 import { queueCommand } from './helpers';
 
 beforeEach(() => resetIdSeq());

@@ -2,7 +2,7 @@
 
 import { useRef, useEffect } from 'react';
 import { GameState } from '@/engine/state';
-import { Unit, UNIT_DEFS } from '@/engine/units';
+import { Unit, effectiveMaxHp } from '@/engine/units';
 import { UnitCommand } from '@/engine/commands';
 import { InteractionMode } from '@/lib/types';
 
@@ -135,10 +135,12 @@ export default function UnitActionPanel({
         const isDefault = defaultIds.has(unit.id);
         const isActive = activeUnitId === unit.id;
         const isTutorialTarget = tutorialHighlightUnitId === unit.id;
-        const unitDef = UNIT_DEFS[unit.type];
-        const effMaxHp = unitDef.maxHp + unit.bonusMaxHp;
+        const effMaxHp = effectiveMaxHp(unit);
         const hpPct = Math.max(0, Math.min(1, unit.hp / effMaxHp));
         const hpColor = hpPct > 0.6 ? '#22c55e' : hpPct > 0.3 ? '#fbbf24' : '#ef4444';
+        const mergeBadge = unit.mergeCount > 0
+          ? <span style={{ color: '#fbbf24', fontSize: '0.55rem', marginLeft: 2 }}>{unit.mergeCount + 1}x</span>
+          : null;
 
         return (
           <div key={unit.id}>
@@ -204,9 +206,7 @@ export default function UnitActionPanel({
                 >
                   <span style={{ color: isDefault ? '#64748b' : '#94a3b8', fontSize: '0.65rem', minWidth: 44, fontWeight: 600 }}>
                     {UNIT_LABEL[unit.type] ?? unit.type}
-                    {unit.mergeCount > 0 && (
-                      <span style={{ color: '#fbbf24', fontSize: '0.55rem', marginLeft: 2 }}>{unit.mergeCount + 1}x</span>
-                    )}
+                    {mergeBadge}
                   </span>
                   <span style={{ color: isDefault ? '#0891b2' : '#00d4ff', fontSize: '0.65rem', fontWeight: 700 }}>
                     {ORDER_BADGE[order.type]}
@@ -238,12 +238,10 @@ export default function UnitActionPanel({
                   <div className="flex items-center justify-between">
                     <span style={{ color: isActive ? '#00d4ff' : '#cbd5e1', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.05em' }}>
                       {UNIT_LABEL[unit.type] ?? unit.type}
-                      {unit.mergeCount > 0 && (
-                        <span style={{ color: '#fbbf24', fontSize: '0.55rem', marginLeft: 3 }}>{unit.mergeCount + 1}x</span>
-                      )}
+                      {mergeBadge}
                     </span>
                     <span style={{ color: '#475569', fontSize: '0.6rem' }}>
-                      {unit.hp}/{unitDef.maxHp + unit.bonusMaxHp}
+                      {unit.hp}/{effMaxHp}
                     </span>
                   </div>
                   {/* HP bar */}

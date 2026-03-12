@@ -131,6 +131,10 @@ export default function CommandPicker(props: CommandPickerProps) {
     feedbackTimerRef.current = setTimeout(() => setDisabledFeedback(null), 2000);
   };
 
+  useEffect(() => {
+    return () => { if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current); };
+  }, []);
+
   // ── Positioning ─────────────────────────────────────────────────────────────
   const posStyle: React.CSSProperties = isUnitContext
     ? {

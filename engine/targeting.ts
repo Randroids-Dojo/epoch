@@ -286,7 +286,7 @@ export function computeUnitMergeTargets(
       hex: other.hex,
       distance: dist,
       hp: other.hp,
-      maxHp: UNIT_DEFS[other.type].maxHp,
+      maxHp: UNIT_DEFS[other.type].maxHp + other.bonusMaxHp,
       mergeCount: other.mergeCount,
     });
   }
