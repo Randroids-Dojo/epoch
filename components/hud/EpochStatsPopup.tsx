@@ -142,7 +142,7 @@ export default function EpochStatsPopup({ stats, onDismiss }: EpochStatsPopupPro
         alignItems: 'center',
         justifyContent: 'center',
         cursor: 'pointer',
-        animation: 'epoch-popup-in 0.25s ease-out',
+        animation: 'epoch-popup-in 0.8s ease-out',
       }}
     >
       <div
