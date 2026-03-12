@@ -135,6 +135,104 @@ describe('Move step', () => {
 
     expect(s.units.get(sentry.id)!.hex).toEqual({ q: 0, r: 0 });
   });
+
+  it('does not move onto crystal_node resource terrain', () => {
+    const s = createInitialState(1);
+    const sentry = addUnit(s, {
+      owner: 'player', type: 'pulse_sentry',
+      hex: { q: 0, r: 0 }, hp: 40,
+    });
+    // Place crystal_node at the target hex
+    const targetHex = { q: 1, r: 0 };
+    const cell = s.map.cells.get(`${targetHex.q},${targetHex.r}`);
+    if (cell) cell.terrain = 'crystal_node';
+
+    queueCommand(s, 'player', 0, {
+      type: 'move', unitId: sentry.id, targetHex,
+    });
+
+    resolveEpoch(s);
+
+    // Unit should stay put because the target is resource terrain
+    expect(s.units.get(sentry.id)!.hex).toEqual({ q: 0, r: 0 });
+  });
+
+  it('does not move onto flux_vent resource terrain', () => {
+    const s = createInitialState(1);
+    const sentry = addUnit(s, {
+      owner: 'player', type: 'pulse_sentry',
+      hex: { q: 0, r: 0 }, hp: 40,
+    });
+    // Place flux_vent at the target hex
+    const targetHex = { q: 1, r: 0 };
+    const cell = s.map.cells.get(`${targetHex.q},${targetHex.r}`);
+    if (cell) cell.terrain = 'flux_vent';
+
+    queueCommand(s, 'player', 0, {
+      type: 'move', unitId: sentry.id, targetHex,
+    });
+
+    resolveEpoch(s);
+
+    // Unit should stay put because the target is resource terrain
+    expect(s.units.get(sentry.id)!.hex).toEqual({ q: 0, r: 0 });
+  });
+
+  it('paths around resource terrain instead of through it', () => {
+    const s = createInitialState(1);
+    const sentry = addUnit(s, {
+      owner: 'player', type: 'pulse_sentry',
+      hex: { q: 0, r: 0 }, hp: 40,
+    });
+    // Ensure surrounding area is open terrain so BFS has alternate routes
+    for (let q = -1; q <= 4; q++) {
+      for (let r = -2; r <= 2; r++) {
+        const cell = s.map.cells.get(`${q},${r}`);
+        if (cell) cell.terrain = 'open';
+      }
+    }
+    // Place crystal_node on the direct path
+    const blockHex = { q: 1, r: 0 };
+    const blockCell = s.map.cells.get(`${blockHex.q},${blockHex.r}`);
+    if (blockCell) blockCell.terrain = 'crystal_node';
+
+    // Target is beyond the resource hex
+    queueCommand(s, 'player', 0, {
+      type: 'move', unitId: sentry.id, targetHex: { q: 3, r: 0 },
+    });
+
+    resolveEpoch(s);
+
+    const moved = s.units.get(sentry.id)!;
+    // Unit should have moved but NOT through the crystal_node
+    expect(moved.hex).not.toEqual(blockHex);
+    // Should have moved somewhere (not stayed at origin)
+    expect(moved.hex).not.toEqual({ q: 0, r: 0 });
+  });
+
+  it('does not allow two units to occupy the same hex', () => {
+    const s = createInitialState(1);
+    const targetHex = { q: 0, r: 0 };
+    // Place an AI unit at the target
+    addUnit(s, {
+      owner: 'ai', type: 'pulse_sentry',
+      hex: targetHex, hp: 40,
+    });
+    // Player unit tries to move to the same hex
+    const sentry = addUnit(s, {
+      owner: 'player', type: 'pulse_sentry',
+      hex: { q: -2, r: 0 }, hp: 40,
+    });
+
+    queueCommand(s, 'player', 0, {
+      type: 'move', unitId: sentry.id, targetHex,
+    });
+
+    resolveEpoch(s);
+
+    // Player unit should NOT be at the occupied hex
+    expect(s.units.get(sentry.id)!.hex).not.toEqual(targetHex);
+  });
 });
 
 // ── Step 4: Attack ────────────────────────────────────────────────────────────
