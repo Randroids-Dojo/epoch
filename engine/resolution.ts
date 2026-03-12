@@ -28,12 +28,12 @@ import {
   AttackCommand, BuildCommand, ChronoShiftCommand, CHRONO_SHIFT_COST,
   ChronoScoutCommand, CHRONO_SCOUT_COST,
   Command, GlobalCommand, DefendCommand, EpochAnchorCommand, EPOCH_ANCHOR_ACTIVATE_COST,
-  EPOCH_ANCHOR_SET_COST, GatherCommand, MoveCommand, PhaseSurgeCommand,
+  EPOCH_ANCHOR_SET_COST, GatherCommand, MergeCommand, MERGE_RANGE, MoveCommand, PhaseSurgeCommand,
   PHASE_SURGE_COST, PHASE_SURGE_SPEED_BONUS, ResearchCommand,
   TemporalCommand, TimelineForkCommand, TIMELINE_FORK_COST, TrainCommand,
 } from './commands';
 import { PlayerId, PLAYER_IDS, opponent } from './player';
-import { UNIT_DEFS } from './units';
+import { UNIT_DEFS, effectiveAttack, effectiveMaxHp } from './units';
 import { STRUCTURE_DEFS, isComplete, isHarvestable } from './structures';
 import { computeFog } from './map';
 
@@ -127,6 +127,65 @@ function stepDefend(state: GameState, commands: CommandEntry[], log: string[]): 
     if (!unit || unit.owner !== owner) continue;
     unit.isDefending = true;
     log.push(`${owner} ${unit.type} is defending`);
+  }
+}
+
+// ── Step 1.5: Merge ──────────────────────────────────────────────────────────
+
+/**
+ * Compute the stat bonus for merging, with diminishing returns.
+ * Each merge grants a fraction of the base stat that shrinks as mergeCount increases.
+ * Formula: bonus per absorbed unit = baseStat * (0.5 / (1 + currentMergeCount))
+ */
+export function computeMergeBonus(baseStat: number, currentMergeCount: number): number {
+  return Math.max(1, Math.floor(baseStat * (0.5 / (1 + currentMergeCount))));
+}
+
+function stepMerge(state: GameState, commands: CommandEntry[], log: string[]): void {
+  const merges = commands.filter(
+    (e): e is { owner: PlayerId; command: MergeCommand } => e.command.type === 'merge',
+  );
+
+  // Track which units have already been consumed this epoch to avoid double-merging.
+  const consumed = new Set<string>();
+
+  for (const { owner, command } of merges) {
+    const unit = state.units.get(command.unitId);
+    if (!unit || unit.owner !== owner) continue;
+    if (consumed.has(unit.id)) continue;
+
+    const def = UNIT_DEFS[unit.type];
+    let absorbed = 0;
+
+    for (const targetId of command.targetUnitIds) {
+      if (consumed.has(targetId)) continue;
+      const target = state.units.get(targetId);
+      if (!target) continue;
+      if (target.owner !== owner || target.type !== unit.type) continue;
+      if (hexDistance(unit.hex, target.hex) > MERGE_RANGE) continue;
+
+      // Apply diminishing returns bonus
+      const hpBonus = computeMergeBonus(def.maxHp, unit.mergeCount + absorbed);
+      const atkBonus = computeMergeBonus(def.attack, unit.mergeCount + absorbed);
+
+      unit.bonusMaxHp += hpBonus;
+      unit.bonusAttack += atkBonus;
+      unit.hp += hpBonus;
+      unit.mergeCount += 1;
+      absorbed += 1;
+      consumed.add(targetId);
+
+      // Remove the absorbed unit
+      state.units.delete(targetId);
+      // Clean up any orders referencing the consumed unit
+      state.players[owner].unitOrders.delete(targetId);
+
+      log.push(`${owner} ${unit.type} merged (absorbed ${target.type} at (${target.hex.q},${target.hex.r}), +${hpBonus} HP, +${atkBonus} ATK)`);
+    }
+
+    if (absorbed > 0) {
+      log.push(`${owner} ${unit.type} is now ${unit.mergeCount + 1}x (merged ${absorbed} unit${absorbed > 1 ? 's' : ''})`);
+    }
   }
 }
 
@@ -362,16 +421,17 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
     if (hexDistance(attacker.hex, command.targetHex) > def.range) continue;
 
     if (targetUnit) {
+      const effAtk = effectiveAttack(attacker);
       const baseDmg = targetUnit.isDefending
-        ? Math.ceil(def.attack * 0.5)
-        : def.attack;
+        ? Math.ceil(effAtk * 0.5)
+        : effAtk;
       const dmg = Math.max(1, Math.ceil(baseDmg * attackMult));
       unitDamage.set(targetUnit.id, (unitDamage.get(targetUnit.id) ?? 0) + dmg);
       log.push(`${owner} ${attacker.type} attacks ${foe} ${targetUnit.type} for ${dmg}`);
 
       // Void Striker splash: 50% damage to all adjacent hexes.
       if (attacker.type === 'void_striker') {
-        const splashDmg = Math.max(1, Math.ceil(def.attack * 0.5 * attackMult));
+        const splashDmg = Math.max(1, Math.ceil(effAtk * 0.5 * attackMult));
         for (const adjHex of hexNeighbors(command.targetHex)) {
           const splashUnit = findUnitAt(state, adjHex, foe);
           if (splashUnit && splashUnit.id !== targetUnit.id) {
@@ -381,7 +441,7 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
         }
       }
     } else if (targetStruct) {
-      const dmg = Math.max(1, Math.ceil(def.attack * attackMult));
+      const dmg = Math.max(1, Math.ceil(effectiveAttack(attacker) * attackMult));
       structDamage.set(targetStruct.id, (structDamage.get(targetStruct.id) ?? 0) + dmg);
       log.push(`${owner} ${attacker.type} attacks ${foe} ${targetStruct.type} for ${dmg}`);
     }
@@ -459,14 +519,14 @@ function stepHeal(state: GameState, log: string[]): void {
     for (const ally of state.units.values()) {
       if (ally.owner !== weaver.owner) continue;
       if (hexDistance(ally.hex, weaver.hex) > FLUX_WEAVER_RANGE) continue;
-      const maxHp = UNIT_DEFS[ally.type].maxHp;
+      const maxHp = effectiveMaxHp(ally);
       if (ally.hp >= maxHp) continue; // Already at full HP.
       const frac = ally.hp / maxHp;
       if (frac < bestHpFrac) { bestHpFrac = frac; bestTarget = ally; }
     }
 
     if (!bestTarget) continue;
-    const maxHp = UNIT_DEFS[bestTarget.type].maxHp;
+    const maxHp = effectiveMaxHp(bestTarget);
     const healed = Math.min(FLUX_WEAVER_HEAL, maxHp - bestTarget.hp);
     bestTarget.hp += healed;
     log.push(`${weaver.owner} flux_weaver heals ${bestTarget.type} for ${healed} HP`);
@@ -767,6 +827,9 @@ function stepTrain(state: GameState, commands: CommandEntry[], log: string[]): v
       isDefending:         false,
       assignedExtractorId: null,
       damageShield:        false,
+      mergeCount:          0,
+      bonusMaxHp:          0,
+      bonusAttack:         0,
     });
     log.push(`${owner} trained ${unitDef.label}`);
   }
@@ -959,6 +1022,7 @@ export function resolveEpoch(state: GameState): string[] {
   const commands = gatherCommands(state);
 
   stepDefend(state, commands, log);
+  stepMerge(state, commands, log);
   stepTemporal(state, commands, log);
   stepMove(state, commands, log);
   stepAttack(state, commands, log);

@@ -190,6 +190,9 @@ export function createInitialState(seed?: number, difficulty: AIDifficulty = 'ad
       isDefending:         false,
       assignedExtractorId: null,
       damageShield:        false,
+      mergeCount:          0,
+      bonusMaxHp:          0,
+      bonusAttack:         0,
     });
   }
 

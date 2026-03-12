@@ -6,7 +6,7 @@ import { GameState } from '@/engine/state';
 import { Hex, hexKey, hexToPixel, pixelToHex } from '@/engine/hex';
 import { Camera, DEFAULT_ZOOM, zoomToward, canvasToWorld } from '@/renderer/camera';
 import { BASE_HEX_SIZE, drawBackground, drawHexCell } from '@/renderer/drawHex';
-import { drawUnits, drawStructures, drawTargetingOverlay, drawCommandArrows, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawEchoOverlay, drawTimelineForkOverlay, drawChronoScoutOverlay } from '@/renderer/drawEntities';
+import { drawUnits, drawStructures, drawTargetingOverlay, drawCommandArrows, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawMergeAnimations, drawEchoOverlay, drawTimelineForkOverlay, drawChronoScoutOverlay } from '@/renderer/drawEntities';
 import { TimelineForkResult, ChronoScoutResult } from '@/engine/simulation';
 import { InteractionMode } from '@/lib/types';
 import { ExecutionAnimation } from '@/renderer/animation';
@@ -163,6 +163,7 @@ export default function GameCanvas({
       const elapsed = (performance.now() - anim.startedAt) / 1000;
       drawAnimatedStructures(ctx, anim, cam, elapsed);
       drawDestroyedEntities(ctx, anim, cam, elapsed);
+      drawMergeAnimations(ctx, anim, cam, elapsed);
       drawAnimatedUnits(ctx, anim, cam, elapsed);
     } else {
       drawStructures(ctx, gs.structures, cam);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   CommandType, CHRONO_SHIFT_COST, CHRONO_SCOUT_COST,
   EPOCH_ANCHOR_ACTIVATE_COST, EPOCH_ANCHOR_SET_COST,
@@ -46,6 +46,7 @@ interface CommandPickerProps {
   canGather?: boolean;       // unit is drone + harvestable structure exists
   canBuild?: boolean;        // unit is drone + can afford a structure
   canChronoShift?: boolean;  // unit has 2-epoch snapshot + Tier 1 + enough TE
+  canMerge?: boolean;        // same-type friendly units within merge range
 
   // Global-context capabilities (ignored in unit mode)
   canTrain?: boolean;
@@ -109,7 +110,7 @@ export default function CommandPicker(props: CommandPickerProps) {
     position,
     playerTE, playerCC, playerFX, playerTechTier,
     researchEpochsLeft, hasCompletedTechLab, hasWarFoundry, hasEpochAnchor, hasChronoSpire,
-    unitType, canAttack = false, canGather = false, canBuild = false, canChronoShift = false,
+    unitType, canAttack = false, canGather = false, canBuild = false, canChronoShift = false, canMerge = false,
     canTrain = false, canTimelineFork = false, timelineForkDisabledReason,
     canChronoScout = false, chronoScoutDisabledReason,
     mode = 'command', trainStructureLabel, feedback,
@@ -119,6 +120,20 @@ export default function CommandPicker(props: CommandPickerProps) {
   } = props;
 
   const isUnitContext = position.kind === 'unit';
+
+  // ── Disabled action tap feedback ──────────────────────────────────────────
+  const [disabledFeedback, setDisabledFeedback] = useState<string | null>(null);
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showDisabledFeedback = (reason: string) => {
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    setDisabledFeedback(reason);
+    feedbackTimerRef.current = setTimeout(() => setDisabledFeedback(null), 2000);
+  };
+
+  useEffect(() => {
+    return () => { if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current); };
+  }, []);
 
   // ── Positioning ─────────────────────────────────────────────────────────────
   const posStyle: React.CSSProperties = isUnitContext
@@ -160,6 +175,12 @@ export default function CommandPicker(props: CommandPickerProps) {
         ? 'Drones cannot surge'
         : playerTE < PHASE_SURGE_COST ? `Need ${PHASE_SURGE_COST} TE`
         : undefined,
+    },
+    {
+      type: 'merge',
+      label: 'Merge',
+      enabled: canMerge,
+      disabledReason: !canMerge ? 'No same-type units in range' : undefined,
     },
   ] : [];
 
@@ -258,8 +279,15 @@ export default function CommandPicker(props: CommandPickerProps) {
       {mode === 'command' && entries.map((entry) => {
         const isTutorial = tutorialHighlightType === entry.type;
         return (
-          <button
+          <div
             key={entry.label}
+            onClick={() => {
+              if (!entry.enabled && entry.disabledReason) {
+                showDisabledFeedback(entry.disabledReason);
+              }
+            }}
+          >
+          <button
             role="menuitem"
             disabled={!entry.enabled}
             title={entry.disabledReason}
@@ -281,6 +309,7 @@ export default function CommandPicker(props: CommandPickerProps) {
               </span>
             )}
           </button>
+          </div>
         );
       })}
 
@@ -315,7 +344,7 @@ export default function CommandPicker(props: CommandPickerProps) {
         );
       })}
 
-      {(mode === 'train' || feedback) && (
+      {(mode === 'train' || feedback || disabledFeedback) && (
         <div className="px-3 py-2" style={{ borderTop: '1px solid #1e293b' }}>
           {mode === 'train' && trainStructureLabel && (
             <div style={{ color: '#64748b', fontSize: '0.65rem' }} data-testid="train-structure-label">
@@ -325,6 +354,11 @@ export default function CommandPicker(props: CommandPickerProps) {
           {feedback && (
             <div style={{ color: '#f87171', fontSize: '0.65rem' }} data-testid="command-feedback">
               {feedback}
+            </div>
+          )}
+          {disabledFeedback && (
+            <div style={{ color: '#fbbf24', fontSize: '0.65rem' }} data-testid="disabled-feedback">
+              {disabledFeedback}
             </div>
           )}
         </div>
