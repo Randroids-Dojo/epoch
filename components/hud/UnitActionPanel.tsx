@@ -101,6 +101,14 @@ export default function UnitActionPanel({
   const activeUnitId = getActiveUnitId(mode);
   const firstDefaultIdx = playerUnits.findIndex((u) => defaultIds.has(u.id));
 
+  // Units targeted by a merge command are locked from receiving other actions.
+  const mergeLockedIds = new Set<string>();
+  for (const cmd of unitOrders.values()) {
+    if (cmd.type === 'merge') {
+      for (const tid of cmd.targetUnitIds) mergeLockedIds.add(tid);
+    }
+  }
+
   // Scroll active card into view when it changes.
   const panelRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -134,6 +142,7 @@ export default function UnitActionPanel({
         const order = unitOrders.get(unit.id);
         const isDefault = defaultIds.has(unit.id);
         const isActive = activeUnitId === unit.id;
+        const isMergeLocked = mergeLockedIds.has(unit.id);
         const isTutorialTarget = tutorialHighlightUnitId === unit.id;
         const effMaxHp = effectiveMaxHp(unit);
         const hpPct = Math.max(0, Math.min(1, unit.hp / effMaxHp));
@@ -170,24 +179,28 @@ export default function UnitActionPanel({
                 if (el) cardRefs.current.set(unit.id, el);
                 else cardRefs.current.delete(unit.id);
               }}
-              onClick={() => !lockedIn && onUnitClick(unit.id)}
+              onClick={() => !lockedIn && !isMergeLocked && onUnitClick(unit.id)}
               style={{
                 borderRadius: 5,
                 border: isActive
                   ? '1.5px solid #00d4ff'
+                  : isMergeLocked
+                    ? '1px solid #92400e'
                   : order
                     ? isDefault ? '1px solid #1e3a3a' : '1px solid #1e3a4a'
                     : '1px solid #334155',
                 background: isActive
                   ? 'rgba(0,212,255,0.08)'
+                  : isMergeLocked
+                    ? 'rgba(146,64,14,0.12)'
                   : order
                     ? isDefault ? 'rgba(12,20,32,0.6)' : 'rgba(15,25,40,0.7)'
                     : 'rgba(20,32,50,0.85)',
                 boxShadow: isActive ? '0 0 8px rgba(0,212,255,0.25)' : undefined,
-                cursor: lockedIn ? 'not-allowed' : 'pointer',
-                opacity: lockedIn ? 0.5 : isDefault ? 0.7 : 1,
+                cursor: lockedIn || isMergeLocked ? 'not-allowed' : 'pointer',
+                opacity: lockedIn ? 0.5 : isMergeLocked ? 0.5 : isDefault ? 0.7 : 1,
                 transition: 'border-color 0.15s ease, background 0.15s ease',
-                animation: !order && !isActive && !lockedIn && !isTutorialTarget ? 'pulse-border 2.5s ease-in-out infinite' : undefined,
+                animation: !order && !isActive && !lockedIn && !isTutorialTarget && !isMergeLocked ? 'pulse-border 2.5s ease-in-out infinite' : undefined,
                 overflow: 'hidden',
                 flexShrink: 0,
                 position: isTutorialTarget ? 'relative' as const : undefined,
@@ -214,7 +227,7 @@ export default function UnitActionPanel({
                   <span style={{ color: '#475569', fontSize: '0.6rem', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap' }}>
                     {orderLabel(order)}
                   </span>
-                  {!lockedIn && (
+                  {!lockedIn && !isMergeLocked && (
                     <span
                       role="button"
                       aria-label={`Clear order for ${UNIT_LABEL[unit.type]}`}
@@ -248,8 +261,8 @@ export default function UnitActionPanel({
                   <div style={{ height: 3, background: '#1e293b', borderRadius: 2, overflow: 'hidden' }}>
                     <div style={{ width: `${hpPct * 100}%`, height: '100%', background: hpColor, borderRadius: 2, transition: 'width 0.3s ease' }} />
                   </div>
-                  <div style={{ color: '#334155', fontSize: '0.6rem', letterSpacing: '0.08em' }}>
-                    {isActive ? 'CHOOSE ACTION…' : 'TAP TO ASSIGN'}
+                  <div style={{ color: isMergeLocked ? '#92400e' : '#334155', fontSize: '0.6rem', letterSpacing: '0.08em' }}>
+                    {isMergeLocked ? 'MERGE TARGET' : isActive ? 'CHOOSE ACTION…' : 'TAP TO ASSIGN'}
                   </div>
                 </div>
               )}

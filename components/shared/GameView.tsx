@@ -677,6 +677,10 @@ export default function GameView() {
   const handleUnitCardClick = useCallback((unitId: string) => {
     const state = gameStateRef.current;
     if (state.players.player.lockedIn) return;
+    // Block units that are targeted by a merge command.
+    for (const cmd of state.players.player.unitOrders.values()) {
+      if (cmd.type === 'merge' && cmd.targetUnitIds.includes(unitId)) return;
+    }
     setMode({ kind: 'unit_picker_open', unitId });
     // Pan camera to the selected unit so the highlight is visible.
     const unit = state.units.get(unitId);
@@ -972,7 +976,12 @@ export default function GameView() {
     if (m.kind === 'idle' && state.phase === 'planning' && !lockedIn) {
       const unit = findUnitAt(state, hex, 'player');
       if (unit) {
-        setMode({ kind: 'unit_picker_open', unitId: unit.id });
+        // Block units that are targeted by a merge command.
+        let mergeLocked = false;
+        for (const cmd of state.players.player.unitOrders.values()) {
+          if (cmd.type === 'merge' && cmd.targetUnitIds.includes(unit.id)) { mergeLocked = true; break; }
+        }
+        if (!mergeLocked) setMode({ kind: 'unit_picker_open', unitId: unit.id });
       }
     }
   }, [commitUnitOrder, lockedIn]);
