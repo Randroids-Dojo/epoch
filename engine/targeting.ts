@@ -48,6 +48,13 @@ export function computeEligibleHexes(
       structOwnerByHex.set(hexKey(s.hex), s.owner);
     }
   }
+  // Structures occupy hexes and block movement.
+  const structHexes = new Set<string>();
+  if (type === 'move' || type === 'phase_surge') {
+    for (const s of state.structures.values()) {
+      structHexes.add(hexKey(s.hex));
+    }
+  }
 
   // Gather lookup: only built when needed.
   let harvestableByHex: Set<string> | null = null;
@@ -79,9 +86,10 @@ export function computeEligibleHexes(
     switch (type) {
       case 'phase_surge':
       case 'move':
-        // All passable visible/explored hexes not occupied by own units.
+        // All passable visible/explored hexes not occupied by own units or structures.
         if (!TERRAIN[cell.terrain].passable) continue;
         if (unitOwnerByHex.get(key) === 'player') continue;
+        if (structHexes.has(key)) continue;
         eligible.add(key);
         break;
 
