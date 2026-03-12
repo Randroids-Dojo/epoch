@@ -49,6 +49,8 @@ import ExecutionOverlay from '../hud/ExecutionOverlay';
 import Minimap from '../hud/Minimap';
 import HexTargetPicker from '../hud/HexTargetPicker';
 import GatherTargetPicker from '../hud/GatherTargetPicker';
+import IntroAnimation from '../animations/IntroAnimation';
+import VictoryAnimation from '../animations/VictoryAnimation';
 import MergeTargetPicker from '../hud/MergeTargetPicker';
 import DifficultyHelpButton from './DifficultyHelpModal';
 
@@ -100,6 +102,7 @@ function captureAllEpochStats(state: GameState): { player: EpochSideStats; ai: E
 export default function GameView() {
   const [showSetup, setShowSetup]   = useState(true);
   const [difficulty, setDifficulty] = useState<AIDifficulty>('adept');
+  const [introPlaying, setIntroPlaying] = useState(true);
   const [gameState, setGameState]   = useState<GameState>(() => createInitialState(42));
   const [mode, setMode]             = useState<InteractionMode>({ kind: 'idle' });
   const [timeLeft, setTimeLeft]     = useState(PLANNING_DURATION);
@@ -140,7 +143,7 @@ export default function GameView() {
 
   // ── Test: auto-dismiss difficulty picker ──────────────────────────────────
   useEffect(() => {
-    if (isSkipSetup()) setShowSetup(false);
+    if (isSkipSetup()) { setShowSetup(false); setIntroPlaying(false); }
   }, []);
 
   useEffect(() => {
@@ -646,10 +649,16 @@ export default function GameView() {
   // ── Play Again / Start ────────────────────────────────────────────────────
   const handlePlayAgain = useCallback(() => {
     setGameState(createInitialState(42));
-    setShowSetup(!isSkipSetup());
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
     setPaused(false);
+    if (isSkipSetup()) {
+      setShowSetup(false);
+      setIntroPlaying(false);
+    } else {
+      setIntroPlaying(true);
+      setShowSetup(true);
+    }
   }, []);
 
   const handleStartGame = useCallback((diff: AIDifficulty) => {
@@ -658,6 +667,10 @@ export default function GameView() {
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
     setShowSetup(false);
+  }, []);
+
+  const handleIntroComplete = useCallback(() => {
+    setIntroPlaying(false);
   }, []);
 
   const queueRecenter = useCallback((worldX: number, worldY: number) => {
@@ -1501,31 +1514,22 @@ export default function GameView() {
           </div>
         )}
 
-        {/* Game-over overlay */}
+        {/* Intro title card animation */}
+        {introPlaying && (
+          <IntroAnimation onComplete={handleIntroComplete} />
+        )}
+
+        {/* Game-over overlay with victory/defeat animation */}
         {gameState.phase === 'over' && (
-          <div
-            data-testid="game-over-overlay"
-            className="absolute inset-0 flex flex-col items-center justify-center"
-            style={{ background: 'rgba(10,14,26,0.85)' }}
-          >
-            <div
-              data-testid="game-over-result"
-              className="font-mono text-2xl font-bold tracking-widest uppercase"
-              style={{ color: gameState.winner === 'player' ? COLORS.CYAN : COLORS.CORAL }}
-            >
+          <div data-testid="game-over-overlay">
+            <VictoryAnimation
+              winner={gameState.winner === 'player' ? 'player' : 'ai'}
+              epoch={gameState.epoch}
+              onComplete={handlePlayAgain}
+            />
+            <div data-testid="game-over-result" style={{ display: 'none' }}>
               {gameState.winner === 'player' ? 'VICTORY' : 'DEFEAT'}
             </div>
-            <div className="mt-2 text-sm" style={{ color: '#475569' }}>
-              Epoch {gameState.epoch}
-            </div>
-            <button
-              data-testid="play-again-btn"
-              className="mt-6 font-mono text-sm tracking-widest uppercase px-6 py-2 border"
-              style={{ color: '#94a3b8', borderColor: '#334155' }}
-              onClick={handlePlayAgain}
-            >
-              Play Again
-            </button>
           </div>
         )}
       </div>

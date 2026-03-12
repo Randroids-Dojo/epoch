@@ -33,6 +33,66 @@ body {
   to { width: 0%; }
 }
 
+/* ── Intro & Victory Animations ────────────────────────────────────────── */
+
+@keyframes intro-slash-line {
+  from {
+    opacity: 0;
+    transform: rotate(-25deg) scaleY(0);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-25deg) scaleY(1);
+  }
+}
+
+@keyframes intro-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(350%);
+  }
+}
+
+@keyframes intro-particle {
+  0% {
+    transform: translate(-50%, -50%) translate(0, 0);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) translate(var(--particle-x), var(--particle-y));
+    opacity: 0;
+  }
+}
+
+@keyframes victory-ring {
+  0% {
+    width: 10px;
+    height: 10px;
+    opacity: 0.8;
+  }
+  100% {
+    width: 150vmin;
+    height: 150vmin;
+    opacity: 0;
+  }
+}
+
+@keyframes victory-speedline {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  50% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: scaleX(1);
+  }
+}
+
 /* ── Planning Phase UI Animations ───────────────────────────────────────── */
 
 @keyframes pulse-border {
