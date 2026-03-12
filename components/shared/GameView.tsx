@@ -903,6 +903,14 @@ export default function GameView() {
     const eligibleKeys = unit
       ? computeUnitBuildTargets(state, unit, structureType)
       : computeEligibleBuildHexes(state);
+
+    // Exclude hexes already claimed by pending build orders from other drones.
+    for (const cmd of state.players.player.unitOrders.values()) {
+      if (cmd.type === 'build' && cmd.unitId !== m.unitId) {
+        eligibleKeys.delete(hexKey(cmd.targetHex));
+      }
+    }
+
     setMode({
       kind: 'build_targeting',
       unitId: m.unitId,
@@ -1007,7 +1015,7 @@ export default function GameView() {
     // ── Build targeting: place the structure ──────────────────────────────
     if (m.kind === 'build_targeting') {
       const key = hexKey(hex);
-      if (!m.eligibleKeys.has(key)) { setMode({ kind: 'idle' }); return; }
+      if (!m.eligibleKeys.has(key)) return; // ignore clicks on ineligible hexes
       commitUnitOrder(m.unitId, { type: 'build', unitId: m.unitId, structureType: m.structureType, targetHex: hex });
       return;
     }

@@ -1,6 +1,6 @@
 import { Camera, worldToCanvas } from './camera';
 import { BASE_HEX_SIZE, hexPath } from './drawHex';
-import { hexToPixel, hexEqual } from '../engine/hex';
+import { Hex, hexToPixel, hexEqual, hexKey, hexesInRange } from '../engine/hex';
 import { Unit, UnitType, effectiveMaxHp } from '../engine/units';
 import { Structure, StructureType, STRUCTURE_DEFS } from '../engine/structures';
 import { HexCell } from '../engine/map';
@@ -572,6 +572,45 @@ export function drawTargetingOverlay(
     ctx.fillStyle = isEligible ? 'rgba(0,212,255,0.18)' : 'rgba(0,0,0,0.30)';
     ctx.fill();
   }
+}
+
+/**
+ * Draw borders on the real board around all hexes in range of a unit,
+ * so the player can see which area on the map the HexTargetPicker represents.
+ * Eligible hexes get a bright cyan border; other in-range hexes get a dim border.
+ */
+export function drawRangeBorders(
+  ctx: CanvasRenderingContext2D,
+  centerHex: Hex,
+  radius: number,
+  eligibleKeys: Set<string>,
+  cam: Camera,
+): void {
+  const size = BASE_HEX_SIZE * cam.zoom;
+  const prevAlpha = ctx.globalAlpha;
+
+  for (const hex of hexesInRange(centerHex, radius)) {
+    const key = hexKey(hex);
+    const isEligible = eligibleKeys.has(key);
+    const wp = hexToPixel(hex, BASE_HEX_SIZE);
+    const sx = cam.x + wp.x * cam.zoom;
+    const sy = cam.y + wp.y * cam.zoom;
+
+    hexPath(ctx, sx, sy, size);
+
+    if (isEligible) {
+      ctx.globalAlpha = 0.8;
+      ctx.strokeStyle = '#00d4ff';
+      ctx.lineWidth = 2;
+    } else {
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 1;
+    }
+    ctx.stroke();
+  }
+
+  ctx.globalAlpha = prevAlpha;
 }
 
 // ── Command arrow colours ───────────────────────────────────────────────────

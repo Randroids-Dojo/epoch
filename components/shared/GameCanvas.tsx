@@ -6,11 +6,12 @@ import { GameState } from '@/engine/state';
 import { Hex, hexKey, hexToPixel, pixelToHex } from '@/engine/hex';
 import { Camera, DEFAULT_ZOOM, zoomToward, canvasToWorld } from '@/renderer/camera';
 import { BASE_HEX_SIZE, drawBackground, drawHexCell } from '@/renderer/drawHex';
-import { drawUnits, drawStructures, drawTargetingOverlay, drawCommandArrows, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawMergeAnimations, drawEchoOverlay, drawTimelineForkOverlay, drawChronoScoutOverlay } from '@/renderer/drawEntities';
+import { drawUnits, drawStructures, drawTargetingOverlay, drawRangeBorders, drawCommandArrows, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawMergeAnimations, drawEchoOverlay, drawTimelineForkOverlay, drawChronoScoutOverlay } from '@/renderer/drawEntities';
 import { TimelineForkResult, ChronoScoutResult } from '@/engine/simulation';
 import { InteractionMode } from '@/lib/types';
 import { ExecutionAnimation } from '@/renderer/animation';
-import { Command } from '@/engine/commands';
+import { Command, PHASE_SURGE_SPEED_BONUS } from '@/engine/commands';
+import { UNIT_DEFS } from '@/engine/units';
 
 const ZOOM_STEP       = 1.15;
 const PAN_SPEED       = 20; // CSS px per keypress
@@ -155,6 +156,25 @@ export default function GameCanvas({
     // ── Targeting overlay ────────────────────────────────────────────────────
     if (m.kind === 'targeting' || m.kind === 'build_targeting') {
       drawTargetingOverlay(ctx, map.cells, m.eligibleKeys, cam);
+
+      // Draw range borders on the real board matching the HexTargetPicker area.
+      const targetUnit = gs.units.get(m.unitId);
+      if (targetUnit) {
+        let radius: number;
+        if (m.kind === 'targeting') {
+          if (m.commandType === 'attack') {
+            const def = UNIT_DEFS[targetUnit.type];
+            radius = def.speed + def.range;
+          } else if (m.commandType === 'phase_surge') {
+            radius = UNIT_DEFS[targetUnit.type].speed + PHASE_SURGE_SPEED_BONUS;
+          } else {
+            radius = UNIT_DEFS[targetUnit.type].speed;
+          }
+        } else {
+          radius = UNIT_DEFS[targetUnit.type].speed;
+        }
+        drawRangeBorders(ctx, targetUnit.hex, radius, m.eligibleKeys, cam);
+      }
     }
 
     // ── Structures + units ───────────────────────────────────────────────────
