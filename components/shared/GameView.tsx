@@ -28,7 +28,7 @@ import { isComplete, STRUCTURE_DEFS } from '@/engine/structures';
 import { PlayerId } from '@/engine/player';
 import { COLORS, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
 import { InteractionMode, TutorialStep } from '@/lib/types';
-import { Unit, UNIT_DEFS } from '@/engine/units';
+import { Unit, UNIT_DEFS, effectiveAttack } from '@/engine/units';
 import { findUnitAt } from '@/engine/state';
 import { getPlayerTrainEligibility, getTrainFailureReason } from './trainFlow';
 import {
@@ -40,7 +40,7 @@ import {
 import { audioEngine } from '@/audio/engine';
 import GameCanvas from './GameCanvas';
 import { CameraSnapshot } from './GameCanvas';
-import PlanningBar from '../hud/PlanningBar';
+import EpochStatsPopup, { EpochSideStats, EpochStatsSnapshot } from '../hud/EpochStatsPopup';
 import CommandTray from '../hud/CommandTray';
 import CommandPicker from '../hud/CommandPicker';
 import UnitActionPanel from '../hud/UnitActionPanel';
@@ -75,6 +75,30 @@ function isSkipSetup(): boolean {
     !!(window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__;
 }
 
+function captureEpochSideStats(state: GameState, owner: 'player' | 'ai'): EpochSideStats {
+  let unitCount = 0;
+  let droneCount = 0;
+  let totalAttack = 0;
+  for (const u of state.units.values()) {
+    if (u.owner !== owner) continue;
+    unitCount++;
+    if (u.type === 'drone') droneCount++;
+    totalAttack += effectiveAttack(u);
+  }
+  const nexus = findNexus(state, owner);
+  const nexusMaxHp = STRUCTURE_DEFS.command_nexus.maxHp;
+  return {
+    unitCount,
+    droneCount,
+    totalAttack,
+    nexusHp: nexus?.hp ?? 0,
+    nexusMaxHp,
+    crystals: state.players[owner].resources.cc,
+    flux: state.players[owner].resources.fx,
+    techTier: state.players[owner].techTier,
+  };
+}
+
 export default function GameView() {
   const [showSetup, setShowSetup]   = useState(true);
   const [difficulty, setDifficulty] = useState<AIDifficulty>('adept');
@@ -100,6 +124,10 @@ export default function GameView() {
   const [chronoScoutResult, setChronoScoutResult]   = useState<ChronoScoutResult | null>(null);
   const timelineForkActiveRef = useRef(false);
   const [timelineForkActive, setTimelineForkActive]  = useState(false);
+
+  // ── Epoch stats popup state ─────────────────────────────────────────────
+  const [epochStatsPopup, setEpochStatsPopup] = useState<EpochStatsSnapshot | null>(null);
+  const preEpochStatsRef = useRef<{ player: EpochSideStats; ai: EpochSideStats; epoch: number } | null>(null);
 
   // Stable refs so callbacks always see the latest values.
   const gameStateRef = useRef(gameState);
@@ -172,8 +200,6 @@ export default function GameView() {
   );
 
   const hasEpochAnchor = gameState.players.player.epochAnchor !== null;
-  const instabilityTier = gameState.players.player.instabilityTier;
-  const instabilityEpochsLeft = gameState.players.player.instabilityEpochsLeft;
   const buildOptions = playerTechTier >= 2 ? TIER2_BUILD_OPTIONS : playerTechTier >= 1 ? TIER1_BUILD_OPTIONS : BASE_BUILD_OPTIONS;
 
   // ── Tutorial auto-advance ─────────────────────────────────────────────────
@@ -352,6 +378,25 @@ export default function GameView() {
 
     const s = gameStateRef.current;
     if (s.phase !== 'over') {
+      // Build epoch stats popup snapshot
+      const pre = preEpochStatsRef.current;
+      if (pre) {
+        const postPlayer = captureEpochSideStats(s, 'player');
+        const postAI = captureEpochSideStats(s, 'ai');
+        setEpochStatsPopup({
+          epoch: pre.epoch,
+          player: postPlayer,
+          ai: postAI,
+          playerDelta: {
+            units: postPlayer.unitCount - pre.player.unitCount,
+            drones: postPlayer.droneCount - pre.player.droneCount,
+            crystals: postPlayer.crystals - pre.player.crystals,
+            flux: postPlayer.flux - pre.player.flux,
+          },
+        });
+        preEpochStatsRef.current = null;
+      }
+
       s.phase = 'planning';
       setGameState({ ...s });
     }
@@ -522,6 +567,13 @@ export default function GameView() {
   const handleResolve = useCallback(() => {
     const state = gameStateRef.current;
     if (state.phase !== 'planning') return;
+
+    // Capture pre-epoch stats for the popup
+    preEpochStatsRef.current = {
+      player: captureEpochSideStats(state, 'player'),
+      ai: captureEpochSideStats(state, 'ai'),
+      epoch: state.epoch,
+    };
 
     generateAICommands(state);
 
@@ -1103,17 +1155,11 @@ export default function GameView() {
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden">
-      {gameState.phase !== 'over' && (
-        <PlanningBar
-          epoch={gameState.epoch}
-          resources={gameState.players.player.resources}
-          timeLeft={timeLeft}
-          lockedIn={lockedIn}
-          techTier={playerTechTier}
-          researchEpochsLeft={researchEpochsLeft}
-          instabilityTier={instabilityTier}
-          instabilityEpochsLeft={instabilityEpochsLeft}
-          hasEpochAnchor={hasEpochAnchor}
+      {/* Epoch stats comparison popup — shown after each epoch resolves */}
+      {epochStatsPopup && (
+        <EpochStatsPopup
+          stats={epochStatsPopup}
+          onDismiss={() => setEpochStatsPopup(null)}
         />
       )}
 
