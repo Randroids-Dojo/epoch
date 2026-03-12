@@ -196,9 +196,18 @@ export default function GameView() {
 
   const canChronoScout = hasChronoSpire && gameState.players.player.resources.te >= CHRONO_SCOUT_COST;
 
+  // Structure IDs already committed to a train command in other slots this epoch.
+  const committedTrainStructures = useMemo(() => {
+    const ids = new Set<string>();
+    for (const cmd of gameState.players.player.globalCommands) {
+      if (cmd?.type === 'train') ids.add(cmd.structureId);
+    }
+    return ids;
+  }, [gameState]);
+
   const canTrain = useMemo(
-    () => getPlayerTrainEligibility(gameState).length > 0,
-    [gameState],
+    () => getPlayerTrainEligibility(gameState, committedTrainStructures).length > 0,
+    [gameState, committedTrainStructures],
   );
 
   const hasEpochAnchor = gameState.players.player.epochAnchor !== null;
@@ -236,14 +245,14 @@ export default function GameView() {
         setTutorialStep('extractor_select_drone');
         break;
       case 'extractor_lock_in':
-        // Both buildings constructing — next epoch just lock in.
-        setTutorialStep('wait_lock_in');
-        break;
-      case 'wait_lock_in':
-        // Extractor should be done — teach gather + train on same turn.
-        setTutorialStep('gather_select_drone');
+        // Barracks done, extractor still building — next epoch train a sentry.
+        setTutorialStep('train_select_slot');
         break;
       case 'train_lock_in':
+        // Sentry training queued — next epoch gather with extractor.
+        setTutorialStep('gather_select_drone');
+        break;
+      case 'gather_lock_in':
         setTutorialStep(null); // tutorial complete
         break;
     }
@@ -323,27 +332,7 @@ export default function GameView() {
         break;
       }
 
-      // ── Phase 4: gather then train (same turn) ─────────────
-      case 'gather_select_drone':
-        if (mode.kind === 'unit_picker_open') {
-          const u = gameState.units.get(mode.unitId);
-          if (u?.type === 'drone') setTutorialStep('gather_select_gather');
-        }
-        break;
-      case 'gather_select_gather':
-        if (mode.kind === 'gather_picker') setTutorialStep('gather_select_target');
-        break;
-      case 'gather_select_target':
-        for (const cmd of gameState.players.player.unitOrders.values()) {
-          if (cmd.type === 'gather') {
-            // Gather is set — now guide to the global tray to train.
-            setTutorialStep('train_select_slot');
-            break;
-          }
-        }
-        break;
-
-      // ── Train a Pulse Sentry (continues same turn) ─────────
+      // ── Phase 3: train a Pulse Sentry (barracks done) ──────
       case 'train_select_slot':
         if (mode.kind === 'global_picker_open') setTutorialStep('train_select_train');
         break;
@@ -359,6 +348,25 @@ export default function GameView() {
         }
         break;
       }
+
+      // ── Phase 4: gather (extractor done) ───────────────────
+      case 'gather_select_drone':
+        if (mode.kind === 'unit_picker_open') {
+          const u = gameState.units.get(mode.unitId);
+          if (u?.type === 'drone') setTutorialStep('gather_select_gather');
+        }
+        break;
+      case 'gather_select_gather':
+        if (mode.kind === 'gather_picker') setTutorialStep('gather_select_target');
+        break;
+      case 'gather_select_target':
+        for (const cmd of gameState.players.player.unitOrders.values()) {
+          if (cmd.type === 'gather') {
+            setTutorialStep('gather_lock_in');
+            break;
+          }
+        }
+        break;
     }
   }, [tutorialActive, tutorialStep, mode, gameState]);
 
@@ -880,14 +888,21 @@ export default function GameView() {
       }
 
       if (type === 'train') {
-        const eligible = getPlayerTrainEligibility(state);
+        // Exclude structures already committed to train commands in other slots.
+        const excludeIds = new Set<string>();
+        for (let j = 0; j < state.players.player.globalCommands.length; j++) {
+          if (j === slotIndex) continue; // allow re-picking for the current slot
+          const cmd = state.players.player.globalCommands[j];
+          if (cmd?.type === 'train') excludeIds.add(cmd.structureId);
+        }
+        const eligible = getPlayerTrainEligibility(state, excludeIds);
         if (eligible.length === 0) {
           setMode({
             kind: 'train_picker',
             slotIndex,
             structureId: '',
             structureHex: { q: 0, r: 0 },
-            failureFeedback: 'Train requires a completed Barracks or War Foundry.',
+            failureFeedback: 'All production buildings are already assigned.',
           });
           return;
         }
@@ -985,7 +1000,14 @@ export default function GameView() {
     }
 
     const unitDef = UNIT_DEFS[unitType];
-    const eligible = getPlayerTrainEligibility(state);
+    // Exclude structures committed to train commands in other slots.
+    const excludeIds = new Set<string>();
+    for (let j = 0; j < state.players.player.globalCommands.length; j++) {
+      if (j === m.slotIndex) continue;
+      const cmd = state.players.player.globalCommands[j];
+      if (cmd?.type === 'train') excludeIds.add(cmd.structureId);
+    }
+    const eligible = getPlayerTrainEligibility(state, excludeIds);
     const matchingBuilding = eligible.find((e) => e.structureType === unitDef.producedAt && e.hasSpawnSpace)
       ?? eligible.find((e) => e.structureType === unitDef.producedAt);
     const structureId = matchingBuilding?.structureId ?? m.structureId;
@@ -1426,6 +1448,7 @@ export default function GameView() {
             animation={animationRef.current}
             elapsed={animElapsed}
             onSkip={handleSkip}
+            tutorialHighlightSkip={tutorialActive}
           />
         )}
 
@@ -1550,8 +1573,8 @@ export default function GameView() {
           tutorialHighlightLockIn={
             tutorialStep === 'lock_in' ||
             tutorialStep === 'extractor_lock_in' ||
-            tutorialStep === 'wait_lock_in' ||
-            tutorialStep === 'train_lock_in'
+            tutorialStep === 'train_lock_in' ||
+            tutorialStep === 'gather_lock_in'
           }
           tutorialHighlightSlot={tutorialStep === 'train_select_slot' || tutorialStep === 'extractor_train_select_slot'}
           onSlotClick={handleGlobalSlotClick}

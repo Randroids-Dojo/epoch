@@ -6,6 +6,7 @@ interface ExecutionOverlayProps {
   animation: ExecutionAnimation;
   elapsed: number;
   onSkip(): void;
+  tutorialHighlightSkip?: boolean;
 }
 
 const PHASE_LABELS: Record<string, string> = {
@@ -19,6 +20,7 @@ export default function ExecutionOverlay({
   animation,
   elapsed,
   onSkip,
+  tutorialHighlightSkip,
 }: ExecutionOverlayProps) {
   const phase = getCurrentPhase(elapsed);
   const phaseLabel = phase ? PHASE_LABELS[phase] ?? phase.toUpperCase() : 'RESOLVING';
@@ -69,16 +71,18 @@ export default function ExecutionOverlay({
         <button
           data-testid="skip-btn"
           onClick={onSkip}
-          className="rounded px-4 py-2 text-xs font-bold tracking-widest uppercase"
+          className={`rounded px-4 py-2 text-xs font-bold tracking-widest uppercase${tutorialHighlightSkip ? ' tutorial-highlight' : ''}`}
           style={{
             background: 'rgba(0,212,255,0.12)',
-            border: '1px solid #00d4ff',
+            border: tutorialHighlightSkip ? undefined : '1px solid #00d4ff',
             color: '#00d4ff',
             cursor: 'pointer',
             minWidth: 80,
+            position: tutorialHighlightSkip ? 'relative' as const : undefined,
           }}
         >
           SKIP
+          {tutorialHighlightSkip && <span className="tutorial-tooltip" style={{ top: -28, left: '50%', transform: 'translateX(-50%)' }}>SKIP ANIMATION</span>}
         </button>
       </div>
     </div>
