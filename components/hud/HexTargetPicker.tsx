@@ -123,10 +123,11 @@ export default function HexTargetPicker({
             const cx = p.x + offsetX;
             const cy = p.y + offsetY;
 
-            let fill = '#1a1f2e';
-            let stroke = '#2a3040';
+            let fill = '#2a1520';
+            let stroke = '#6b2030';
             let cursor = 'default';
-            let opacity = 0.4;
+            let opacity = 0.85;
+            const isBlocked = !isCenter && !isEligible;
 
             if (isCenter) {
               fill = '#00d4ff20';
@@ -139,23 +140,32 @@ export default function HexTargetPicker({
               opacity = 1;
             }
 
+            const xSize = MINI_HEX_SIZE * 0.35;
+
             return (
-              <polygon
-                key={`${h.q},${h.r}`}
-                points={hexPoints(cx, cy, MINI_HEX_SIZE - 1)}
-                fill={fill}
-                stroke={stroke}
-                strokeWidth={1}
-                opacity={opacity}
-                style={{ cursor, transition: 'fill 0.1s ease' }}
-                onClick={isEligible ? () => onSelect(worldHex) : undefined}
-                onMouseEnter={(e) => {
-                  if (isEligible) (e.target as SVGPolygonElement).setAttribute('fill', '#00d4ff30');
-                }}
-                onMouseLeave={(e) => {
-                  if (isEligible) (e.target as SVGPolygonElement).setAttribute('fill', fill);
-                }}
-              />
+              <g key={`${h.q},${h.r}`}>
+                <polygon
+                  points={hexPoints(cx, cy, MINI_HEX_SIZE - 1)}
+                  fill={fill}
+                  stroke={stroke}
+                  strokeWidth={1}
+                  opacity={opacity}
+                  style={{ cursor, transition: 'fill 0.1s ease' }}
+                  onClick={isEligible ? () => onSelect(worldHex) : undefined}
+                  onMouseEnter={(e) => {
+                    if (isEligible) (e.target as SVGPolygonElement).setAttribute('fill', '#00d4ff30');
+                  }}
+                  onMouseLeave={(e) => {
+                    if (isEligible) (e.target as SVGPolygonElement).setAttribute('fill', fill);
+                  }}
+                />
+                {isBlocked && (
+                  <g opacity={0.5}>
+                    <line x1={cx - xSize} y1={cy - xSize} x2={cx + xSize} y2={cy + xSize} stroke="#ff4060" strokeWidth={1.5} strokeLinecap="round" />
+                    <line x1={cx + xSize} y1={cy - xSize} x2={cx - xSize} y2={cy + xSize} stroke="#ff4060" strokeWidth={1.5} strokeLinecap="round" />
+                  </g>
+                )}
+              </g>
             );
           })}
         </svg>
