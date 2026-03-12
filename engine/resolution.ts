@@ -774,6 +774,9 @@ function stepTrain(state: GameState, commands: CommandEntry[], log: string[]): v
     (e): e is { owner: PlayerId; command: TrainCommand } => e.command.type === 'train',
   );
 
+  // Each production building can only train one unit per epoch.
+  const trainedStructures = new Set<string>();
+
   for (const { owner, command } of trains) {
     const player    = state.players[owner];
     const building  = state.structures.get(command.structureId);
@@ -787,6 +790,11 @@ function stepTrain(state: GameState, commands: CommandEntry[], log: string[]): v
     }
     if (!isComplete(building)) {
       log.push(`${owner} Train failed — ${building.type} not ready`);
+      continue;
+    }
+    // Only one train per structure per epoch.
+    if (trainedStructures.has(command.structureId)) {
+      log.push(`${owner} Train ${command.unitType} failed — ${building.type} already training`);
       continue;
     }
     // Validate unit is produced at the correct building type.
@@ -817,6 +825,7 @@ function stepTrain(state: GameState, commands: CommandEntry[], log: string[]): v
 
     player.resources.cc -= unitDef.costCC;
     player.resources.fx -= unitDef.costFX;
+    trainedStructures.add(command.structureId);
     const id = newId('u');
     state.units.set(id, {
       id,

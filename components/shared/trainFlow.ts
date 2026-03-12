@@ -31,13 +31,22 @@ export interface TrainEligibility {
   hasSpawnSpace: boolean;
 }
 
-export function getPlayerTrainEligibility(state: GameState): TrainEligibility[] {
+/**
+ * Returns eligible production structures for the player.
+ * @param excludeStructureIds — structure IDs already committed to a train
+ *   command this epoch (each building can only train one unit per epoch).
+ */
+export function getPlayerTrainEligibility(
+  state: GameState,
+  excludeStructureIds?: ReadonlySet<string>,
+): TrainEligibility[] {
   const results: TrainEligibility[] = [];
 
   for (const structure of state.structures.values()) {
     if (structure.owner !== 'player') continue;
     if (structure.type !== 'barracks' && structure.type !== 'war_foundry') continue;
     if (!isComplete(structure)) continue;
+    if (excludeStructureIds?.has(structure.id)) continue;
 
     results.push({
       structureId: structure.id,

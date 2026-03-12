@@ -452,6 +452,33 @@ describe('Train step', () => {
 
     expect(s.units.size).toBe(unitsBefore);
   });
+
+  it('only trains one unit per structure even with multiple commands', () => {
+    const s = createInitialState(1);
+    s.players.player.resources.cc = 100;
+
+    const barracks = addStructure(s, {
+      owner: 'player', type: 'barracks',
+      hex: { q: -7, r: 0 }, buildProgress: 0,
+    });
+    // Queue two train commands for the same barracks in different slots.
+    queueCommand(s, 'player', 0, {
+      type: 'train', structureId: barracks.id, unitType: 'pulse_sentry',
+    });
+    queueCommand(s, 'player', 1, {
+      type: 'train', structureId: barracks.id, unitType: 'pulse_sentry',
+    });
+
+    const unitsBefore = s.units.size;
+    resolveEpoch(s);
+
+    // Only the first train should succeed; the second is rejected.
+    const newSentries = [...s.units.values()].filter(
+      u => u.owner === 'player' && u.type === 'pulse_sentry',
+    );
+    expect(newSentries).toHaveLength(1);
+    expect(s.units.size).toBe(unitsBefore + 1);
+  });
 });
 
 // ── Win condition ─────────────────────────────────────────────────────────────
