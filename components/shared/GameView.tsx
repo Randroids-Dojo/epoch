@@ -70,6 +70,7 @@ function isSkipSetup(): boolean {
 
 export default function GameView() {
   const [showSetup, setShowSetup]   = useState(true);
+  const [showDifficultyHelp, setShowDifficultyHelp] = useState(false);
   const [difficulty, setDifficulty] = useState<AIDifficulty>('adept');
   const [gameState, setGameState]   = useState<GameState>(() => createInitialState(42));
   const [mode, setMode]             = useState<InteractionMode>({ kind: 'idle' });
@@ -1403,14 +1404,95 @@ export default function GameView() {
                 </button>
               ))}
             </div>
-            <button
-              data-testid="start-game-btn"
-              className="mt-2 font-mono text-sm tracking-widest uppercase px-8 py-2 border"
-              style={{ color: COLORS.CYAN, borderColor: COLORS.CYAN, background: 'rgba(0,229,255,0.08)' }}
-              onClick={() => handleStartGame(difficulty)}
-            >
-              BEGIN
-            </button>
+            <div className="flex gap-3 mt-2">
+              <button
+                data-testid="difficulty-help-btn"
+                className="font-mono text-sm tracking-widest uppercase px-4 py-2 border"
+                style={{ color: '#94a3b8', borderColor: '#334155', background: 'transparent' }}
+                onClick={() => setShowDifficultyHelp(true)}
+              >
+                ?
+              </button>
+              <button
+                data-testid="start-game-btn"
+                className="font-mono text-sm tracking-widest uppercase px-8 py-2 border"
+                style={{ color: COLORS.CYAN, borderColor: COLORS.CYAN, background: 'rgba(0,229,255,0.08)' }}
+                onClick={() => handleStartGame(difficulty)}
+              >
+                BEGIN
+              </button>
+            </div>
+
+            {/* Difficulty help modal */}
+            {showDifficultyHelp && (
+              <div
+                data-testid="difficulty-help-modal"
+                className="absolute inset-0 flex items-center justify-center"
+                style={{ background: 'rgba(10,14,26,0.95)', zIndex: 60 }}
+                onClick={() => setShowDifficultyHelp(false)}
+              >
+                <div
+                  className="font-mono max-w-lg w-full mx-4 p-6 border"
+                  style={{ borderColor: '#334155', background: '#0a0e1a' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="text-sm font-bold tracking-widest uppercase" style={{ color: COLORS.CYAN }}>
+                      Difficulty Details
+                    </div>
+                    <button
+                      data-testid="difficulty-help-close"
+                      className="text-sm px-2 py-1 border"
+                      style={{ color: '#94a3b8', borderColor: '#334155' }}
+                      onClick={() => setShowDifficultyHelp(false)}
+                    >
+                      X
+                    </button>
+                  </div>
+
+                  <table className="w-full text-xs" style={{ color: '#94a3b8' }}>
+                    <thead>
+                      <tr style={{ color: '#64748b' }}>
+                        <th className="text-left py-1 pr-2"></th>
+                        <th className="text-center py-1 px-1">Slots</th>
+                        <th className="text-center py-1 px-1">Temporal</th>
+                        <th className="text-left py-1 pl-2">Behavior</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style={{ borderTop: '1px solid #1e293b' }}>
+                        <td className="py-2 pr-2 font-bold" style={{ color: COLORS.CYAN }}>Novice</td>
+                        <td className="py-2 px-1 text-center">1</td>
+                        <td className="py-2 px-1 text-center">None</td>
+                        <td className="py-2 pl-2">Single archetype, ~30% suboptimal moves</td>
+                      </tr>
+                      <tr style={{ borderTop: '1px solid #1e293b' }}>
+                        <td className="py-2 pr-2 font-bold" style={{ color: COLORS.CYAN }}>Adept</td>
+                        <td className="py-2 px-1 text-center">2</td>
+                        <td className="py-2 px-1 text-center">Echo</td>
+                        <td className="py-2 pl-2">Mild adaptation, optimizes resources</td>
+                      </tr>
+                      <tr style={{ borderTop: '1px solid #1e293b' }}>
+                        <td className="py-2 pr-2 font-bold" style={{ color: COLORS.CYAN }}>Commander</td>
+                        <td className="py-2 px-1 text-center">2</td>
+                        <td className="py-2 px-1 text-center">Echo + Shift</td>
+                        <td className="py-2 pl-2">Blended archetypes, adapts to player patterns</td>
+                      </tr>
+                      <tr style={{ borderTop: '1px solid #1e293b' }}>
+                        <td className="py-2 pr-2 font-bold" style={{ color: COLORS.CYAN }}>Epoch Master</td>
+                        <td className="py-2 px-1 text-center">3</td>
+                        <td className="py-2 px-1 text-center">All</td>
+                        <td className="py-2 pl-2">Full blending, exploits player habits</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <div className="mt-4 text-xs" style={{ color: '#475569' }}>
+                    Difficulty only affects the AI opponent. Your options stay the same across all levels.
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
