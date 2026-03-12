@@ -75,28 +75,26 @@ function isSkipSetup(): boolean {
     !!(window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__;
 }
 
-function captureEpochSideStats(state: GameState, owner: 'player' | 'ai'): EpochSideStats {
-  let unitCount = 0;
-  let droneCount = 0;
-  let totalAttack = 0;
-  for (const u of state.units.values()) {
-    if (u.owner !== owner) continue;
-    unitCount++;
-    if (u.type === 'drone') droneCount++;
-    totalAttack += effectiveAttack(u);
-  }
-  const nexus = findNexus(state, owner);
+function captureAllEpochStats(state: GameState): { player: EpochSideStats; ai: EpochSideStats } {
   const nexusMaxHp = STRUCTURE_DEFS.command_nexus.maxHp;
-  return {
-    unitCount,
-    droneCount,
-    totalAttack,
-    nexusHp: nexus?.hp ?? 0,
-    nexusMaxHp,
-    crystals: state.players[owner].resources.cc,
-    flux: state.players[owner].resources.fx,
-    techTier: state.players[owner].techTier,
+  const sides: Record<'player' | 'ai', EpochSideStats> = {
+    player: { unitCount: 0, droneCount: 0, totalAttack: 0, nexusHp: 0, nexusMaxHp, crystals: 0, flux: 0, techTier: 0 },
+    ai:     { unitCount: 0, droneCount: 0, totalAttack: 0, nexusHp: 0, nexusMaxHp, crystals: 0, flux: 0, techTier: 0 },
   };
+  for (const u of state.units.values()) {
+    const s = sides[u.owner];
+    s.unitCount++;
+    if (u.type === 'drone') s.droneCount++;
+    s.totalAttack += effectiveAttack(u);
+  }
+  for (const owner of ['player', 'ai'] as const) {
+    const s = sides[owner];
+    s.nexusHp = findNexus(state, owner)?.hp ?? 0;
+    s.crystals = state.players[owner].resources.cc;
+    s.flux = state.players[owner].resources.fx;
+    s.techTier = state.players[owner].techTier;
+  }
+  return sides;
 }
 
 export default function GameView() {
@@ -128,6 +126,7 @@ export default function GameView() {
   // ── Epoch stats popup state ─────────────────────────────────────────────
   const [epochStatsPopup, setEpochStatsPopup] = useState<EpochStatsSnapshot | null>(null);
   const preEpochStatsRef = useRef<{ player: EpochSideStats; ai: EpochSideStats; epoch: number } | null>(null);
+  const dismissEpochStats = useCallback(() => setEpochStatsPopup(null), []);
 
   // Stable refs so callbacks always see the latest values.
   const gameStateRef = useRef(gameState);
@@ -381,17 +380,16 @@ export default function GameView() {
       // Build epoch stats popup snapshot
       const pre = preEpochStatsRef.current;
       if (pre) {
-        const postPlayer = captureEpochSideStats(s, 'player');
-        const postAI = captureEpochSideStats(s, 'ai');
+        const post = captureAllEpochStats(s);
         setEpochStatsPopup({
           epoch: pre.epoch,
-          player: postPlayer,
-          ai: postAI,
+          player: post.player,
+          ai: post.ai,
           playerDelta: {
-            units: postPlayer.unitCount - pre.player.unitCount,
-            drones: postPlayer.droneCount - pre.player.droneCount,
-            crystals: postPlayer.crystals - pre.player.crystals,
-            flux: postPlayer.flux - pre.player.flux,
+            units: post.player.unitCount - pre.player.unitCount,
+            drones: post.player.droneCount - pre.player.droneCount,
+            crystals: post.player.crystals - pre.player.crystals,
+            flux: post.player.flux - pre.player.flux,
           },
         });
         preEpochStatsRef.current = null;
@@ -570,8 +568,7 @@ export default function GameView() {
 
     // Capture pre-epoch stats for the popup
     preEpochStatsRef.current = {
-      player: captureEpochSideStats(state, 'player'),
-      ai: captureEpochSideStats(state, 'ai'),
+      ...captureAllEpochStats(state),
       epoch: state.epoch,
     };
 
@@ -1159,7 +1156,7 @@ export default function GameView() {
       {epochStatsPopup && (
         <EpochStatsPopup
           stats={epochStatsPopup}
-          onDismiss={() => setEpochStatsPopup(null)}
+          onDismiss={dismissEpochStats}
         />
       )}
 

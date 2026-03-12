@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 
 export interface EpochSideStats {
   unitCount: number;
@@ -107,20 +107,16 @@ function AttackBar({ value, maxValue, color, label }: { value: number; maxValue:
 
 /* ── main component ───────────────────────────────────────────────────────── */
 
-export default function EpochStatsPopup({ stats, onDismiss }: EpochStatsPopupProps) {
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+const AUTO_DISMISS_MS = 7000;
 
-  const dismiss = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    onDismiss();
-  }, [onDismiss]);
+export default function EpochStatsPopup({ stats, onDismiss }: EpochStatsPopupProps) {
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
 
   useEffect(() => {
-    timerRef.current = setTimeout(dismiss, 3000);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [dismiss]);
+    const timer = setTimeout(() => onDismissRef.current(), AUTO_DISMISS_MS);
+    return () => clearTimeout(timer);
+  }, []);
 
   const { player, ai, playerDelta } = stats;
 
@@ -136,7 +132,7 @@ export default function EpochStatsPopup({ stats, onDismiss }: EpochStatsPopupPro
   return (
     <div
       data-testid="epoch-stats-popup"
-      onClick={dismiss}
+      onClick={onDismiss}
       style={{
         position: 'fixed',
         inset: 0,
@@ -248,23 +244,11 @@ export default function EpochStatsPopup({ stats, onDismiss }: EpochStatsPopupPro
             style={{
               height: '100%',
               background: '#00d4ff',
-              animation: 'epoch-popup-timer 3s linear forwards',
+              animation: 'epoch-popup-timer 7s linear forwards',
             }}
           />
         </div>
       </div>
-
-      {/* Keyframe styles */}
-      <style>{`
-        @keyframes epoch-popup-in {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes epoch-popup-timer {
-          from { width: 100%; }
-          to { width: 0%; }
-        }
-      `}</style>
     </div>
   );
 }

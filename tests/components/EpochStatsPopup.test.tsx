@@ -61,12 +61,12 @@ describe('EpochStatsPopup', () => {
     expect(onDismiss).toHaveBeenCalled();
   });
 
-  it('auto-dismisses after 3 seconds', () => {
+  it('auto-dismisses after 7 seconds', () => {
     vi.useFakeTimers();
     const onDismiss = vi.fn();
     render(<EpochStatsPopup stats={baseStats} onDismiss={onDismiss} />);
     expect(onDismiss).not.toHaveBeenCalled();
-    act(() => { vi.advanceTimersByTime(3000); });
+    act(() => { vi.advanceTimersByTime(7000); });
     expect(onDismiss).toHaveBeenCalled();
     vi.useRealTimers();
   });
