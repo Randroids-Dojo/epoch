@@ -33,17 +33,17 @@ describe('ExecutionOverlay', () => {
   });
 
   it('shows MOVEMENT label during move phase', () => {
-    render(<ExecutionOverlay animation={makeAnimation()} elapsed={1.0} onSkip={() => {}} />);
+    render(<ExecutionOverlay animation={makeAnimation()} elapsed={2.0} onSkip={() => {}} />);
     expect(screen.getByTestId('phase-label')).toHaveTextContent('MOVEMENT');
   });
 
   it('shows COMBAT label during attack phase', () => {
-    render(<ExecutionOverlay animation={makeAnimation()} elapsed={2.5} onSkip={() => {}} />);
+    render(<ExecutionOverlay animation={makeAnimation()} elapsed={5.0} onSkip={() => {}} />);
     expect(screen.getByTestId('phase-label')).toHaveTextContent('COMBAT');
   });
 
   it('shows log entries for current and previous phases', () => {
-    render(<ExecutionOverlay animation={makeAnimation()} elapsed={1.0} onSkip={() => {}} />);
+    render(<ExecutionOverlay animation={makeAnimation()} elapsed={2.0} onSkip={() => {}} />);
     const entries = screen.getAllByTestId('log-entry');
     // During move phase: defend + move entries visible.
     expect(entries.length).toBe(2);

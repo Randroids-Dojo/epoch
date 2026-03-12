@@ -28,7 +28,7 @@ import { isComplete, STRUCTURE_DEFS } from '@/engine/structures';
 import { PlayerId } from '@/engine/player';
 import { COLORS, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
 import { InteractionMode, TutorialStep } from '@/lib/types';
-import { Unit, UNIT_DEFS } from '@/engine/units';
+import { Unit, UNIT_DEFS, effectiveAttack } from '@/engine/units';
 import { findUnitAt } from '@/engine/state';
 import { getPlayerTrainEligibility, getTrainFailureReason } from './trainFlow';
 import {
@@ -40,7 +40,7 @@ import {
 import { audioEngine } from '@/audio/engine';
 import GameCanvas from './GameCanvas';
 import { CameraSnapshot } from './GameCanvas';
-import PlanningBar from '../hud/PlanningBar';
+import EpochStatsPopup, { EpochSideStats, EpochStatsSnapshot } from '../hud/EpochStatsPopup';
 import CommandTray from '../hud/CommandTray';
 import CommandPicker from '../hud/CommandPicker';
 import UnitActionPanel from '../hud/UnitActionPanel';
@@ -77,6 +77,28 @@ function isSkipSetup(): boolean {
     !!(window as Window & { __EPOCH_SKIP_SETUP__?: boolean }).__EPOCH_SKIP_SETUP__;
 }
 
+function captureAllEpochStats(state: GameState): { player: EpochSideStats; ai: EpochSideStats } {
+  const nexusMaxHp = STRUCTURE_DEFS.command_nexus.maxHp;
+  const sides: Record<'player' | 'ai', EpochSideStats> = {
+    player: { unitCount: 0, droneCount: 0, totalAttack: 0, nexusHp: 0, nexusMaxHp, crystals: 0, flux: 0, techTier: 0 },
+    ai:     { unitCount: 0, droneCount: 0, totalAttack: 0, nexusHp: 0, nexusMaxHp, crystals: 0, flux: 0, techTier: 0 },
+  };
+  for (const u of state.units.values()) {
+    const s = sides[u.owner];
+    s.unitCount++;
+    if (u.type === 'drone') s.droneCount++;
+    s.totalAttack += effectiveAttack(u);
+  }
+  for (const owner of ['player', 'ai'] as const) {
+    const s = sides[owner];
+    s.nexusHp = findNexus(state, owner)?.hp ?? 0;
+    s.crystals = state.players[owner].resources.cc;
+    s.flux = state.players[owner].resources.fx;
+    s.techTier = state.players[owner].techTier;
+  }
+  return sides;
+}
+
 export default function GameView() {
   const [showSetup, setShowSetup]   = useState(true);
   const [difficulty, setDifficulty] = useState<AIDifficulty>('adept');
@@ -103,6 +125,11 @@ export default function GameView() {
   const [chronoScoutResult, setChronoScoutResult]   = useState<ChronoScoutResult | null>(null);
   const timelineForkActiveRef = useRef(false);
   const [timelineForkActive, setTimelineForkActive]  = useState(false);
+
+  // ── Epoch stats popup state ─────────────────────────────────────────────
+  const [epochStatsPopup, setEpochStatsPopup] = useState<EpochStatsSnapshot | null>(null);
+  const preEpochStatsRef = useRef<{ player: EpochSideStats; ai: EpochSideStats; epoch: number } | null>(null);
+  const dismissEpochStats = useCallback(() => setEpochStatsPopup(null), []);
 
   // Stable refs so callbacks always see the latest values.
   const gameStateRef = useRef(gameState);
@@ -184,8 +211,6 @@ export default function GameView() {
   );
 
   const hasEpochAnchor = gameState.players.player.epochAnchor !== null;
-  const instabilityTier = gameState.players.player.instabilityTier;
-  const instabilityEpochsLeft = gameState.players.player.instabilityEpochsLeft;
   const buildOptions = playerTechTier >= 2 ? TIER2_BUILD_OPTIONS : playerTechTier >= 1 ? TIER1_BUILD_OPTIONS : BASE_BUILD_OPTIONS;
 
   // ── Tutorial auto-advance ─────────────────────────────────────────────────
@@ -363,6 +388,24 @@ export default function GameView() {
 
     const s = gameStateRef.current;
     if (s.phase !== 'over') {
+      // Build epoch stats popup snapshot
+      const pre = preEpochStatsRef.current;
+      if (pre) {
+        const post = captureAllEpochStats(s);
+        setEpochStatsPopup({
+          epoch: pre.epoch,
+          player: post.player,
+          ai: post.ai,
+          playerDelta: {
+            units: post.player.unitCount - pre.player.unitCount,
+            drones: post.player.droneCount - pre.player.droneCount,
+            crystals: post.player.crystals - pre.player.crystals,
+            flux: post.player.flux - pre.player.flux,
+          },
+        });
+        preEpochStatsRef.current = null;
+      }
+
       s.phase = 'planning';
       setGameState({ ...s });
     }
@@ -533,6 +576,12 @@ export default function GameView() {
   const handleResolve = useCallback(() => {
     const state = gameStateRef.current;
     if (state.phase !== 'planning') return;
+
+    // Capture pre-epoch stats for the popup
+    preEpochStatsRef.current = {
+      ...captureAllEpochStats(state),
+      epoch: state.epoch,
+    };
 
     generateAICommands(state);
 
@@ -1146,17 +1195,11 @@ export default function GameView() {
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden">
-      {gameState.phase !== 'over' && !showSetup && (
-        <PlanningBar
-          epoch={gameState.epoch}
-          resources={gameState.players.player.resources}
-          timeLeft={timeLeft}
-          lockedIn={lockedIn}
-          techTier={playerTechTier}
-          researchEpochsLeft={researchEpochsLeft}
-          instabilityTier={instabilityTier}
-          instabilityEpochsLeft={instabilityEpochsLeft}
-          hasEpochAnchor={hasEpochAnchor}
+      {/* Epoch stats comparison popup — shown after each epoch resolves */}
+      {epochStatsPopup && (
+        <EpochStatsPopup
+          stats={epochStatsPopup}
+          onDismiss={dismissEpochStats}
         />
       )}
 

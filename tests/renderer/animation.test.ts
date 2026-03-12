@@ -170,16 +170,16 @@ describe('getCurrentPhase', () => {
     expect(getCurrentPhase(0)).toBe('defend');
   });
 
-  it('returns move at 0.5s', () => {
-    expect(getCurrentPhase(0.5)).toBe('move');
+  it('returns move at 1.0s', () => {
+    expect(getCurrentPhase(1.0)).toBe('move');
   });
 
-  it('returns attack at 2.0s', () => {
-    expect(getCurrentPhase(2.0)).toBe('attack');
+  it('returns attack at 4.5s', () => {
+    expect(getCurrentPhase(4.5)).toBe('attack');
   });
 
-  it('returns build at 3.0s', () => {
-    expect(getCurrentPhase(3.0)).toBe('build');
+  it('returns build at 7.0s', () => {
+    expect(getCurrentPhase(7.0)).toBe('build');
   });
 
   it('returns null after total duration', () => {

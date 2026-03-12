@@ -12,12 +12,10 @@ test('global command slots are visible @smoke', async ({ page }) => {
   }
 });
 
-test('timer is visible @smoke', async ({ page }) => {
+test('lock-in button is visible @smoke', async ({ page }) => {
   await page.goto('/');
   await waitForGameReady(page);
-  await expect(page.getByTestId('timer-value')).toBeVisible();
-  const text = await page.getByTestId('timer-value').textContent();
-  expect(text).toMatch(/\d+s/);
+  await expect(page.getByTestId('lock-in-btn')).toBeVisible();
 });
 
 test('lock-in button is visible and enabled initially', async ({ page }) => {

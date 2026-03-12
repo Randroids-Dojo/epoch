@@ -76,16 +76,16 @@ export interface PhaseConfig {
   dur: number;   // seconds
 }
 
-export const PHASE_DEFEND: PhaseConfig = { name: 'defend', start: 0,   dur: 0.5 };
-export const PHASE_MOVE:   PhaseConfig = { name: 'move',   start: 0.5, dur: 1.5 };
-export const PHASE_ATTACK: PhaseConfig = { name: 'attack', start: 2.0, dur: 1.0 };
-export const PHASE_BUILD:  PhaseConfig = { name: 'build',  start: 3.0, dur: 0.5 };
+export const PHASE_DEFEND: PhaseConfig = { name: 'defend', start: 0,   dur: 1.0 };
+export const PHASE_MOVE:   PhaseConfig = { name: 'move',   start: 1.0, dur: 3.5 };
+export const PHASE_ATTACK: PhaseConfig = { name: 'attack', start: 4.5, dur: 2.5 };
+export const PHASE_BUILD:  PhaseConfig = { name: 'build',  start: 7.0, dur: 1.5 };
 
 export const PHASES: readonly PhaseConfig[] = [
   PHASE_DEFEND, PHASE_MOVE, PHASE_ATTACK, PHASE_BUILD,
 ];
 
-export const TOTAL_DURATION = 3.5;
+export const TOTAL_DURATION = 8.5;
 
 // ── ExecutionAnimation ─────────────────────────────────────────────────────
 
