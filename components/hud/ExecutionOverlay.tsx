@@ -34,9 +34,9 @@ export default function ExecutionOverlay({
           data-testid="phase-label"
           className="rounded px-3 py-1 text-xs font-bold tracking-widest uppercase"
           style={{
-            background: 'rgba(0,212,255,0.1)',
-            border: '1px solid rgba(0,212,255,0.3)',
-            color: '#00d4ff',
+            background: 'rgba(230,57,70,0.1)',
+            border: '1px solid rgba(230,57,70,0.3)',
+            color: '#e63946',
           }}
         >
           {phaseLabel}
@@ -55,7 +55,7 @@ export default function ExecutionOverlay({
               data-testid="log-entry"
               className="rounded px-2 py-0.5 text-xs"
               style={{
-                background: 'rgba(10,14,26,0.85)',
+                background: 'rgba(11,10,15,0.88)',
                 color: '#94a3b8',
                 animation: 'fadeIn 0.3s ease forwards',
               }}
@@ -73,9 +73,9 @@ export default function ExecutionOverlay({
           onClick={onSkip}
           className={`rounded px-4 py-2 text-xs font-bold tracking-widest uppercase${tutorialHighlightSkip ? ' tutorial-highlight' : ''}`}
           style={{
-            background: 'rgba(0,212,255,0.12)',
-            border: tutorialHighlightSkip ? undefined : '1px solid #00d4ff',
-            color: '#00d4ff',
+            background: 'rgba(230,57,70,0.12)',
+            border: tutorialHighlightSkip ? undefined : '1px solid #e63946',
+            color: '#e63946',
             cursor: 'pointer',
             minWidth: 80,
             position: tutorialHighlightSkip ? 'relative' as const : undefined,

@@ -4,11 +4,11 @@ import { createInitialGameState } from '@/lib/types'
 
 describe('COLORS', () => {
   it('has NAVY color defined', () => {
-    expect(COLORS.NAVY).toBe('#0a0e1a')
+    expect(COLORS.NAVY).toBe('#0b0a0f')
   })
 
   it('has CYAN color defined', () => {
-    expect(COLORS.CYAN).toBe('#00d4ff')
+    expect(COLORS.CYAN).toBe('#e63946')
   })
 })
 

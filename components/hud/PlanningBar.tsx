@@ -35,7 +35,7 @@ export default function PlanningBar({
   return (
     <div
       className="shrink-0 font-mono text-xs"
-      style={{ background: 'rgba(10,14,26,0.95)', borderBottom: '1px solid #1e293b' }}
+      style={{ background: 'rgba(11,10,15,0.95)', borderBottom: '1px solid #1e1a28' }}
     >
       {/* Main row */}
       <div className="flex items-center justify-between px-4 py-2">
@@ -43,7 +43,7 @@ export default function PlanningBar({
         <div className="flex items-center gap-3">
           <span
             className="font-bold tracking-[0.25em] uppercase"
-            style={{ color: '#00d4ff', textShadow: '0 0 8px rgba(0,212,255,0.4)' }}
+            style={{ color: '#e63946', textShadow: '0 0 8px rgba(230,57,70,0.4)' }}
           >
             EPOCH {epoch}
           </span>
@@ -54,7 +54,7 @@ export default function PlanningBar({
         {/* Centre: resources + tech tier */}
         <div className="flex items-center gap-4" style={{ color: '#94a3b8' }}>
           <span>
-            <span style={{ color: '#7dd3fc' }}>CC</span>{' '}
+            <span style={{ color: '#ff4d6a' }}>CC</span>{' '}
             <span style={{ color: '#e2e8f0' }}>{resources.cc}</span>
           </span>
           <span>
@@ -111,7 +111,7 @@ export default function PlanningBar({
           {lockedIn && (
             <span
               className="rounded px-2 py-0.5 text-xs font-bold tracking-widest uppercase"
-              style={{ background: 'rgba(0,212,255,0.12)', color: '#00d4ff', border: '1px solid #00d4ff40' }}
+              style={{ background: 'rgba(230,57,70,0.12)', color: '#e63946', border: '1px solid #e6394640' }}
             >
               LOCKED
             </span>
@@ -132,7 +132,7 @@ export default function PlanningBar({
       </div>
 
       {/* Timer progress bar */}
-      <div style={{ height: '2px', background: '#1e293b' }}>
+      <div style={{ height: '2px', background: '#1e1a28' }}>
         <div
           style={{
             height: '100%',

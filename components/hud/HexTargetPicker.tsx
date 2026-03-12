@@ -74,8 +74,8 @@ export default function HexTargetPicker({
       className="font-mono text-xs"
       style={{
         zIndex: 100,
-        background: '#0d1321',
-        border: '1px solid #334155',
+        background: '#0d0c14',
+        border: '1px solid #2a2535',
         borderRadius: 6,
         boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
         overflow: 'hidden',
@@ -88,7 +88,7 @@ export default function HexTargetPicker({
         className="px-3 py-1.5"
         style={{
           color: '#475569',
-          borderBottom: '1px solid #1e293b',
+          borderBottom: '1px solid #1e1a28',
           fontSize: '0.65rem',
           letterSpacing: '0.1em',
           display: 'flex',
@@ -130,12 +130,12 @@ export default function HexTargetPicker({
             const isBlocked = !isCenter && !isEligible;
 
             if (isCenter) {
-              fill = '#00d4ff20';
-              stroke = '#00d4ff';
+              fill = '#e6394620';
+              stroke = '#e63946';
               opacity = 1;
             } else if (isEligible) {
-              fill = '#00d4ff10';
-              stroke = '#00d4ff80';
+              fill = '#e6394610';
+              stroke = '#e6394680';
               cursor = 'pointer';
               opacity = 1;
             }
@@ -153,7 +153,7 @@ export default function HexTargetPicker({
                   style={{ cursor, transition: 'fill 0.1s ease' }}
                   onClick={isEligible ? () => onSelect(worldHex) : undefined}
                   onMouseEnter={(e) => {
-                    if (isEligible) (e.target as SVGPolygonElement).setAttribute('fill', '#00d4ff30');
+                    if (isEligible) (e.target as SVGPolygonElement).setAttribute('fill', '#e6394630');
                   }}
                   onMouseLeave={(e) => {
                     if (isEligible) (e.target as SVGPolygonElement).setAttribute('fill', fill);

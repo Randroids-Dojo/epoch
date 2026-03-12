@@ -2,25 +2,25 @@ import { FogState, HexCell } from '../engine/map';
 import { TerrainType } from '../engine/terrain';
 import { Camera } from './camera';
 
-// ── Color palette (GDD §11.2) ────────────────────────────────────────────────
+// ── Obsidian & Crimson palette — paper-diorama cel-shaded aesthetic ──────────
 const C = {
-  bg:              '#0a0e1a',
-  hexFill:         '#1e293b',
-  hexFillVisible:  '#253347',
-  hexBorder:       '#334155',
-  hexBorderSelect: '#00e5ff',
-  unexplored:      '#070b14',
-  exploredOverlay: 'rgba(0,0,0,0.40)',
-  crystalNode:        '#7dd3fc',
-  crystalNodeVisible: '#0c2d4a',
-  voidRift:           '#0c1220',
-  ridge:              '#475569',
-  ridgeVisible:       '#1c2535',
-  energyField:        '#110a24',
-  energyFieldSymbol:  '#7c3aed',
-  fluxVent:           '#d946ef',
-  fluxVentVisible:    '#1a0a2e',
-  fog:                '#334155',
+  bg:              '#0b0a0f',     // deep obsidian
+  hexFill:         '#16141c',     // dark tile
+  hexFillVisible:  '#1e1a28',     // visible tile — slightly warmer
+  hexBorder:       '#2a2535',     // subtle border
+  hexBorderSelect: '#e63946',     // crimson selection
+  unexplored:      '#08070c',     // near-black
+  exploredOverlay: 'rgba(0,0,0,0.45)',
+  crystalNode:        '#ff4d6a',  // rose crystal
+  crystalNodeVisible: '#2a0f1a',  // dark rose fill
+  voidRift:           '#0a080e',  // void black
+  ridge:              '#3d3548',  // slate-purple
+  ridgeVisible:       '#1f1a28',  // dark slate
+  energyField:        '#1a0c22',  // dark violet
+  energyFieldSymbol:  '#9b3aed',  // vivid violet
+  fluxVent:           '#ff2255',  // hot pink-red
+  fluxVentVisible:    '#1e0815',  // dark crimson
+  fog:                '#2a2535',
 } as const;
 
 /** Base hex size in world pixels (before camera zoom is applied). */
@@ -41,7 +41,7 @@ export function hexPath(ctx: CanvasRenderingContext2D, sx: number, sy: number, s
   ctx.closePath();
 }
 
-/** Draw a single hex cell onto the canvas. */
+/** Draw a single hex cell onto the canvas with paper-diorama cel-shaded style. */
 export function drawHexCell(
   ctx: CanvasRenderingContext2D,
   cell: HexCell,
@@ -52,7 +52,15 @@ export function drawHexCell(
 ): void {
   const size = BASE_HEX_SIZE * cam.zoom;
 
-  // ── Hex fill ──────────────────────────────────────────────────────────────
+  // ── Paper shadow layer (offset down-right for 2.5D diorama feel) ────────
+  if (cell.fog !== 'unexplored' && cam.zoom >= 0.4) {
+    const shadowOff = Math.max(1, size * 0.06);
+    hexPath(ctx, sx + shadowOff, sy + shadowOff, size * 0.97);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fill();
+  }
+
+  // ── Hex fill ────────────────────────────────────────────────────────────
   hexPath(ctx, sx, sy, size);
 
   ctx.fillStyle = getHexFill(cell.terrain, cell.fog);
@@ -64,12 +72,23 @@ export function drawHexCell(
     ctx.fill();
   }
 
-  // ── Border ────────────────────────────────────────────────────────────────
+  // ── Thick cel-shaded border ─────────────────────────────────────────────
   ctx.strokeStyle = selected ? C.hexBorderSelect : C.hexBorder;
-  ctx.lineWidth = selected ? Math.max(1.5, cam.zoom) : 0.5;
+  ctx.lineWidth = selected ? Math.max(2, cam.zoom * 1.5) : Math.max(0.8, cam.zoom * 0.7);
   ctx.stroke();
 
-  // ── Terrain symbol (skip for unexplored or when zoomed out too far) ───────
+  // ── Inner bevel highlight (top-left edge gets a subtle bright line) ─────
+  if (cell.fog === 'visible' && cam.zoom >= 0.5) {
+    ctx.beginPath();
+    ctx.moveTo(sx + size * CORNER_COS[0], sy + size * CORNER_SIN[0]);
+    ctx.lineTo(sx + size * CORNER_COS[1], sy + size * CORNER_SIN[1]);
+    ctx.lineTo(sx + size * CORNER_COS[2], sy + size * CORNER_SIN[2]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = Math.max(0.5, cam.zoom * 0.5);
+    ctx.stroke();
+  }
+
+  // ── Terrain symbol (skip for unexplored or when zoomed out too far) ────
   if (cell.fog !== 'unexplored' && cam.zoom >= 0.55) {
     drawTerrainSymbol(ctx, cell.terrain, sx, sy, size, cell.fog === 'explored');
   }
@@ -102,10 +121,11 @@ function drawTerrainSymbol(
   const prevAlpha   = ctx.globalAlpha;
   const prevLW      = ctx.lineWidth;
   ctx.globalAlpha   = desaturated ? 0.4 : 1.0;
-  ctx.lineWidth     = Math.max(1, size * 0.05);
+  ctx.lineWidth     = Math.max(1.5, size * 0.06);
 
   switch (terrain) {
     case 'crystal_node': {
+      // Crimson crystal diamond with inner glow
       ctx.strokeStyle = C.crystalNode;
       ctx.beginPath();
       ctx.moveTo(cx,         cy - r);
@@ -114,10 +134,18 @@ function drawTerrainSymbol(
       ctx.lineTo(cx - r * 0.6, cy);
       ctx.closePath();
       ctx.stroke();
+      // Inner glow dot
+      if (!desaturated) {
+        ctx.fillStyle = C.crystalNode;
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
       break;
     }
     case 'void_rift': {
-      ctx.strokeStyle = C.ridge;
+      ctx.strokeStyle = '#4a3858';
       ctx.beginPath();
       ctx.moveTo(cx - r * 0.6, cy - r * 0.6);
       ctx.lineTo(cx + r * 0.6, cy + r * 0.6);
