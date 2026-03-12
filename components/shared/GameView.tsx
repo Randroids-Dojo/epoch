@@ -77,6 +77,10 @@ export default function GameView() {
   const [lockInFlash, setLockInFlash] = useState(false);
   const [animElapsed, setAnimElapsed] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
+  const [paused, setPaused]     = useState(false);
+
+  // Track how long the animation was paused so we can adjust startedAt.
+  const pausedAtRef = useRef<number | null>(null);
   const [cameraSnapshot, setCameraSnapshot] = useState<CameraSnapshot | null>(null);
   const [centerRequest, setCenterRequest] = useState<{ nonce: number; worldX: number; worldY: number } | null>(null);
   const centerNonceRef = useRef(0);
@@ -539,7 +543,14 @@ export default function GameView() {
 
   // ── Animation tick ────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!animationRef.current) return;
+    if (!animationRef.current || paused) return;
+
+    // If resuming from pause, shift startedAt forward by the paused duration.
+    if (pausedAtRef.current !== null && animationRef.current) {
+      const pauseDuration = performance.now() - pausedAtRef.current;
+      animationRef.current.startedAt += pauseDuration;
+      pausedAtRef.current = null;
+    }
 
     let rafId: number;
     const tick = () => {
@@ -558,17 +569,17 @@ export default function GameView() {
 
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [gameState.phase]);
+  }, [gameState.phase, paused]);
 
   // ── Countdown timer ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (lockedIn || gameState.phase !== 'planning' || showSetup) return;
+    if (lockedIn || gameState.phase !== 'planning' || showSetup || paused) return;
 
     const id = setInterval(() => {
       setTimeLeft((t) => Math.max(0, t - 1));
     }, 1000);
     return () => clearInterval(id);
-  }, [lockedIn, gameState.phase, showSetup]);
+  }, [lockedIn, gameState.phase, showSetup, paused]);
 
   useEffect(() => {
     if (timeLeft === 0 && gameState.phase === 'planning' && !lockedIn && !showSetup) {
@@ -582,6 +593,7 @@ export default function GameView() {
     setShowSetup(!isSkipSetup());
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
+    setPaused(false);
   }, []);
 
   const handleStartGame = useCallback((diff: AIDifficulty) => {
@@ -951,6 +963,29 @@ export default function GameView() {
     }
   }, [commitUnitOrder, lockedIn]);
 
+  // ── Pause toggle ─────────────────────────────────────────────────────────
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
+
+  const togglePause = useCallback(() => {
+    setPaused((prev) => {
+      const next = !prev;
+      if (next) {
+        // Entering pause — close any open menus/pickers and freeze everything.
+        setMode({ kind: 'idle' });
+        pausedAtRef.current = performance.now();
+        audioEngine.suspend();
+      } else {
+        // Resuming — audio restarts; pausedAtRef is consumed in the anim tick effect.
+        audioEngine.resume();
+      }
+      return next;
+    });
+  }, []);
+
+  const togglePauseRef = useRef(togglePause);
+  togglePauseRef.current = togglePause;
+
   // ── Keyboard shortcuts ───────────────────────────────────────────────────
   const handleLockInRef = useRef(handleLockIn);
   handleLockInRef.current = handleLockIn;
@@ -962,16 +997,28 @@ export default function GameView() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (animationRef.current !== null) {
-          e.preventDefault();
-          finishExecutionRef.current();
-        } else {
+        e.preventDefault();
+        // Don't allow pause during setup or game-over.
+        if (showSetupRef.current) return;
+        if (gameStateRef.current.phase === 'over') return;
+
+        // If paused, always unpause.
+        if (pausedRef.current) {
+          togglePauseRef.current();
+          return;
+        }
+
+        // If in a sub-mode (picker, targeting), close it first. Otherwise toggle pause.
+        if (modeRef.current.kind !== 'idle') {
           setMode({ kind: 'idle' });
+        } else {
+          togglePauseRef.current();
         }
         return;
       }
 
-      // Block game shortcuts while difficulty picker is shown.
+      // Block all shortcuts while paused or during setup.
+      if (pausedRef.current) return;
       if (showSetupRef.current) return;
 
       if (e.key === ' ') {
@@ -1285,6 +1332,49 @@ export default function GameView() {
           />
         )}
 
+        {/* Pause button — visible during active gameplay */}
+        {!showSetup && gameState.phase !== 'over' && !paused && (
+          <button
+            data-testid="pause-btn"
+            aria-label="Pause game"
+            onClick={togglePause}
+            className="absolute font-mono text-xs tracking-wider uppercase"
+            style={{
+              top: 8,
+              right: 8,
+              zIndex: 40,
+              padding: '6px 14px',
+              background: 'rgba(10,14,26,0.75)',
+              border: '1px solid #334155',
+              borderRadius: 4,
+              color: '#94a3b8',
+              cursor: 'pointer',
+            }}
+          >
+            Pause
+          </button>
+        )}
+
+        {/* Pause overlay */}
+        {paused && (
+          <div
+            data-testid="pause-overlay"
+            className="absolute inset-0 flex flex-col items-center justify-center"
+            style={{ background: 'rgba(10,14,26,0.80)', zIndex: 60 }}
+            onClick={togglePause}
+          >
+            <div
+              className="font-mono text-4xl font-bold tracking-widest uppercase"
+              style={{ color: COLORS.CYAN }}
+            >
+              PAUSED
+            </div>
+            <div className="mt-4 font-mono text-sm" style={{ color: '#64748b' }}>
+              {isMobile ? 'Tap to resume' : 'Press Esc or tap to resume'}
+            </div>
+          </div>
+        )}
+
         {/* Difficulty picker overlay */}
         {showSetup && (
           <div
@@ -1362,7 +1452,7 @@ export default function GameView() {
               ? mode.slotIndex
               : null
           }
-          lockedIn={lockedIn}
+          lockedIn={lockedIn || paused}
           lockInFlash={lockInFlash}
           isMobile={isMobile}
           forkMode={timelineForkActive}
