@@ -73,8 +73,7 @@ function isSkipSetup(): boolean {
 export default function GameView() {
   const [showSetup, setShowSetup]   = useState(true);
   const [difficulty, setDifficulty] = useState<AIDifficulty>('adept');
-  const [introPlaying, setIntroPlaying] = useState(false);
-  const pendingDifficultyRef = useRef<AIDifficulty>('adept');
+  const [introPlaying, setIntroPlaying] = useState(true);
   const [gameState, setGameState]   = useState<GameState>(() => createInitialState(42));
   const [mode, setMode]             = useState<InteractionMode>({ kind: 'idle' });
   const [timeLeft, setTimeLeft]     = useState(PLANNING_DURATION);
@@ -110,7 +109,7 @@ export default function GameView() {
 
   // ── Test: auto-dismiss difficulty picker ──────────────────────────────────
   useEffect(() => {
-    if (isSkipSetup()) setShowSetup(false);
+    if (isSkipSetup()) { setShowSetup(false); setIntroPlaying(false); }
   }, []);
 
   useEffect(() => {
@@ -594,24 +593,27 @@ export default function GameView() {
   // ── Play Again / Start ────────────────────────────────────────────────────
   const handlePlayAgain = useCallback(() => {
     setGameState(createInitialState(42));
-    setShowSetup(!isSkipSetup());
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
     setPaused(false);
+    if (isSkipSetup()) {
+      setShowSetup(false);
+      setIntroPlaying(false);
+    } else {
+      setIntroPlaying(true);
+      setShowSetup(true);
+    }
   }, []);
 
   const handleStartGame = useCallback((diff: AIDifficulty) => {
-    pendingDifficultyRef.current = diff;
-    setShowSetup(false);
-    setIntroPlaying(true);
-  }, []);
-
-  const handleIntroComplete = useCallback(() => {
-    const diff = pendingDifficultyRef.current;
     setDifficulty(diff);
     setGameState(createInitialState(Date.now(), diff));
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
+    setShowSetup(false);
+  }, []);
+
+  const handleIntroComplete = useCallback(() => {
     setIntroPlaying(false);
   }, []);
 
