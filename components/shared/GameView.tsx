@@ -211,10 +211,14 @@ export default function GameView() {
         setTutorialStep('extractor_select_drone');
         break;
       case 'extractor_lock_in':
-        // Extractor building — next epoch gather + train.
-        setTutorialStep('gather_select_drone');
+        // Barracks done, extractor still building — next epoch train a sentry.
+        setTutorialStep('train_select_slot');
         break;
       case 'train_lock_in':
+        // Sentry training queued — next epoch gather with extractor.
+        setTutorialStep('gather_select_drone');
+        break;
+      case 'gather_lock_in':
         setTutorialStep(null); // tutorial complete
         break;
     }
@@ -294,27 +298,7 @@ export default function GameView() {
         break;
       }
 
-      // ── Phase 4: gather then train (same turn) ─────────────
-      case 'gather_select_drone':
-        if (mode.kind === 'unit_picker_open') {
-          const u = gameState.units.get(mode.unitId);
-          if (u?.type === 'drone') setTutorialStep('gather_select_gather');
-        }
-        break;
-      case 'gather_select_gather':
-        if (mode.kind === 'gather_picker') setTutorialStep('gather_select_target');
-        break;
-      case 'gather_select_target':
-        for (const cmd of gameState.players.player.unitOrders.values()) {
-          if (cmd.type === 'gather') {
-            // Gather is set — now guide to the global tray to train.
-            setTutorialStep('train_select_slot');
-            break;
-          }
-        }
-        break;
-
-      // ── Train a Pulse Sentry (continues same turn) ─────────
+      // ── Phase 3: train a Pulse Sentry (barracks done) ──────
       case 'train_select_slot':
         if (mode.kind === 'global_picker_open') setTutorialStep('train_select_train');
         break;
@@ -330,6 +314,25 @@ export default function GameView() {
         }
         break;
       }
+
+      // ── Phase 4: gather (extractor done) ───────────────────
+      case 'gather_select_drone':
+        if (mode.kind === 'unit_picker_open') {
+          const u = gameState.units.get(mode.unitId);
+          if (u?.type === 'drone') setTutorialStep('gather_select_gather');
+        }
+        break;
+      case 'gather_select_gather':
+        if (mode.kind === 'gather_picker') setTutorialStep('gather_select_target');
+        break;
+      case 'gather_select_target':
+        for (const cmd of gameState.players.player.unitOrders.values()) {
+          if (cmd.type === 'gather') {
+            setTutorialStep('gather_lock_in');
+            break;
+          }
+        }
+        break;
     }
   }, [tutorialActive, tutorialStep, mode, gameState]);
 
@@ -1379,6 +1382,7 @@ export default function GameView() {
             animation={animationRef.current}
             elapsed={animElapsed}
             onSkip={handleSkip}
+            tutorialHighlightSkip={tutorialActive}
           />
         )}
 
@@ -1503,7 +1507,8 @@ export default function GameView() {
           tutorialHighlightLockIn={
             tutorialStep === 'lock_in' ||
             tutorialStep === 'extractor_lock_in' ||
-            tutorialStep === 'train_lock_in'
+            tutorialStep === 'train_lock_in' ||
+            tutorialStep === 'gather_lock_in'
           }
           tutorialHighlightSlot={tutorialStep === 'train_select_slot' || tutorialStep === 'extractor_train_select_slot'}
           onSlotClick={handleGlobalSlotClick}
