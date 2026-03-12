@@ -12,19 +12,19 @@ interface GameStatsPanelProps {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const C = {
-  cyan:    '#00d4ff',
-  red:     '#ff6b4a',
+  cyan:    '#e63946',    // player crimson
+  red:     '#8b5cf6',    // AI violet
   gold:    '#fbbf24',
-  dim:     '#475569',
-  dimmer:  '#334155',
+  dim:     '#4a4555',
+  dimmer:  '#2a2535',
   muted:   '#64748b',
   text:    '#94a3b8',
   bright:  '#e2e8f0',
   green:   '#22c55e',
   orange:  '#f97316',
   purple:  '#a78bfa',
-  bg:      'rgba(10,14,26,0.92)',
-  border:  '#1e293b',
+  bg:      'rgba(11,10,15,0.92)',
+  border:  '#1e1a28',
 };
 
 const UNIT_SHORT: Record<UnitType, string> = {
@@ -92,7 +92,7 @@ function TechRow({ tier, researchLeft }: { tier: number; researchLeft: number })
       {[0, 1, 2, 3].map(t => (
         <div key={t} style={{
           width: 14, height: 6, borderRadius: 2,
-          background: t < tier ? C.cyan : t === tier && researchLeft > 0 ? 'rgba(0,212,255,0.3)' : C.dimmer,
+          background: t < tier ? C.cyan : t === tier && researchLeft > 0 ? 'rgba(230,57,70,0.3)' : C.dimmer,
           border: `1px solid ${t <= tier ? C.cyan : C.dimmer}`,
         }} />
       ))}
@@ -233,7 +233,7 @@ export default function GameStatsPanel({ gameState }: GameStatsPanelProps) {
         width: 200,
         zIndex: 30,
         padding: '8px 8px',
-        background: 'linear-gradient(to left, rgba(10,14,26,0.92) 0%, rgba(10,14,26,0.72) 80%, transparent 100%)',
+        background: 'linear-gradient(to left, rgba(11,10,15,0.92) 0%, rgba(11,10,15,0.72) 80%, transparent 100%)',
         pointerEvents: 'none',
         display: 'flex',
         flexDirection: 'column',

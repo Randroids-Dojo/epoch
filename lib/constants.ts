@@ -1,13 +1,14 @@
 export const COLORS = {
-  NAVY: '#0a0e1a',
-  NAVY_LIGHT: '#111827',
-  CYAN: '#00d4ff',
-  CYAN_DIM: '#0099bb',
-  CORAL: '#ff6b6b',
+  // ── Obsidian & Crimson palette ──────────────────────────────────────────
+  NAVY: '#0b0a0f',         // deep obsidian black
+  NAVY_LIGHT: '#151319',   // slightly lighter obsidian
+  CYAN: '#e63946',         // player crimson red
+  CYAN_DIM: '#a8232e',     // dimmed crimson
+  CORAL: '#ff6b6b',        // AI coral (enemy units)
   GOLD: '#ffd700',
   MAGENTA: '#ff00ff',
-  ICE: '#e0f7ff',
-  ICE_DIM: '#a8d8ea',
+  ICE: '#ffe0e0',          // light blush (was ice blue)
+  ICE_DIM: '#d4a0a0',      // dim blush
 } as const
 
 /** Responsive slot dimensions for the command tray. */

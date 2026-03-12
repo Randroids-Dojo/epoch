@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 @theme {
-  --color-navy: #0a0e1a;
-  --color-navy-light: #111827;
-  --color-cyan: #00d4ff;
-  --color-cyan-dim: #0099bb;
+  --color-navy: #0b0a0f;
+  --color-navy-light: #151319;
+  --color-cyan: #e63946;
+  --color-cyan-dim: #a8232e;
   --color-coral: #ff6b6b;
   --color-gold: #ffd700;
   --color-magenta: #ff00ff;
-  --color-ice: #e0f7ff;
-  --color-ice-dim: #a8d8ea;
+  --color-ice: #ffe0e0;
+  --color-ice-dim: #d4a0a0;
 
   --font-mono: ui-monospace, 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
 }
@@ -97,12 +97,12 @@ body {
 
 @keyframes pulse-border {
   0%, 100% {
-    border-color: #1e293b;
+    border-color: #1e1a28;
     box-shadow: none;
   }
   50% {
-    border-color: #334155;
-    box-shadow: 0 0 6px rgba(0, 212, 255, 0.08);
+    border-color: #2a2535;
+    box-shadow: 0 0 6px rgba(230, 57, 70, 0.08);
   }
 }
 
@@ -171,7 +171,7 @@ body {
   width: 44px;
   height: 44px;
   border-radius: 6px;
-  border: 1px solid #334155;
+  border: 1px solid #2a2535;
   background: rgba(10, 14, 26, 0.90);
   color: #94a3b8;
   cursor: pointer;
@@ -183,9 +183,9 @@ body {
 }
 
 .epoch-fab:hover {
-  border-color: #00d4ff;
-  color: #00d4ff;
-  box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+  border-color: #e63946;
+  color: #e63946;
+  box-shadow: 0 0 10px rgba(230, 57, 70, 0.2);
 }
 
 .epoch-fab.open {
@@ -229,8 +229,8 @@ body {
   z-index: 2999;
   display: flex;
   flex-direction: column;
-  background: #0d1321;
-  border: 1px solid #334155;
+  background: #0d0c14;
+  border: 1px solid #2a2535;
   border-radius: 6px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
   overflow: hidden;
@@ -270,12 +270,12 @@ body {
 }
 
 .epoch-fab-menu-item:hover {
-  background: rgba(0, 212, 255, 0.06);
-  color: #00d4ff;
+  background: rgba(230, 57, 70, 0.06);
+  color: #e63946;
 }
 
 .epoch-fab-menu-item + .epoch-fab-menu-item {
-  border-top: 1px solid #1e293b;
+  border-top: 1px solid #1e1a28;
 }
 
 /* ── Feedback Panel ──────────────────────────────────────────────────────── */
@@ -286,10 +286,10 @@ body {
   right: 1.25rem;
   z-index: 2999;
   width: 340px;
-  background: #0d1321;
-  border: 1px solid #334155;
+  background: #0d0c14;
+  border: 1px solid #2a2535;
   border-radius: 6px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.7), 0 0 30px rgba(0, 212, 255, 0.06);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.7), 0 0 30px rgba(230, 57, 70, 0.06);
   opacity: 0;
   transform: translateY(6px) scale(0.96);
   transform-origin: bottom right;
@@ -307,8 +307,8 @@ body {
   padding: 0.85rem 1rem 0.6rem;
   font-size: 0.7rem;
   letter-spacing: 0.12em;
-  color: #00d4ff;
-  border-bottom: 1px solid #1e293b;
+  color: #e63946;
+  border-bottom: 1px solid #1e1a28;
 }
 
 .epoch-feedback-form {
@@ -320,11 +320,11 @@ body {
 
 .epoch-feedback-textarea {
   width: 100%;
-  background: #070b14;
-  border: 1px solid #1e293b;
+  background: #08070c;
+  border: 1px solid #1e1a28;
   border-radius: 4px;
   padding: 0.65rem 0.75rem;
-  color: #e0f7ff;
+  color: #ffe0e0;
   font-family: var(--font-mono);
   font-size: 0.8rem;
   line-height: 1.5;
@@ -337,12 +337,12 @@ body {
 }
 
 .epoch-feedback-textarea::placeholder {
-  color: #334155;
+  color: #2a2535;
 }
 
 .epoch-feedback-textarea:focus {
-  border-color: #334155;
-  box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.12);
+  border-color: #2a2535;
+  box-shadow: 0 0 0 2px rgba(230, 57, 70, 0.12);
 }
 
 .epoch-feedback-submit {
@@ -351,8 +351,8 @@ body {
   justify-content: center;
   gap: 0.4rem;
   padding: 0.55rem 1rem;
-  background: #00d4ff;
-  color: #0a0e1a;
+  background: #e63946;
+  color: #0b0a0f;
   border: none;
   border-radius: 4px;
   font-family: var(--font-mono);
@@ -365,7 +365,7 @@ body {
 }
 
 .epoch-feedback-submit:hover:not(:disabled) {
-  box-shadow: 0 0 12px rgba(0, 212, 255, 0.4);
+  box-shadow: 0 0 12px rgba(230, 57, 70, 0.4);
 }
 
 .epoch-feedback-submit:disabled {
@@ -390,7 +390,7 @@ body {
 
 .epoch-feedback-hint {
   font-size: 0.68rem;
-  color: #334155;
+  color: #2a2535;
   letter-spacing: 0.02em;
 }
 
@@ -409,8 +409,8 @@ body {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  border: 2px solid #00d4ff;
-  color: #00d4ff;
+  border: 2px solid #e63946;
+  color: #e63946;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -422,7 +422,7 @@ body {
 .epoch-feedback-success p {
   margin: 0;
   font-size: 0.85rem;
-  color: #e0f7ff;
+  color: #ffe0e0;
   font-family: var(--font-mono);
 }
 

@@ -130,8 +130,8 @@ describe('CommandTray', () => {
       />,
     );
     const slot = screen.getByTestId('command-slot-1');
-    // Selected slot has cyan border (jsdom converts hex to rgb)
-    expect(slot.style.border).toContain('rgb(0, 212, 255)');
+    // Selected slot has crimson border (jsdom converts hex to rgb)
+    expect(slot.style.border).toContain('rgb(230, 57, 70)');
   });
 
   it('clicking a slot calls onSlotClick with correct index', () => {

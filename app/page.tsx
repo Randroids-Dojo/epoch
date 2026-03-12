@@ -5,7 +5,7 @@ export default function Home() {
   return (
     <main
       className="flex h-dvh w-screen flex-col overflow-hidden"
-      style={{ backgroundColor: '#0a0e1a' }}
+      style={{ backgroundColor: '#0b0a0f' }}
     >
       <UpdateBanner />
       <GameView />

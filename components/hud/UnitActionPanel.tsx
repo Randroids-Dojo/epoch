@@ -165,11 +165,11 @@ export default function UnitActionPanel({
                   marginBottom: 4,
                 }}
               >
-                <div style={{ flex: 1, height: 1, background: '#334155' }} />
+                <div style={{ flex: 1, height: 1, background: '#2a2535' }} />
                 <span style={{ color: '#475569', fontSize: '0.55rem', letterSpacing: '0.1em', whiteSpace: 'nowrap' }}>
                   DEFAULT TASKS
                 </span>
-                <div style={{ flex: 1, height: 1, background: '#334155' }} />
+                <div style={{ flex: 1, height: 1, background: '#2a2535' }} />
               </div>
             )}
             <div
@@ -187,20 +187,20 @@ export default function UnitActionPanel({
               style={{
                 borderRadius: 5,
                 border: isActive
-                  ? '1.5px solid #00d4ff'
+                  ? '1.5px solid #e63946'
                   : isMergeLocked
                     ? '1px solid #92400e'
                   : order
                     ? isDefault ? '1px solid #1e3a3a' : '1px solid #1e3a4a'
-                    : '1px solid #334155',
+                    : '1px solid #2a2535',
                 background: isActive
-                  ? 'rgba(0,212,255,0.08)'
+                  ? 'rgba(230,57,70,0.08)'
                   : isMergeLocked
                     ? 'rgba(146,64,14,0.12)'
                   : order
                     ? isDefault ? 'rgba(12,20,32,0.6)' : 'rgba(15,25,40,0.7)'
                     : 'rgba(20,32,50,0.85)',
-                boxShadow: isActive ? '0 0 8px rgba(0,212,255,0.25)' : undefined,
+                boxShadow: isActive ? '0 0 8px rgba(230,57,70,0.25)' : undefined,
                 cursor: lockedIn ? 'not-allowed' : 'pointer',
                 opacity: lockedIn ? 0.5 : isMergeLocked ? 0.5 : isDefault ? 0.7 : 1,
                 transition: 'border-color 0.15s ease, background 0.15s ease',
@@ -225,7 +225,7 @@ export default function UnitActionPanel({
                     {UNIT_LABEL[unit.type] ?? unit.type}
                     {mergeBadge}
                   </span>
-                  <span style={{ color: isDefault ? '#0891b2' : '#00d4ff', fontSize: '0.65rem', fontWeight: 700 }}>
+                  <span style={{ color: isDefault ? '#0891b2' : '#e63946', fontSize: '0.65rem', fontWeight: 700 }}>
                     {ORDER_BADGE[order.type]}
                   </span>
                   <span style={{ color: '#475569', fontSize: '0.6rem', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap' }}>
@@ -253,7 +253,7 @@ export default function UnitActionPanel({
                 // ── Full unassigned card ───────────────────────────────────────
                 <div className="px-2 py-1.5" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div className="flex items-center justify-between">
-                    <span style={{ color: isActive ? '#00d4ff' : '#cbd5e1', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.05em' }}>
+                    <span style={{ color: isActive ? '#e63946' : '#cbd5e1', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.05em' }}>
                       {UNIT_LABEL[unit.type] ?? unit.type}
                       {mergeBadge}
                     </span>
@@ -262,10 +262,10 @@ export default function UnitActionPanel({
                     </span>
                   </div>
                   {/* HP bar */}
-                  <div style={{ height: 3, background: '#1e293b', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ height: 3, background: '#1e1a28', borderRadius: 2, overflow: 'hidden' }}>
                     <div style={{ width: `${hpPct * 100}%`, height: '100%', background: hpColor, borderRadius: 2, transition: 'width 0.3s ease' }} />
                   </div>
-                  <div style={{ color: isMergeLocked ? '#92400e' : '#334155', fontSize: '0.6rem', letterSpacing: '0.08em' }}>
+                  <div style={{ color: isMergeLocked ? '#92400e' : '#2a2535', fontSize: '0.6rem', letterSpacing: '0.08em' }}>
                     {isMergeLocked ? 'TAP TO UNMERGE' : isActive ? 'CHOOSE ACTION…' : 'TAP TO ASSIGN'}
                   </div>
                 </div>

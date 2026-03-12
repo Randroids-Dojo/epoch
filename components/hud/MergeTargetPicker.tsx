@@ -36,8 +36,8 @@ export default function MergeTargetPicker({
       className="font-mono text-xs"
       style={{
         zIndex: 100,
-        background: '#0d1321',
-        border: '1px solid #334155',
+        background: '#0d0c14',
+        border: '1px solid #2a2535',
         borderRadius: 6,
         boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
         minWidth: 200,
@@ -50,7 +50,7 @@ export default function MergeTargetPicker({
         className="px-3 py-1.5"
         style={{
           color: '#475569',
-          borderBottom: '1px solid #1e293b',
+          borderBottom: '1px solid #1e1a28',
           fontSize: '0.65rem',
           letterSpacing: '0.1em',
           display: 'flex',
@@ -89,23 +89,23 @@ export default function MergeTargetPicker({
               onClick={() => toggleUnit(t.unitId)}
               className="flex w-full items-center justify-between px-3 py-2 text-left"
               style={{
-                background: isSelected ? 'rgba(0,212,255,0.12)' : 'transparent',
+                background: isSelected ? 'rgba(230,57,70,0.12)' : 'transparent',
                 border: 'none',
-                borderLeft: isSelected ? '2px solid #00d4ff' : '2px solid transparent',
+                borderLeft: isSelected ? '2px solid #e63946' : '2px solid transparent',
                 color: '#e2e8f0',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
                 fontSize: 'inherit',
                 transition: 'background 0.12s ease',
               }}
-              onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'rgba(0,212,255,0.06)'; }}
+              onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'rgba(230,57,70,0.06)'; }}
               onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
             >
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{
                   width: 12, height: 12, borderRadius: 2,
-                  border: isSelected ? '2px solid #00d4ff' : '2px solid #475569',
-                  background: isSelected ? '#00d4ff' : 'transparent',
+                  border: isSelected ? '2px solid #e63946' : '2px solid #475569',
+                  background: isSelected ? '#e63946' : 'transparent',
                   display: 'inline-block', flexShrink: 0,
                 }} />
                 <span>
@@ -121,7 +121,7 @@ export default function MergeTargetPicker({
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 {/* Mini HP bar */}
                 <span style={{
-                  width: 30, height: 3, background: '#1e293b', borderRadius: 2,
+                  width: 30, height: 3, background: '#1e1a28', borderRadius: 2,
                   overflow: 'hidden', display: 'inline-block',
                 }}>
                   <span style={{ width: `${hpPct * 100}%`, height: '100%', background: hpColor, display: 'block', borderRadius: 2 }} />
@@ -137,7 +137,7 @@ export default function MergeTargetPicker({
 
       {/* Confirm button */}
       {targets.length > 0 && (
-        <div className="px-3 py-2" style={{ borderTop: '1px solid #1e293b' }}>
+        <div className="px-3 py-2" style={{ borderTop: '1px solid #1e1a28' }}>
           <button
             type="button"
             onClick={handleConfirm}
@@ -145,10 +145,10 @@ export default function MergeTargetPicker({
             style={{
               width: '100%',
               padding: '6px 8px',
-              background: selected.size > 0 ? 'rgba(0,212,255,0.15)' : 'transparent',
-              border: selected.size > 0 ? '1px solid #00d4ff' : '1px solid #334155',
+              background: selected.size > 0 ? 'rgba(230,57,70,0.15)' : 'transparent',
+              border: selected.size > 0 ? '1px solid #e63946' : '1px solid #2a2535',
               borderRadius: 4,
-              color: selected.size > 0 ? '#00d4ff' : '#334155',
+              color: selected.size > 0 ? '#e63946' : '#2a2535',
               cursor: selected.size > 0 ? 'pointer' : 'not-allowed',
               fontFamily: 'inherit',
               fontSize: '0.65rem',

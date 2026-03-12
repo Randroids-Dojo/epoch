@@ -47,8 +47,8 @@ export default function UpdateBanner() {
         justifyContent: 'center',
         gap: 12,
         padding: '7px 16px',
-        background: 'rgba(10,14,26,0.97)',
-        borderBottom: '1px solid #00d4ff',
+        background: 'rgba(11,10,15,0.97)',
+        borderBottom: '1px solid #e63946',
         fontFamily: 'ui-monospace, monospace',
         fontSize: 12,
         letterSpacing: '0.08em',
@@ -59,9 +59,9 @@ export default function UpdateBanner() {
       <button
         onClick={() => window.location.reload()}
         style={{
-          background: 'rgba(0,212,255,0.12)',
-          border: '1px solid #00d4ff',
-          color: '#00d4ff',
+          background: 'rgba(230,57,70,0.12)',
+          border: '1px solid #e63946',
+          color: '#e63946',
           padding: '3px 12px',
           fontFamily: 'ui-monospace, monospace',
           fontSize: 12,

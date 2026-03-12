@@ -60,7 +60,7 @@ export default function CommandTray({
   return (
     <div
       className="shrink-0 flex items-center px-4 py-3 font-mono"
-      style={{ gap: slot.gap, background: 'rgba(10,14,26,0.95)', borderTop: '1px solid #1e293b' }}
+      style={{ gap: slot.gap, background: 'rgba(11,10,15,0.95)', borderTop: '1px solid #2a2535' }}
     >
       {/* Global command slots */}
       {globalCommands.map((cmd, i) => {
@@ -80,14 +80,14 @@ export default function CommandTray({
               cursor: lockedIn ? 'not-allowed' : 'pointer',
               opacity: lockedIn ? 0.5 : 1,
               border: isSelected
-                ? '1.5px solid #00d4ff'
-                : '1px solid #334155',
+                ? '1.5px solid #e63946'
+                : '1px solid #2a2535',
               boxShadow: isSelected
-                ? '0 0 8px rgba(0,212,255,0.35), inset 0 0 8px rgba(0,212,255,0.08)'
+                ? '0 0 8px rgba(230,57,70,0.35), inset 0 0 8px rgba(230,57,70,0.08)'
                 : undefined,
               background: isSelected
-                ? 'rgba(0,212,255,0.06)'
-                : 'rgba(30,41,59,0.5)',
+                ? 'rgba(230,57,70,0.06)'
+                : 'rgba(22,20,28,0.6)',
               animation: !cmd && !isSelected && !lockedIn ? 'pulse-border 2.5s ease-in-out infinite' : undefined,
               transition: 'border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease',
               fontFamily: 'inherit',
@@ -97,12 +97,12 @@ export default function CommandTray({
               <>
                 <span
                   className="absolute left-1 top-0.5"
-                  style={{ color: '#334155', fontSize: '0.6rem' }}
+                  style={{ color: '#2a2535', fontSize: '0.6rem' }}
                 >
                   {i + 1}
                 </span>
                 <div className="flex flex-col items-center gap-0.5">
-                  <span style={{ color: '#00d4ff', fontWeight: 700 }}>
+                  <span style={{ color: '#e63946', fontWeight: 700 }}>
                     {TYPE_CODE[cmd.type] ?? cmd.type.slice(0, 2).toUpperCase()}
                   </span>
                   <span style={{ color: '#64748b', fontSize: '0.6rem' }}>
@@ -143,7 +143,7 @@ export default function CommandTray({
                 >
                   {i + 1}
                 </span>
-                <span style={{ color: '#334155', fontSize: '1.1rem' }}>+</span>
+                <span style={{ color: '#2a2535', fontSize: '1.1rem' }}>+</span>
                 {isTutorial && <span className="tutorial-tooltip" style={{ top: -24, left: -4 }}>CLICK TO ADD ORDER</span>}
               </>
             )}
@@ -164,10 +164,10 @@ export default function CommandTray({
           background: lockedIn
             ? 'rgba(30,41,59,0.5)'
             : lockInFlash
-              ? 'rgba(0,212,255,0.3)'
-              : 'rgba(0,212,255,0.12)',
-          border: `1px solid ${lockedIn ? '#334155' : '#00d4ff'}`,
-          color: lockedIn ? '#334155' : '#00d4ff',
+              ? 'rgba(230,57,70,0.3)'
+              : 'rgba(230,57,70,0.12)',
+          border: `1px solid ${lockedIn ? '#2a2535' : '#e63946'}`,
+          color: lockedIn ? '#2a2535' : '#e63946',
           cursor: lockedIn ? 'not-allowed' : 'pointer',
           transition: 'background 0.2s ease, border-color 0.2s ease',
           minWidth: isMobile ? 72 : 100,

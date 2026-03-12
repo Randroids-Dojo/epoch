@@ -13,7 +13,122 @@ import {
   PHASE_DEFEND, PHASE_ATTACK, PHASE_BUILD,
 } from './animation';
 
-// ── Shape helpers ───────────────────────────────────────────────────────────
+// ── Theme colors ────────────────────────────────────────────────────────────
+
+const PLAYER_COLOR  = '#e63946';   // crimson red
+const PLAYER_GLOW   = '#ff4d5e';   // brighter crimson for highlights
+const AI_COLOR      = '#8b5cf6';   // violet for AI (distinct from player red)
+const AI_GLOW       = '#a78bfa';
+const OUTLINE_DARK  = '#1a1520';   // dark outline for cel-shading
+
+function entityColor(owner: string): string {
+  return owner === 'player' ? PLAYER_COLOR : AI_COLOR;
+}
+
+// ── Particle system ─────────────────────────────────────────────────────────
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  size: number;
+  color: string;
+  type: 'gather' | 'attack' | 'spark';
+}
+
+const particles: Particle[] = [];
+const MAX_PARTICLES = 300;
+
+function spawnParticles(
+  sx: number, sy: number,
+  count: number,
+  type: Particle['type'],
+  color: string,
+  spread: number,
+  speed: number,
+  life: number,
+  size: number,
+): void {
+  for (let i = 0; i < count && particles.length < MAX_PARTICLES; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const spd = speed * (0.3 + Math.random() * 0.7);
+    particles.push({
+      x: sx + (Math.random() - 0.5) * spread,
+      y: sy + (Math.random() - 0.5) * spread,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd,
+      life: life * (0.5 + Math.random() * 0.5),
+      maxLife: life,
+      size: size * (0.6 + Math.random() * 0.8),
+      color,
+      type,
+    });
+  }
+}
+
+function updateAndDrawParticles(ctx: CanvasRenderingContext2D, dt: number): void {
+  const prevAlpha = ctx.globalAlpha;
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy -= 15 * dt; // slight upward drift
+    p.life -= dt;
+
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+      continue;
+    }
+
+    const alpha = Math.min(1, p.life / p.maxLife);
+    ctx.globalAlpha = alpha * 0.8;
+    ctx.fillStyle = p.color;
+
+    if (p.type === 'spark') {
+      // Spark: small bright square rotated 45 degrees
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(Math.PI / 4);
+      const hs = p.size * alpha;
+      ctx.fillRect(-hs, -hs, hs * 2, hs * 2);
+      ctx.restore();
+    } else {
+      // Circle particle
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = prevAlpha;
+}
+
+// ── Cel-shaded drawing helpers ──────────────────────────────────────────────
+
+/** Draw a cel-shaded drop shadow beneath a shape. */
+function drawEntityShadow(
+  ctx: CanvasRenderingContext2D,
+  sx: number, sy: number, r: number,
+): void {
+  const off = Math.max(1.5, r * 0.12);
+  ctx.globalAlpha = 0.3;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(sx + off, sy + off + r * 0.3, r * 0.9, r * 0.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Draw a thick cel-shaded outline around a shape (call after filling). */
+function celOutline(
+  ctx: CanvasRenderingContext2D,
+  lineWidth: number,
+): void {
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = lineWidth;
+  ctx.stroke();
+}
 
 /** Draw a regular polygon centered at (cx, cy) with given radius and sides. */
 function regularPolygon(
@@ -30,7 +145,7 @@ function regularPolygon(
   ctx.closePath();
 }
 
-/** Draw an HP bar below an entity. */
+/** Draw an HP bar below an entity — crimson themed. */
 function drawHpBar(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number,
@@ -39,18 +154,24 @@ function drawHpBar(
 ): void {
   if (hp <= 0 || maxHp <= 0) return;
   const barW = radius * 2.4;
-  const barH = 2.5;
+  const barH = 3;
   const bx = sx - barW / 2;
-  const by = sy + radius + 3;
+  const by = sy + radius + 4;
   const frac = Math.max(0, Math.min(1, hp / maxHp));
 
-  ctx.globalAlpha = 0.85;
-  ctx.fillStyle = '#0a0e1a';
-  ctx.fillRect(bx, by, barW, barH);
+  // Bar background with outline
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = '#0b0a0f';
+  ctx.fillRect(bx - 0.5, by - 0.5, barW + 1, barH + 1);
 
   const barColor = frac > 0.5 ? '#22c55e' : frac > 0.25 ? '#eab308' : '#ef4444';
   ctx.fillStyle = barColor;
   ctx.fillRect(bx, by, barW * frac, barH);
+
+  // Thin outline
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = 0.5;
+  ctx.strokeRect(bx - 0.5, by - 0.5, barW + 1, barH + 1);
 }
 
 /** Draw a merge count badge above a unit (e.g. "2x", "10x"). */
@@ -68,40 +189,59 @@ function drawMergeBadge(
   const bx = sx;
   const by = sy - r - 3;
 
-  // Background pill
+  // Background pill — crimson
   const textWidth = ctx.measureText(label).width;
   const padX = 3;
   const padY = 1;
   const pillW = textWidth + padX * 2;
   const pillH = fontSize + padY * 2;
 
-  ctx.globalAlpha = 0.85;
-  ctx.fillStyle = '#fbbf24';
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = '#e63946';
   ctx.beginPath();
   const pillR = pillH / 2;
   ctx.roundRect(bx - pillW / 2, by - pillH, pillW, pillH, pillR);
   ctx.fill();
 
+  // Outline
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
   // Text
-  ctx.fillStyle = '#0a0e1a';
+  ctx.fillStyle = '#fff';
   ctx.globalAlpha = 1;
   ctx.fillText(label, bx, by - padY);
 }
 
-// ── Unit shape painters ─────────────────────────────────────────────────────
+// ── Unit shape painters — cel-shaded paper-diorama style ────────────────────
 
 function paintDrone(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
+  // Paper-cutout circle with layered look
+  drawEntityShadow(ctx, sx, sy, r);
+
+  ctx.globalAlpha = 0.85;
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.arc(sx, sy, r, 0, Math.PI * 2);
   ctx.fill();
-  // center dot
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  celOutline(ctx, Math.max(1.5, r * 0.15));
+
+  // Inner highlight crescent (top-left light source)
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = '#fff';
   ctx.beginPath();
-  ctx.arc(sx, sy, r * 0.3, 0, Math.PI * 2);
+  ctx.arc(sx - r * 0.2, sy - r * 0.2, r * 0.55, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Center rotor dot
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = OUTLINE_DARK;
+  ctx.beginPath();
+  ctx.arc(sx, sy, r * 0.25, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -109,69 +249,162 @@ function paintPulseSentry(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
+  // ── Heavily redesigned sentry: fortified tower with battlements ────────
+  drawEntityShadow(ctx, sx, sy, r * 1.1);
+
+  const w = r * 1.4;
+  const h = r * 1.8;
+  const bx = sx - w / 2;
+  const by = sy - h / 2;
+
+  ctx.globalAlpha = 0.85;
+
+  // Main tower body
   ctx.fillStyle = color;
-  ctx.save();
-  ctx.translate(sx, sy);
-  ctx.fillRect(-r, -r, r * 2, r * 2);
-  // diagonal cross lines
-  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath();
+  ctx.rect(bx, by + h * 0.25, w, h * 0.75);
+  ctx.fill();
+
+  // Battlements (3 crenellations on top)
+  const crenW = w / 5;
+  const crenH = h * 0.3;
+  for (let i = 0; i < 3; i++) {
+    ctx.fillRect(bx + i * crenW * 2 - crenW * 0.5 + w * 0.1, by, crenW, crenH);
+  }
+
+  // Thick outline around the whole tower
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = Math.max(1.8, r * 0.13);
+
+  // Draw outline manually for the tower + battlement shape
+  ctx.beginPath();
+  // Bottom edge
+  ctx.moveTo(bx, by + h);
+  ctx.lineTo(bx, by + h * 0.25);
+  // Up to battlements
+  for (let i = 0; i < 3; i++) {
+    const cx2 = bx + i * crenW * 2 - crenW * 0.5 + w * 0.1;
+    ctx.lineTo(cx2, by + h * 0.25);
+    ctx.lineTo(cx2, by);
+    ctx.lineTo(cx2 + crenW, by);
+    ctx.lineTo(cx2 + crenW, by + h * 0.25);
+  }
+  ctx.lineTo(bx + w, by + h * 0.25);
+  ctx.lineTo(bx + w, by + h);
+  ctx.closePath();
+  ctx.stroke();
+
+  // Inner window/slit (glowing)
+  ctx.fillStyle = '#fff';
+  ctx.globalAlpha = 0.6;
+  ctx.fillRect(sx - r * 0.12, sy + r * 0.05, r * 0.24, r * 0.45);
+
+  // Vision pulse ring
+  ctx.globalAlpha = 0.15;
+  ctx.strokeStyle = color;
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(-r, -r); ctx.lineTo(r, r);
-  ctx.moveTo(r, -r);  ctx.lineTo(-r, r);
+  ctx.arc(sx, sy, r * 1.5, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.restore();
 }
 
 function paintArcRanger(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
+  drawEntityShadow(ctx, sx, sy, r);
+
+  // Rotated diamond/square
   ctx.fillStyle = color;
+  ctx.globalAlpha = 0.85;
   ctx.save();
   ctx.translate(sx, sy);
   ctx.rotate(Math.PI / 4);
   ctx.fillRect(-r, -r, r * 2, r * 2);
+  // Cel outline
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = Math.max(1.5, r * 0.13);
+  ctx.strokeRect(-r, -r, r * 2, r * 2);
   ctx.restore();
-  // horizontal line through center
-  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-  ctx.lineWidth = 1;
+
+  // Crosshair lines (sniper scope)
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.5;
   ctx.beginPath();
   ctx.moveTo(sx - r * 0.85, sy);
   ctx.lineTo(sx + r * 0.85, sy);
+  ctx.moveTo(sx, sy - r * 0.85);
+  ctx.lineTo(sx, sy + r * 0.85);
   ctx.stroke();
+
+  // Bright center dot (scope reticle)
+  ctx.fillStyle = '#fff';
+  ctx.globalAlpha = 0.7;
+  ctx.beginPath();
+  ctx.arc(sx, sy, r * 0.15, 0, Math.PI * 2);
+  ctx.fill();
 }
 
-// Phase Walker: upward triangle with dashed outline effect (phases through enemies).
+// Phase Walker: ghostly triangle with dashed phase effect.
 function paintPhaseWalker(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
+  drawEntityShadow(ctx, sx, sy, r);
+
   regularPolygon(ctx, sx, sy, r, 3, -Math.PI / 2);
   ctx.fillStyle = color;
+  ctx.globalAlpha = 0.7; // slightly transparent — phasing!
   ctx.fill();
-  // Dashed inner border suggesting phase effect.
+  celOutline(ctx, Math.max(1.5, r * 0.13));
+
+  // Inner dashed ghost triangle
   ctx.save();
   ctx.setLineDash([2, 2]);
-  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
   ctx.lineWidth = 1.5;
-  regularPolygon(ctx, sx, sy, r * 0.6, 3, -Math.PI / 2);
+  regularPolygon(ctx, sx, sy, r * 0.55, 3, -Math.PI / 2);
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.restore();
+
+  // Phase shimmer (small bright dot)
+  ctx.fillStyle = '#fff';
+  ctx.globalAlpha = 0.4 + 0.2 * Math.sin(performance.now() / 300);
+  ctx.beginPath();
+  ctx.arc(sx, sy - r * 0.1, r * 0.12, 0, Math.PI * 2);
+  ctx.fill();
 }
 
-// Temporal Warden: hexagon with triple-ring vision aura.
+// Temporal Warden: hexagon with vision aura ring.
 function paintTemporalWarden(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
+  drawEntityShadow(ctx, sx, sy, r);
+
   regularPolygon(ctx, sx, sy, r, 6, 0);
   ctx.fillStyle = color;
+  ctx.globalAlpha = 0.85;
   ctx.fill();
-  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  celOutline(ctx, Math.max(1.5, r * 0.13));
+
+  // Concentric inner ring
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
   ctx.lineWidth = 1;
   regularPolygon(ctx, sx, sy, r * 0.55, 6, 0);
+  ctx.stroke();
+
+  // Time symbol (hourglass shape inside)
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.4;
+  ctx.beginPath();
+  ctx.moveTo(sx - r * 0.25, sy - r * 0.35);
+  ctx.lineTo(sx + r * 0.25, sy - r * 0.35);
+  ctx.lineTo(sx - r * 0.25, sy + r * 0.35);
+  ctx.lineTo(sx + r * 0.25, sy + r * 0.35);
   ctx.stroke();
 }
 
@@ -180,15 +413,29 @@ function paintVoidStriker(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
+  drawEntityShadow(ctx, sx, sy, r * 1.1);
+
   regularPolygon(ctx, sx, sy, r, 8, Math.PI / 8);
   ctx.fillStyle = color;
+  ctx.globalAlpha = 0.85;
   ctx.fill();
-  // Cross inside to suggest artillery.
-  ctx.strokeStyle = 'rgba(0,0,0,0.45)';
-  ctx.lineWidth = 1.5;
+  celOutline(ctx, Math.max(2, r * 0.15));
+
+  // Cross inside to suggest artillery — thicker, more menacing
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.5;
   ctx.beginPath();
-  ctx.moveTo(sx - r * 0.6, sy); ctx.lineTo(sx + r * 0.6, sy);
-  ctx.moveTo(sx, sy - r * 0.6); ctx.lineTo(sx, sy + r * 0.6);
+  ctx.moveTo(sx - r * 0.5, sy); ctx.lineTo(sx + r * 0.5, sy);
+  ctx.moveTo(sx, sy - r * 0.5); ctx.lineTo(sx, sy + r * 0.5);
+  ctx.stroke();
+
+  // Danger glow ring
+  ctx.globalAlpha = 0.12;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(sx, sy, r * 1.4, 0, Math.PI * 2);
   ctx.stroke();
 }
 
@@ -197,16 +444,22 @@ function paintFluxWeaver(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
+  drawEntityShadow(ctx, sx, sy, r);
+
   // Draw two overlapping triangles to form a star.
   ctx.fillStyle = color;
+  ctx.globalAlpha = 0.85;
   for (let t = 0; t < 2; t++) {
     regularPolygon(ctx, sx, sy, r, 3, -Math.PI / 2 + t * Math.PI);
     ctx.fill();
+    celOutline(ctx, Math.max(1.5, r * 0.12));
   }
-  // Small circle center.
-  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+
+  // Healing pulse center (bright core)
+  ctx.fillStyle = '#fff';
+  ctx.globalAlpha = 0.5;
   ctx.beginPath();
-  ctx.arc(sx, sy, r * 0.28, 0, Math.PI * 2);
+  ctx.arc(sx, sy, r * 0.22, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -215,21 +468,35 @@ function paintChronoTitan(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
-  // Outer ring.
+  drawEntityShadow(ctx, sx, sy, r * 1.2);
+
+  // Outer ring — thick and bold
   ctx.strokeStyle = color;
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = Math.max(3, r * 0.2);
+  ctx.globalAlpha = 0.85;
   ctx.beginPath();
   ctx.arc(sx, sy, r, 0, Math.PI * 2);
   ctx.stroke();
-  // Inner filled circle.
+
+  // Outer cel outline
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = Math.max(1.5, r * 0.08);
+  ctx.beginPath();
+  ctx.arc(sx, sy, r + Math.max(1.5, r * 0.1), 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Inner filled circle
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.arc(sx, sy, r * 0.6, 0, Math.PI * 2);
   ctx.fill();
-  // Center dot.
-  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  celOutline(ctx, Math.max(1.5, r * 0.1));
+
+  // Bright center eye
+  ctx.fillStyle = '#fff';
+  ctx.globalAlpha = 0.6;
   ctx.beginPath();
-  ctx.arc(sx, sy, r * 0.22, 0, Math.PI * 2);
+  ctx.arc(sx, sy, r * 0.18, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -250,21 +517,68 @@ function paintUnit(
   }
 }
 
-// ── Structure shape painters ────────────────────────────────────────────────
+// ── Structure shape painters — paper-diorama fortress style ─────────────────
 
 function paintCommandNexus(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
-  // Triple concentric hexagons
-  for (let i = 0; i < 3; i++) {
-    const ri = r * (1 - i * 0.28);
-    regularPolygon(ctx, sx, sy, ri, 6, -Math.PI / 2);
-    if (i === 0) {
-      ctx.fillStyle = color;
-      ctx.fill();
-    }
-    ctx.strokeStyle = i === 0 ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.45)';
+  // ── Redesigned: multi-layered fortress base with central tower & flag ──
+  drawEntityShadow(ctx, sx, sy, r * 1.3);
+  ctx.globalAlpha = 0.85;
+
+  // Outer fortress wall (hexagonal)
+  regularPolygon(ctx, sx, sy, r * 1.15, 6, -Math.PI / 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  celOutline(ctx, Math.max(2, r * 0.15));
+
+  // Inner wall layer
+  regularPolygon(ctx, sx, sy, r * 0.75, 6, Math.PI / 6);
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Central tower (small filled square)
+  const tw = r * 0.4;
+  ctx.fillStyle = color;
+  ctx.fillRect(sx - tw / 2, sy - tw / 2, tw, tw);
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(sx - tw / 2, sy - tw / 2, tw, tw);
+
+  // Flag/banner on top
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy - tw / 2);
+  ctx.lineTo(sx, sy - r * 1.05);
+  ctx.stroke();
+
+  // Flag triangle
+  ctx.fillStyle = '#fff';
+  ctx.globalAlpha = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy - r * 1.05);
+  ctx.lineTo(sx + r * 0.35, sy - r * 0.85);
+  ctx.lineTo(sx, sy - r * 0.65);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Corner turret dots (4 points)
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.85;
+  const turretAngles = [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
+  for (const a of turretAngles) {
+    ctx.beginPath();
+    ctx.arc(sx + Math.cos(a) * r * 0.9, sy + Math.sin(a) * r * 0.9, r * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = OUTLINE_DARK;
     ctx.lineWidth = 1;
     ctx.stroke();
   }
@@ -274,16 +588,26 @@ function paintCrystalExtractor(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
+  drawEntityShadow(ctx, sx, sy, r);
+
   regularPolygon(ctx, sx, sy, r, 5, -Math.PI / 2);
   ctx.fillStyle = color;
+  ctx.globalAlpha = 0.85;
   ctx.fill();
-  // crystal diamond inside
+  celOutline(ctx, Math.max(1.5, r * 0.13));
+
+  // Crystal diamond inside — glowing
   ctx.save();
   ctx.translate(sx, sy);
   ctx.rotate(Math.PI / 4);
-  const ci = r * 0.38;
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  const ci = r * 0.35;
+  ctx.fillStyle = '#fff';
+  ctx.globalAlpha = 0.3;
   ctx.fillRect(-ci, -ci, ci * 2, ci * 2);
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.5;
+  ctx.strokeRect(-ci, -ci, ci * 2, ci * 2);
   ctx.restore();
 }
 
@@ -291,12 +615,21 @@ function paintBarracks(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
+  drawEntityShadow(ctx, sx, sy, r);
+
   const w = r * 2.1;
   const h = r * 1.6;
   ctx.fillStyle = color;
+  ctx.globalAlpha = 0.85;
   ctx.fillRect(sx - w / 2, sy - h / 2, w, h);
-  // grid lines (barracks doors)
-  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+
+  // Cel outline
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = Math.max(1.5, r * 0.12);
+  ctx.strokeRect(sx - w / 2, sy - h / 2, w, h);
+
+  // Grid lines (barracks doors)
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(sx, sy - h / 2); ctx.lineTo(sx, sy + h / 2);
@@ -308,25 +641,38 @@ function paintTechLab(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
-  // outer ring
+  drawEntityShadow(ctx, sx, sy, r);
+
+  // Outer ring
   ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = Math.max(2, r * 0.15);
+  ctx.globalAlpha = 0.85;
   ctx.beginPath();
   ctx.arc(sx, sy, r, 0, Math.PI * 2);
   ctx.stroke();
-  // filled inner circle
+
+  // Cel outline on outer
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = Math.max(1, r * 0.08);
+  ctx.beginPath();
+  ctx.arc(sx, sy, r + Math.max(1, r * 0.08), 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Inner filled circle
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.arc(sx, sy, r * 0.6, 0, Math.PI * 2);
+  ctx.arc(sx, sy, r * 0.55, 0, Math.PI * 2);
   ctx.fill();
-  // spiral suggestion (3 spokes)
-  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  celOutline(ctx, Math.max(1, r * 0.1));
+
+  // 3 spokes
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * Math.PI * 2;
     ctx.moveTo(sx, sy);
-    ctx.lineTo(sx + r * 0.55 * Math.cos(a), sy + r * 0.55 * Math.sin(a));
+    ctx.lineTo(sx + r * 0.5 * Math.cos(a), sy + r * 0.5 * Math.sin(a));
   }
   ctx.stroke();
 }
@@ -335,20 +681,32 @@ function paintWatchtower(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
-  // upward-pointing triangle
+  drawEntityShadow(ctx, sx, sy, r);
+
+  // Upward triangle
   ctx.beginPath();
   ctx.moveTo(sx, sy - r);
   ctx.lineTo(sx + r * 0.866, sy + r * 0.5);
   ctx.lineTo(sx - r * 0.866, sy + r * 0.5);
   ctx.closePath();
   ctx.fillStyle = color;
+  ctx.globalAlpha = 0.85;
   ctx.fill();
-  // eye inside
-  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  celOutline(ctx, Math.max(1.5, r * 0.13));
+
+  // Eye inside — brighter
+  ctx.strokeStyle = '#fff';
   ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.5;
   ctx.beginPath();
-  ctx.arc(sx, sy + r * 0.1, r * 0.25, 0, Math.PI * 2);
+  ctx.arc(sx, sy + r * 0.1, r * 0.22, 0, Math.PI * 2);
   ctx.stroke();
+  // Pupil
+  ctx.fillStyle = '#fff';
+  ctx.globalAlpha = 0.4;
+  ctx.beginPath();
+  ctx.arc(sx, sy + r * 0.1, r * 0.08, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 // Flux Conduit: diamond shape (resource harvester).
@@ -356,14 +714,22 @@ function paintFluxConduit(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
+  drawEntityShadow(ctx, sx, sy, r);
+
   ctx.save();
   ctx.translate(sx, sy);
   ctx.rotate(Math.PI / 4);
   ctx.fillStyle = color;
+  ctx.globalAlpha = 0.85;
   ctx.fillRect(-r * 0.85, -r * 0.85, r * 1.7, r * 1.7);
-  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = Math.max(1.5, r * 0.12);
+  ctx.strokeRect(-r * 0.85, -r * 0.85, r * 1.7, r * 1.7);
+
+  // Inner diamond
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
   ctx.lineWidth = 1;
-  ctx.strokeRect(-r * 0.5, -r * 0.5, r, r);
+  ctx.strokeRect(-r * 0.45, -r * 0.45, r * 0.9, r * 0.9);
   ctx.restore();
 }
 
@@ -372,18 +738,34 @@ function paintWarFoundry(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
+  drawEntityShadow(ctx, sx, sy, r * 1.1);
+
   const w = r * 2.4;
   const h = r * 1.8;
   ctx.fillStyle = color;
+  ctx.globalAlpha = 0.85;
   ctx.fillRect(sx - w / 2, sy - h / 2, w, h);
-  // Gear notches on sides.
-  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+
+  // Cel outline
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = Math.max(2, r * 0.13);
+  ctx.strokeRect(sx - w / 2, sy - h / 2, w, h);
+
+  // Gear notches on sides — darker
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
   const notchW = r * 0.3;
   const notchH = r * 0.5;
   ctx.fillRect(sx - w / 2 - notchW, sy - notchH / 2, notchW, notchH);
   ctx.fillRect(sx + w / 2, sy - notchH / 2, notchW, notchH);
-  // Inner grid.
-  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+
+  // Notch outlines
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(sx - w / 2 - notchW, sy - notchH / 2, notchW, notchH);
+  ctx.strokeRect(sx + w / 2, sy - notchH / 2, notchW, notchH);
+
+  // Inner grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(sx - w * 0.25, sy - h / 2); ctx.lineTo(sx - w * 0.25, sy + h / 2);
@@ -397,7 +779,9 @@ function paintShieldPylon(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
-  // Shield outline: rounded pentagon-like.
+  drawEntityShadow(ctx, sx, sy, r);
+
+  // Shield outline
   ctx.beginPath();
   ctx.moveTo(sx - r, sy - r * 0.6);
   ctx.lineTo(sx, sy - r);
@@ -407,13 +791,18 @@ function paintShieldPylon(
   ctx.lineTo(sx - r, sy + r * 0.2);
   ctx.closePath();
   ctx.fillStyle = color;
+  ctx.globalAlpha = 0.85;
   ctx.fill();
-  // Inner highlight.
-  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  celOutline(ctx, Math.max(1.5, r * 0.13));
+
+  // Inner cross highlight
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(sx, sy - r * 0.6);
   ctx.lineTo(sx, sy + r * 0.5);
+  ctx.moveTo(sx - r * 0.5, sy - r * 0.1);
+  ctx.lineTo(sx + r * 0.5, sy - r * 0.1);
   ctx.stroke();
 }
 
@@ -422,10 +811,17 @@ function paintChronoSpire(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number, color: string,
 ): void {
-  // Central pillar.
+  drawEntityShadow(ctx, sx, sy, r);
+
+  // Central pillar
   ctx.fillStyle = color;
+  ctx.globalAlpha = 0.85;
   ctx.fillRect(sx - r * 0.25, sy - r, r * 0.5, r * 2);
-  // Two orbital rings.
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = Math.max(1.5, r * 0.12);
+  ctx.strokeRect(sx - r * 0.25, sy - r, r * 0.5, r * 2);
+
+  // Two orbital rings
   ctx.strokeStyle = color;
   ctx.lineWidth = 1.5;
   for (let i = 0; i < 2; i++) {
@@ -437,11 +833,16 @@ function paintChronoSpire(
     ctx.stroke();
     ctx.restore();
   }
-  // Top crystal.
-  ctx.fillStyle = '#fbbf24';
+
+  // Top crystal — now crimson glow
+  ctx.fillStyle = '#ff4d5e';
+  ctx.globalAlpha = 0.9;
   ctx.beginPath();
   ctx.arc(sx, sy - r, r * 0.22, 0, Math.PI * 2);
   ctx.fill();
+  ctx.strokeStyle = OUTLINE_DARK;
+  ctx.lineWidth = 1;
+  ctx.stroke();
 }
 
 function paintStructure(
@@ -464,7 +865,7 @@ function paintStructure(
 
 // ── Public draw functions ───────────────────────────────────────────────────
 
-/** Draw all units onto the canvas with distinct shapes per type and HP bars. */
+/** Draw all units onto the canvas with cel-shaded paper-diorama style. */
 export function drawUnits(
   ctx: CanvasRenderingContext2D,
   units: Map<string, Unit>,
@@ -478,21 +879,33 @@ export function drawUnits(
     const wp = hexToPixel(unit.hex, BASE_HEX_SIZE);
     const sx = cam.x + wp.x * cam.zoom;
     const sy = cam.y + wp.y * cam.zoom;
-    const color = unit.owner === 'player' ? '#00d4ff' : '#ff6b6b';
+    const color = entityColor(unit.owner);
 
     ctx.globalAlpha = 0.85;
     paintUnit(ctx, sx, sy, r, unit.type, color);
     drawHpBar(ctx, sx, sy, r, unit.hp, effectiveMaxHp(unit));
+
+    // ── Gathering particle effect ─────────────────────────────────────────
+    if (unit.type === 'drone' && unit.assignedExtractorId) {
+      // Emit swirling gather particles around gathering drones
+      if (Math.random() < 0.15) {
+        spawnParticles(
+          sx, sy, 1, 'gather',
+          unit.owner === 'player' ? '#ff4d6a' : '#a78bfa',
+          r * 2, 12, 1.2, r * 0.15,
+        );
+      }
+    }
 
     // Draw merge count badge above unit.
     if (unit.mergeCount > 0) {
       drawMergeBadge(ctx, sx, sy, r, unit.mergeCount);
     }
 
-    // Highlight ring for the selected/active unit.
+    // Highlight ring for the selected/active unit — crimson dashed.
     if (unit.id === selectedUnitId) {
       ctx.globalAlpha = 0.9;
-      ctx.strokeStyle = '#00d4ff';
+      ctx.strokeStyle = PLAYER_GLOW;
       ctx.lineWidth = 2.5;
       ctx.setLineDash([4, 3]);
       ctx.beginPath();
@@ -505,7 +918,7 @@ export function drawUnits(
   ctx.globalAlpha = prevAlpha;
 }
 
-/** Draw all structures onto the canvas with distinct shapes per type and HP bars. */
+/** Draw all structures onto the canvas with cel-shaded style and HP bars. */
 export function drawStructures(
   ctx: CanvasRenderingContext2D,
   structures: Map<string, Structure>,
@@ -518,7 +931,7 @@ export function drawStructures(
     const wp = hexToPixel(s.hex, BASE_HEX_SIZE);
     const sx = cam.x + wp.x * cam.zoom;
     const sy = cam.y + wp.y * cam.zoom;
-    const color = s.owner === 'player' ? '#00d4ff' : '#ff6b6b';
+    const color = entityColor(s.owner);
 
     ctx.globalAlpha = s.buildProgress > 0 ? 0.45 : 0.85;
     paintStructure(ctx, sx, sy, r, s.type, color);
@@ -544,7 +957,7 @@ export function drawStructures(
 
 /**
  * Draw hex targeting overlay.
- * Eligible hexes: bright cyan tint.
+ * Eligible hexes: crimson tint.
  * Non-eligible passable hexes: dark dimming overlay.
  */
 export function drawTargetingOverlay(
@@ -569,7 +982,7 @@ export function drawTargetingOverlay(
 
     hexPath(ctx, sx, sy, size);
 
-    ctx.fillStyle = isEligible ? 'rgba(0,212,255,0.18)' : 'rgba(0,0,0,0.30)';
+    ctx.fillStyle = isEligible ? 'rgba(230,57,70,0.22)' : 'rgba(0,0,0,0.30)';
     ctx.fill();
   }
 }
@@ -577,7 +990,7 @@ export function drawTargetingOverlay(
 /**
  * Draw borders on the real board around all hexes in range of a unit,
  * so the player can see which area on the map the HexTargetPicker represents.
- * Eligible hexes get a bright cyan border; other in-range hexes get a dim border.
+ * Eligible hexes get a bright crimson border; other in-range hexes get a dim border.
  */
 export function drawRangeBorders(
   ctx: CanvasRenderingContext2D,
@@ -600,7 +1013,7 @@ export function drawRangeBorders(
 
     if (isEligible) {
       ctx.globalAlpha = 0.8;
-      ctx.strokeStyle = '#00d4ff';
+      ctx.strokeStyle = '#e63946';
       ctx.lineWidth = 2;
     } else {
       ctx.globalAlpha = 0.35;
@@ -613,17 +1026,17 @@ export function drawRangeBorders(
   ctx.globalAlpha = prevAlpha;
 }
 
-// ── Command arrow colours ───────────────────────────────────────────────────
+// ── Command arrow colours — crimson themed ──────────────────────────────────
 
 const ARROW_STYLES: Record<string, { color: string; dash: number[] }> = {
-  move:        { color: '#00d4ff', dash: [6, 4] },
-  attack:      { color: '#ff6b6b', dash: [] },
+  move:        { color: '#e63946', dash: [6, 4] },
+  attack:      { color: '#ff2244', dash: [] },
   gather:      { color: '#22c55e', dash: [6, 4] },
   build:       { color: '#fbbf24', dash: [4, 3] },
   phase_surge: { color: '#c084fc', dash: [6, 4] },
 };
 
-/** Draw an arrowhead pointing from (fx,fy) → (tx,ty). */
+/** Draw an arrowhead pointing from (fx,fy) -> (tx,ty). */
 function drawArrowhead(
   ctx: CanvasRenderingContext2D,
   fx: number, fy: number,
@@ -688,8 +1101,8 @@ export function drawCommandArrows(
     const ux = dx / len;
     const uy = dy / len;
     const inset = r + 2;
-    const sx = fx + ux * inset;
-    const sy = fy + uy * inset;
+    const asx = fx + ux * inset;
+    const asy = fy + uy * inset;
     const ex = tx - ux * inset;
     const ey = ty - uy * inset;
 
@@ -699,14 +1112,14 @@ export function drawCommandArrows(
     ctx.lineWidth = 2;
     ctx.setLineDash(style.dash);
     ctx.beginPath();
-    ctx.moveTo(sx, sy);
+    ctx.moveTo(asx, asy);
     ctx.lineTo(ex, ey);
     ctx.stroke();
     ctx.setLineDash([]);
 
     // Draw arrowhead.
     ctx.fillStyle = style.color;
-    drawArrowhead(ctx, sx, sy, ex, ey, 7 * cam.zoom);
+    drawArrowhead(ctx, asx, asy, ex, ey, 7 * cam.zoom);
 
     // Build orders: draw a ghost of the planned structure at the target.
     if (cmd.type === 'build') {
@@ -729,59 +1142,158 @@ export function drawCommandArrows(
 
 // ── Animation draw helpers ─────────────────────────────────────────────────
 
-/** Draw a cyan defend ring around a screen position. */
+/** Draw a crimson defend ring around a screen position. */
 function drawDefendMarker(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number,
 ): void {
-  ctx.strokeStyle = '#00d4ff';
+  ctx.strokeStyle = PLAYER_COLOR;
   ctx.lineWidth = 2;
   ctx.globalAlpha = 0.7;
   ctx.beginPath();
   ctx.arc(sx, sy, r + 4, 0, Math.PI * 2);
   ctx.stroke();
+
+  // Shield icon inside the ring
+  ctx.globalAlpha = 0.3;
+  ctx.fillStyle = PLAYER_COLOR;
+  ctx.beginPath();
+  ctx.arc(sx, sy, r + 4, 0, Math.PI * 2);
+  ctx.fill();
 }
 
-/** Draw a red damage flash (pulsing circle) at a screen position. */
+/** Draw a damage flash with weapon-impact sparks. */
 function drawDamageFlash(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number,
   intensity: number,
 ): void {
-  ctx.globalAlpha = intensity * 0.6;
-  ctx.fillStyle = '#ff6b6b';
+  ctx.globalAlpha = intensity * 0.5;
+  ctx.fillStyle = '#ff2244';
   ctx.beginPath();
   ctx.arc(sx, sy, r + 6, 0, Math.PI * 2);
   ctx.fill();
+
+  // Impact sparks — spawn particles on first pulse
+  if (intensity > 0.8) {
+    spawnParticles(sx, sy, 2, 'spark', '#ff6b4a', r, 30, 0.4, r * 0.12);
+  }
 }
 
-/** Draw an expanding ring for a destroyed entity. */
+/** Draw an expanding ring for a destroyed entity with explosion particles. */
 function drawDeathRing(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number,
   progress: number,
   color: string,
 ): void {
-  const expandR = r + r * progress * 2;
+  const expandR = r + r * progress * 2.5;
   ctx.globalAlpha = (1 - progress) * 0.8;
   ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
   ctx.arc(sx, sy, expandR, 0, Math.PI * 2);
   ctx.stroke();
+
+  // Inner flash
+  ctx.globalAlpha = (1 - progress) * 0.2;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(sx, sy, expandR * 0.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Spawn explosion particles on early progress
+  if (progress < 0.15 && Math.random() < 0.5) {
+    spawnParticles(sx, sy, 4, 'spark', color, r * 0.5, 50, 0.8, r * 0.15);
+    spawnParticles(sx, sy, 2, 'attack', '#ff8800', r * 0.3, 25, 0.6, r * 0.1);
+  }
 }
 
-/** Draw a spawn glow effect (expanding cyan circle, fading in). */
+/** Draw a spawn glow effect (expanding crimson circle, fading in). */
 function drawSpawnGlow(
   ctx: CanvasRenderingContext2D,
   sx: number, sy: number, r: number,
   progress: number,
 ): void {
-  ctx.globalAlpha = progress * 0.5;
-  ctx.fillStyle = '#00d4ff';
+  ctx.globalAlpha = progress * 0.4;
+  ctx.fillStyle = PLAYER_COLOR;
   ctx.beginPath();
   ctx.arc(sx, sy, r * (0.5 + progress * 0.5), 0, Math.PI * 2);
   ctx.fill();
+
+  // Outer glow ring
+  ctx.globalAlpha = progress * 0.3;
+  ctx.strokeStyle = PLAYER_GLOW;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(sx, sy, r * (0.7 + progress * 0.5), 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+/** Draw weapon attack effect: muzzle flash and projectile trail. */
+function drawWeaponEffect(
+  ctx: CanvasRenderingContext2D,
+  fromX: number, fromY: number,
+  toX: number, toY: number,
+  progress: number,
+  color: string,
+  r: number,
+): void {
+  if (progress < 0 || progress > 1) return;
+
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 1) return;
+
+  // Projectile position along the line
+  const projT = Math.min(1, progress * 3); // projectile moves 3x faster
+  const projX = fromX + dx * projT;
+  const projY = fromY + dy * projT;
+
+  // Muzzle flash at source (brief)
+  if (progress < 0.2) {
+    const flashAlpha = (0.2 - progress) / 0.2;
+    ctx.globalAlpha = flashAlpha * 0.7;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(fromX, fromY, r * 0.5 * flashAlpha, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(fromX, fromY, r * 0.35 * flashAlpha, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Projectile trail
+  if (projT < 1) {
+    const trailLen = Math.min(len * 0.3, 15);
+    const ux = dx / len;
+    const uy = dy / len;
+
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(projX, projY);
+    ctx.lineTo(projX - ux * trailLen, projY - uy * trailLen);
+    ctx.stroke();
+
+    // Bright projectile head
+    ctx.globalAlpha = 0.8;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(projX, projY, r * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ── Particle update & draw (called from GameCanvas render loop) ─────────────
+
+/** Update and render all active particles. Call once per frame. */
+export function drawParticles(ctx: CanvasRenderingContext2D, dt: number): void {
+  updateAndDrawParticles(ctx, dt);
 }
 
 // ── Main animation draw functions ──────────────────────────────────────────
@@ -798,7 +1310,7 @@ export function drawAnimatedUnits(
   const phase = getCurrentPhase(elapsed);
 
   for (const anim of animation.units.values()) {
-    const color = anim.owner === 'player' ? '#00d4ff' : '#ff6b6b';
+    const color = entityColor(anim.owner);
 
     // Spawned units only appear during build phase.
     if (anim.wasSpawned) {
@@ -821,7 +1333,7 @@ export function drawAnimatedUnits(
       drawDefendMarker(ctx, sx, sy, r);
     }
 
-    // Draw damage flash during attack phase.
+    // Draw damage flash and weapon effects during attack phase.
     if (phase === 'attack' && anim.newHp < anim.oldHp && !anim.wasDestroyed) {
       const ap = getPhaseProgress(elapsed, PHASE_ATTACK);
       if (ap >= 0) {
@@ -838,6 +1350,46 @@ export function drawAnimatedUnits(
       ? anim.oldHp + (anim.newHp - anim.oldHp) * Math.max(0, getPhaseProgress(elapsed, PHASE_ATTACK))
       : anim.newHp;
     drawHpBar(ctx, sx, sy, r, displayHp, anim.maxHp);
+  }
+
+  // ── Weapon effects between attacking and defending units ────────────────
+  if (phase === 'attack') {
+    const ap = getPhaseProgress(elapsed, PHASE_ATTACK);
+    if (ap >= 0) {
+      // Find pairs: units that took damage from enemies
+      for (const target of animation.units.values()) {
+        if (target.newHp >= target.oldHp && !target.wasDestroyed) continue;
+
+        const targetPos = getAnimatedUnitPosition(target, elapsed);
+        const tsx = cam.x + targetPos.x * cam.zoom;
+        const tsy = cam.y + targetPos.y * cam.zoom;
+
+        // Find nearest enemy unit as attacker source
+        let nearestDist = Infinity;
+        let attackerSx = tsx;
+        let attackerSy = tsy;
+        for (const other of animation.units.values()) {
+          if (other.owner === target.owner) continue;
+          if (other.wasDestroyed || other.wasSpawned) continue;
+          const oPos = getAnimatedUnitPosition(other, elapsed);
+          const osx = cam.x + oPos.x * cam.zoom;
+          const osy = cam.y + oPos.y * cam.zoom;
+          const dist = Math.hypot(osx - tsx, osy - tsy);
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            attackerSx = osx;
+            attackerSy = osy;
+          }
+        }
+
+        if (nearestDist < Infinity && nearestDist > r * 2) {
+          const attackerColor = target.owner === 'player' ? AI_GLOW : PLAYER_GLOW;
+          // Stagger weapon effects using pulse
+          const pulse3 = (ap * 3) % 1;
+          drawWeaponEffect(ctx, attackerSx, attackerSy, tsx, tsy, pulse3, attackerColor, r);
+        }
+      }
+    }
   }
 
   ctx.globalAlpha = prevAlpha;
@@ -857,7 +1409,7 @@ export function drawAnimatedStructures(
   for (const anim of animation.structures.values()) {
     const sx = cam.x + anim.pixel.x * cam.zoom;
     const sy = cam.y + anim.pixel.y * cam.zoom;
-    const color = anim.owner === 'player' ? '#00d4ff' : '#ff6b6b';
+    const color = entityColor(anim.owner);
 
     // Newly built: fade in during build phase.
     const bp = getPhaseProgress(elapsed, PHASE_BUILD);
@@ -905,11 +1457,11 @@ export function drawDestroyedEntities(
   const prevAlpha = ctx.globalAlpha;
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
 
-  // Destroyed units: fade out + expanding ring.
+  // Destroyed units: fade out + expanding ring + explosion particles.
   for (const anim of animation.destroyedUnits) {
     const sx = cam.x + anim.fromPixel.x * cam.zoom;
     const sy = cam.y + anim.fromPixel.y * cam.zoom;
-    const color = anim.owner === 'player' ? '#00d4ff' : '#ff6b6b';
+    const color = entityColor(anim.owner);
 
     ctx.globalAlpha = (1 - ap) * 0.85;
     paintUnit(ctx, sx, sy, r, anim.unitType, color);
@@ -920,7 +1472,7 @@ export function drawDestroyedEntities(
   for (const anim of animation.destroyedStructures) {
     const sx = cam.x + anim.pixel.x * cam.zoom;
     const sy = cam.y + anim.pixel.y * cam.zoom;
-    const color = anim.owner === 'player' ? '#00d4ff' : '#ff6b6b';
+    const color = entityColor(anim.owner);
 
     ctx.globalAlpha = (1 - ap) * 0.85;
     paintStructure(ctx, sx, sy, r, anim.structureType, color);
@@ -932,7 +1484,7 @@ export function drawDestroyedEntities(
 
 /**
  * Draw merge animation: consumed units slide toward the survivor and fade out
- * during the defend phase (0–0.5s).
+ * during the defend phase (0-0.5s).
  */
 export function drawMergeAnimations(
   ctx: CanvasRenderingContext2D,
@@ -952,7 +1504,7 @@ export function drawMergeAnimations(
   const t = 1 - (1 - dp) * (1 - dp);
 
   for (const anim of animation.mergedUnits) {
-    const color = anim.owner === 'player' ? '#00d4ff' : '#ff6b6b';
+    const color = entityColor(anim.owner);
 
     // Interpolate from original position toward survivor
     const fx = cam.x + anim.fromPixel.x * cam.zoom;
@@ -993,7 +1545,7 @@ const ECHO_LABELS: Partial<Record<Command['type'], string>> = {
 };
 
 /**
- * Draw Temporal Echo overlays — translucent gold ghost indicators showing the
+ * Draw Temporal Echo overlays — translucent crimson ghost indicators showing the
  * previous epoch's enemy commands during the planning phase.
  *
  * @param timeMs  Current time in ms (e.g. performance.now()) for pulse animation.
@@ -1004,14 +1556,14 @@ export function drawEchoOverlay(
   cam: Camera,
   timeMs: number,
 ): void {
-  const pulse      = 0.45 + 0.3 * Math.sin(timeMs / 700); // 0.45–0.75 oscillation
+  const pulse      = 0.45 + 0.3 * Math.sin(timeMs / 700); // 0.45-0.75 oscillation
   const hexR       = BASE_HEX_SIZE * cam.zoom;
   const alphaFill  = pulse * 0.18;
   const alphaLabel = pulse * 0.9;
   const prevAlpha  = ctx.globalAlpha;
 
-  ctx.strokeStyle  = '#fbbf24';
-  ctx.fillStyle    = '#fbbf24';
+  ctx.strokeStyle  = '#e63946';
+  ctx.fillStyle    = '#e63946';
   ctx.lineWidth    = 1.5;
   ctx.font         = `bold ${Math.max(8, Math.round(hexR * 0.38))}px monospace`;
   ctx.textAlign    = 'center';
@@ -1057,9 +1609,9 @@ export function drawEchoOverlay(
 
 /**
  * Draw Timeline Fork ghost overlay.
- * Player units are shown as translucent cyan ghosts at their predicted
+ * Player units are shown as translucent crimson ghosts at their predicted
  * post-resolution positions, with dashed movement lines from their current
- * positions. Destroyed units appear as faded × markers at their current hex.
+ * positions. Destroyed units appear as faded x markers at their current hex.
  */
 export function drawTimelineForkOverlay(
   ctx: CanvasRenderingContext2D,
@@ -1080,12 +1632,12 @@ export function drawTimelineForkOverlay(
     const { x: tx, y: ty } = worldToCanvas(toWp.x, toWp.y, cam);
 
     if (ghost.survived) {
-      // Draw movement trail (dashed line from current → predicted).
+      // Draw movement trail (dashed line from current -> predicted).
       const fromWp = hexToPixel(unit.hex, BASE_HEX_SIZE);
       const { x: fx, y: fy } = worldToCanvas(fromWp.x, fromWp.y, cam);
       if (fx !== tx || fy !== ty) {
         ctx.globalAlpha = pulse * 0.35;
-        ctx.strokeStyle = '#00e5ff';
+        ctx.strokeStyle = PLAYER_GLOW;
         ctx.lineWidth   = 1;
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
@@ -1097,22 +1649,22 @@ export function drawTimelineForkOverlay(
 
       // Ghost unit shape at predicted position.
       ctx.globalAlpha = pulse * 0.5;
-      paintUnit(ctx, tx, ty, r, unit.type, '#00e5ff');
+      paintUnit(ctx, tx, ty, r, unit.type, PLAYER_GLOW);
 
       // Outer ghost ring.
       ctx.globalAlpha = pulse * 0.28;
-      ctx.strokeStyle = '#00e5ff';
+      ctx.strokeStyle = PLAYER_GLOW;
       ctx.lineWidth   = 1;
       ctx.beginPath();
       ctx.arc(tx, ty, r + 3 * cam.zoom, 0, Math.PI * 2);
       ctx.stroke();
     } else {
-      // × marker for units predicted to be destroyed.
+      // x marker for units predicted to be destroyed.
       const fromWp = hexToPixel(unit.hex, BASE_HEX_SIZE);
       const { x: fx, y: fy } = worldToCanvas(fromWp.x, fromWp.y, cam);
       const xr = r * 0.7;
       ctx.globalAlpha = pulse * 0.75;
-      ctx.strokeStyle = '#ff6b4a';
+      ctx.strokeStyle = '#ff2244';
       ctx.lineWidth   = 2;
       ctx.beginPath();
       ctx.moveTo(fx - xr, fy - xr); ctx.lineTo(fx + xr, fy + xr);

@@ -23,7 +23,7 @@ export default function DifficultyHelpButton({ labels }: DifficultyHelpButtonPro
       <button
         data-testid="difficulty-help-btn"
         className="font-mono text-sm tracking-widest uppercase px-4 py-2 border"
-        style={{ color: '#94a3b8', borderColor: '#334155', background: 'transparent' }}
+        style={{ color: '#94a3b8', borderColor: '#2a2535', background: 'transparent' }}
         onClick={() => setOpen(true)}
       >
         ?
@@ -38,7 +38,7 @@ export default function DifficultyHelpButton({ labels }: DifficultyHelpButtonPro
         >
           <div
             className="font-mono max-w-lg w-full mx-4 p-6 border"
-            style={{ borderColor: '#334155', background: COLORS.NAVY }}
+            style={{ borderColor: '#2a2535', background: COLORS.NAVY }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-4">
@@ -48,7 +48,7 @@ export default function DifficultyHelpButton({ labels }: DifficultyHelpButtonPro
               <button
                 data-testid="difficulty-help-close"
                 className="text-sm px-2 py-1 border"
-                style={{ color: '#94a3b8', borderColor: '#334155' }}
+                style={{ color: '#94a3b8', borderColor: '#2a2535' }}
                 onClick={() => setOpen(false)}
               >
                 X

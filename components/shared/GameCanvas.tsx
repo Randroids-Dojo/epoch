@@ -6,7 +6,7 @@ import { GameState } from '@/engine/state';
 import { Hex, hexKey, hexToPixel, pixelToHex } from '@/engine/hex';
 import { Camera, DEFAULT_ZOOM, zoomToward, canvasToWorld } from '@/renderer/camera';
 import { BASE_HEX_SIZE, drawBackground, drawHexCell } from '@/renderer/drawHex';
-import { drawUnits, drawStructures, drawTargetingOverlay, drawRangeBorders, drawCommandArrows, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawMergeAnimations, drawEchoOverlay, drawTimelineForkOverlay, drawChronoScoutOverlay } from '@/renderer/drawEntities';
+import { drawUnits, drawStructures, drawTargetingOverlay, drawRangeBorders, drawCommandArrows, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawMergeAnimations, drawEchoOverlay, drawTimelineForkOverlay, drawChronoScoutOverlay, drawParticles } from '@/renderer/drawEntities';
 import { TimelineForkResult, ChronoScoutResult } from '@/engine/simulation';
 import { InteractionMode } from '@/lib/types';
 import { ExecutionAnimation } from '@/renderer/animation';
@@ -75,6 +75,7 @@ export default function GameCanvas({
   const mapRef    = useRef<GameMap | null>(null);
   const frameRef  = useRef<number>(0);
   const dprRef    = useRef(1);
+  const lastFrameTimeRef = useRef(0);
 
   // Keep mapRef in sync with the current game state map.
   mapRef.current = gameState.map;
@@ -190,6 +191,12 @@ export default function GameCanvas({
       const activeUnitId = ('unitId' in m) ? m.unitId : null;
       drawUnits(ctx, gs.units, cam, activeUnitId);
     }
+
+    // ── Particle effects (gather sparks, weapon impacts, explosions) ─────────
+    const now = performance.now();
+    const dt = lastFrameTimeRef.current ? Math.min(0.05, (now - lastFrameTimeRef.current) / 1000) : 0.016;
+    lastFrameTimeRef.current = now;
+    drawParticles(ctx, dt);
 
     // ── Command arrows (planning phase only) ──────────────────────────────────
     if (!anim) {
@@ -483,9 +490,9 @@ export default function GameCanvas({
       {mode.kind === 'idle' && selectedCell && (
         <div
           className="pointer-events-none absolute bottom-4 left-4 rounded border border-slate-700 px-3 py-2 font-mono text-xs"
-          style={{ background: 'rgba(10,14,26,0.90)', color: '#94a3b8' }}
+          style={{ background: 'rgba(11,10,15,0.92)', color: '#94a3b8' }}
         >
-          <div className="mb-1" style={{ color: '#00e5ff' }}>
+          <div className="mb-1" style={{ color: '#e63946' }}>
             Hex ({selectedCell.hex.q}, {selectedCell.hex.r})
           </div>
           <div>Terrain: {selectedCell.terrain.replace('_', ' ')}</div>
@@ -496,13 +503,13 @@ export default function GameCanvas({
       {/* Controls hint — offset right of UnitActionPanel (180px wide) to avoid overlap */}
       {!animation && <div
         className="pointer-events-none absolute top-4 hidden rounded border border-slate-700 px-3 py-2 font-mono text-xs sm:block"
-        style={{ left: 196, background: 'rgba(10,14,26,0.85)', color: '#475569' }}
+        style={{ left: 196, background: 'rgba(11,10,15,0.88)', color: '#4a4555' }}
       >
         <div>Drag / WASD — pan</div>
         <div>Scroll / pinch / ± — zoom</div>
         <div>Home — snap to base</div>
         {mode.kind === 'idle' && <div>Click hex — inspect</div>}
-        {mode.kind === 'targeting' && <div style={{ color: '#00d4ff' }}>Tap target hex</div>}
+        {mode.kind === 'targeting' && <div style={{ color: '#e63946' }}>Tap target hex</div>}
       </div>}
     </div>
   );

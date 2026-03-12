@@ -27,19 +27,19 @@ const PAD = 8;
 
 function getTerrainColor(terrain: string): string {
   switch (terrain) {
-    case 'crystal_node': return '#0d3558';
-    case 'void_rift': return '#080d18';
-    case 'flux_vent': return '#2c1242';
-    case 'ridge': return '#223045';
-    case 'energy_field': return '#1a1030';
-    default: return '#1b2738';
+    case 'crystal_node': return '#2a0f1a';
+    case 'void_rift': return '#08070c';
+    case 'flux_vent': return '#1e0815';
+    case 'ridge': return '#1f1a28';
+    case 'energy_field': return '#1a0c22';
+    default: return '#16141c';
   }
 }
 
 function withFog(base: string, fog: 'unexplored' | 'explored' | 'visible'): string {
   if (fog === 'visible') return base;
-  if (fog === 'explored') return '#101827';
-  return '#05080f';
+  if (fog === 'explored') return '#0e0d14';
+  return '#06050a';
 }
 
 export default function Minimap({ gameState, cameraSnapshot, isMobile, onRecenter, onSnapHome }: MinimapProps) {
@@ -84,7 +84,7 @@ export default function Minimap({ gameState, cameraSnapshot, isMobile, onRecente
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
-    ctx.fillStyle = '#070b14';
+    ctx.fillStyle = '#08070c';
     ctx.fillRect(0, 0, cssW, cssH);
 
     const sx = (cssW - PAD * 2) / Math.max(bounds.width, 1);
@@ -109,7 +109,7 @@ export default function Minimap({ gameState, cameraSnapshot, isMobile, onRecente
     for (const s of gameState.structures.values()) {
       const p = hexToPixel(s.hex, BASE_HEX_SIZE);
       const m = worldToMini(p.x, p.y);
-      ctx.fillStyle = s.owner === 'player' ? '#00d4ff' : '#ff6b6b';
+      ctx.fillStyle = s.owner === 'player' ? '#e63946' : '#8b5cf6';
       ctx.fillRect(m.x - entityPx / 2, m.y - entityPx / 2, entityPx, entityPx);
     }
 
@@ -119,7 +119,7 @@ export default function Minimap({ gameState, cameraSnapshot, isMobile, onRecente
       const p = hexToPixel(u.hex, BASE_HEX_SIZE);
       const m = worldToMini(p.x, p.y);
       ctx.beginPath();
-      ctx.fillStyle = u.owner === 'player' ? '#67e8f9' : '#fb7185';
+      ctx.fillStyle = u.owner === 'player' ? '#ff4d5e' : '#a78bfa';
       ctx.arc(m.x, m.y, entityPx * 0.42, 0, Math.PI * 2);
       ctx.fill();
     }
@@ -163,7 +163,7 @@ export default function Minimap({ gameState, cameraSnapshot, isMobile, onRecente
       className={`absolute z-10 ${isMobile ? 'bottom-16 left-3' : 'right-4 top-8'}`}
     >
       <div className="relative">
-        <div className="overflow-hidden rounded border border-slate-700 bg-slate-950/85 p-2 shadow-lg backdrop-blur-sm">
+        <div className="overflow-hidden rounded border border-red-900/60 bg-[#0b0a0f]/90 p-2 shadow-lg backdrop-blur-sm">
           <canvas
             ref={canvasRef}
             data-testid="minimap-canvas"
@@ -178,7 +178,7 @@ export default function Minimap({ gameState, cameraSnapshot, isMobile, onRecente
           {viewportRect && (
             <div
               data-testid="minimap-viewport"
-              className="pointer-events-none absolute border border-cyan-300/90"
+              className="pointer-events-none absolute border border-red-400/80"
               style={{
                 left: `${viewportRect.left + 8}px`,
                 top: `${viewportRect.top + 8}px`,
@@ -192,7 +192,7 @@ export default function Minimap({ gameState, cameraSnapshot, isMobile, onRecente
         <button
           type="button"
           data-testid="minimap-home"
-          className="absolute -top-2 -right-2 rounded-full border border-cyan-400/60 bg-slate-950 px-2 py-1 text-[10px] font-mono text-cyan-200"
+          className="absolute -top-2 -right-2 rounded-full border border-red-500/60 bg-[#0b0a0f] px-2 py-1 text-[10px] font-mono text-red-300"
           onClick={onSnapHome}
           aria-label="Snap camera to base"
         >
