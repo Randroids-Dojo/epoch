@@ -19,6 +19,7 @@ import {
   computeUnitPhaseSurgeTargets,
   computeUnitBuildTargets,
   computeUnitGatherTargets,
+  computeUnitMergeTargets,
   TargetingCommandType,
   BuildStructureType,
 } from '@/engine/targeting';
@@ -50,6 +51,8 @@ import HexTargetPicker from '../hud/HexTargetPicker';
 import GatherTargetPicker from '../hud/GatherTargetPicker';
 import IntroAnimation from '../animations/IntroAnimation';
 import VictoryAnimation from '../animations/VictoryAnimation';
+import MergeTargetPicker from '../hud/MergeTargetPicker';
+import DifficultyHelpButton from './DifficultyHelpModal';
 
 const PLANNING_DURATION = GAME_CONSTANTS.PLANNING_PHASE_DURATION_MS / 1000;
 const BASE_BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks', 'tech_lab', 'watchtower'];
@@ -62,6 +65,10 @@ const DIFFICULTY_OPTIONS: { value: AIDifficulty; label: string; desc: string }[]
   { value: 'commander',    label: 'Commander',     desc: 'Mixed archetypes · Uses Chrono Shift' },
   { value: 'epoch_master', label: 'Epoch Master',  desc: 'Full archetype blend · All abilities' },
 ];
+
+const DIFFICULTY_LABELS = Object.fromEntries(
+  DIFFICULTY_OPTIONS.map((o) => [o.value, o.label]),
+) as Record<AIDifficulty, string>;
 
 // Module-level code in 'use client' files can still run during SSR prerender,
 // so the typeof-window guard is needed here even though call sites are client-only.
@@ -523,7 +530,7 @@ export default function GameView() {
 
     const unitSnaps = new Map<string, UnitSnapshot>();
     for (const [id, u] of state.units) {
-      unitSnaps.set(id, { hex: { ...u.hex }, hp: u.hp, owner: u.owner, type: u.type });
+      unitSnaps.set(id, { hex: { ...u.hex }, hp: u.hp, owner: u.owner, type: u.type, mergeCount: u.mergeCount, bonusMaxHp: u.bonusMaxHp });
     }
     const structSnaps = new Map<string, StructSnapshot>();
     for (const [id, s] of state.structures) {
@@ -688,6 +695,10 @@ export default function GameView() {
   const handleUnitCardClick = useCallback((unitId: string) => {
     const state = gameStateRef.current;
     if (state.players.player.lockedIn) return;
+    // Block units that are targeted by a merge command.
+    for (const cmd of state.players.player.unitOrders.values()) {
+      if (cmd.type === 'merge' && cmd.targetUnitIds.includes(unitId)) return;
+    }
     setMode({ kind: 'unit_picker_open', unitId });
     // Pan camera to the selected unit so the highlight is visible.
     const unit = state.units.get(unitId);
@@ -768,6 +779,12 @@ export default function GameView() {
       if (type === 'gather') {
         const targets = computeUnitGatherTargets(state, unit);
         setMode({ kind: 'gather_picker', unitId, targets });
+        return;
+      }
+
+      if (type === 'merge') {
+        const targets = computeUnitMergeTargets(state, unit);
+        setMode({ kind: 'merge_picker', unitId, targets });
         return;
       }
 
@@ -885,6 +902,12 @@ export default function GameView() {
     commitUnitOrder(m.unitId, { type: 'gather', unitId: m.unitId, targetHex: hex });
   }, [commitUnitOrder]);
 
+  const handleMergeConfirm = useCallback((selectedIds: string[]) => {
+    const m = modeRef.current;
+    if (m.kind !== 'merge_picker') return;
+    commitUnitOrder(m.unitId, { type: 'merge', unitId: m.unitId, targetUnitIds: selectedIds });
+  }, [commitUnitOrder]);
+
   const handleHexTargetSelect = useCallback((hex: Hex) => {
     const m = modeRef.current;
     if (m.kind === 'targeting') {
@@ -971,7 +994,12 @@ export default function GameView() {
     if (m.kind === 'idle' && state.phase === 'planning' && !lockedIn) {
       const unit = findUnitAt(state, hex, 'player');
       if (unit) {
-        setMode({ kind: 'unit_picker_open', unitId: unit.id });
+        // Block units that are targeted by a merge command.
+        let mergeLocked = false;
+        for (const cmd of state.players.player.unitOrders.values()) {
+          if (cmd.type === 'merge' && cmd.targetUnitIds.includes(unit.id)) { mergeLocked = true; break; }
+        }
+        if (!mergeLocked) setMode({ kind: 'unit_picker_open', unitId: unit.id });
       }
     }
   }, [commitUnitOrder, lockedIn]);
@@ -1062,7 +1090,7 @@ export default function GameView() {
   // ── Unit picker props (derived from current mode) ─────────────────────────
   const activeUnitId =
     mode.kind === 'unit_picker_open' ? mode.unitId :
-    mode.kind === 'targeting' || mode.kind === 'build_select' || mode.kind === 'build_targeting' || mode.kind === 'gather_picker' ? mode.unitId :
+    mode.kind === 'targeting' || mode.kind === 'build_select' || mode.kind === 'build_targeting' || mode.kind === 'gather_picker' || mode.kind === 'merge_picker' ? mode.unitId :
     null;
 
   const unitForPicker = activeUnitId ? gameState.units.get(activeUnitId) : null;
@@ -1078,7 +1106,8 @@ export default function GameView() {
     const canBuild = unitForPicker.type === 'drone' && gameState.players.player.resources.cc >= 3;
     const unitHasChrono = !!(getOldestSnapshot(gameState)?.has(unitForPicker.id));
     const canChronoShift = playerTechTier >= 1 && gameState.players.player.resources.te >= CHRONO_SHIFT_COST && unitHasChrono;
-    return { canAttack, canGather, canBuild, canChronoShift, unitType: unitForPicker.type };
+    const canMerge = computeUnitMergeTargets(gameState, unitForPicker).length > 0;
+    return { canAttack, canGather, canBuild, canChronoShift, canMerge, unitType: unitForPicker.type };
   })() : null;
 
   // Position for unit picker: to the right of the panel, aligned to the card.
@@ -1159,6 +1188,7 @@ export default function GameView() {
             canGather={unitPickerProps.canGather}
             canBuild={unitPickerProps.canBuild}
             canChronoShift={unitPickerProps.canChronoShift}
+            canMerge={unitPickerProps.canMerge}
             tutorialHighlightType={
               tutorialStep === 'select_build' || tutorialStep === 'extractor_select_build' ? 'build'
               : tutorialStep === 'gather_select_gather' ? 'gather'
@@ -1336,6 +1366,17 @@ export default function GameView() {
           </div>
         )}
 
+        {/* Merge target picker */}
+        {mode.kind === 'merge_picker' && !isExecuting && (
+          <div style={{ position: 'absolute', top: unitPickerTop, left: 188 }}>
+            <MergeTargetPicker
+              targets={mode.targets}
+              onConfirm={handleMergeConfirm}
+              onClose={() => setMode({ kind: 'idle' })}
+            />
+          </div>
+        )}
+
         {/* Execution overlay */}
         {isExecuting && animationRef.current && (
           <ExecutionOverlay
@@ -1416,14 +1457,17 @@ export default function GameView() {
                 </button>
               ))}
             </div>
-            <button
-              data-testid="start-game-btn"
-              className="mt-2 font-mono text-sm tracking-widest uppercase px-8 py-2 border"
-              style={{ color: COLORS.CYAN, borderColor: COLORS.CYAN, background: 'rgba(0,229,255,0.08)' }}
-              onClick={() => handleStartGame(difficulty)}
-            >
-              BEGIN
-            </button>
+            <div className="flex gap-3 mt-2">
+              <DifficultyHelpButton labels={DIFFICULTY_LABELS} />
+              <button
+                data-testid="start-game-btn"
+                className="font-mono text-sm tracking-widest uppercase px-8 py-2 border"
+                style={{ color: COLORS.CYAN, borderColor: COLORS.CYAN, background: 'rgba(0,229,255,0.08)' }}
+                onClick={() => handleStartGame(difficulty)}
+              >
+                BEGIN
+              </button>
+            </div>
           </div>
         )}
 

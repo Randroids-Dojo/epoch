@@ -9,6 +9,7 @@ function makeAnimation(overrides?: Partial<ExecutionAnimation>): ExecutionAnimat
     structures: new Map(),
     destroyedUnits: [],
     destroyedStructures: [],
+    mergedUnits: [],
     eventLog: [
       'player pulse_sentry is defending',
       'player drone → (1,0)',

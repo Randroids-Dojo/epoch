@@ -2,7 +2,7 @@
 
 import { useRef, useEffect } from 'react';
 import { GameState } from '@/engine/state';
-import { Unit, UNIT_DEFS } from '@/engine/units';
+import { Unit, effectiveMaxHp } from '@/engine/units';
 import { UnitCommand } from '@/engine/commands';
 import { InteractionMode } from '@/lib/types';
 
@@ -35,6 +35,7 @@ const ORDER_BADGE: Record<string, string> = {
   build:        'BD',
   chrono_shift: 'SH',
   phase_surge:  'SG',
+  merge:        'MG',
 };
 
 function orderLabel(cmd: UnitCommand): string {
@@ -50,6 +51,8 @@ function orderLabel(cmd: UnitCommand): string {
       return 'DEF';
     case 'chrono_shift':
       return 'SHIFT';
+    case 'merge':
+      return `×${cmd.targetUnitIds.length}`;
   }
 }
 
@@ -73,7 +76,8 @@ function getActiveUnitId(mode: InteractionMode): string | null {
     mode.kind === 'targeting' ||
     mode.kind === 'build_select' ||
     mode.kind === 'build_targeting' ||
-    mode.kind === 'gather_picker'
+    mode.kind === 'gather_picker' ||
+    mode.kind === 'merge_picker'
   ) {
     return mode.unitId;
   }
@@ -96,6 +100,14 @@ export default function UnitActionPanel({
   const unitOrders = gameState.players.player.unitOrders;
   const activeUnitId = getActiveUnitId(mode);
   const firstDefaultIdx = playerUnits.findIndex((u) => defaultIds.has(u.id));
+
+  // Units targeted by a merge command are locked — maps targetId → survivorId.
+  const mergeLockedBy = new Map<string, string>();
+  for (const cmd of unitOrders.values()) {
+    if (cmd.type === 'merge') {
+      for (const tid of cmd.targetUnitIds) mergeLockedBy.set(tid, cmd.unitId);
+    }
+  }
 
   // Scroll active card into view when it changes.
   const panelRef = useRef<HTMLDivElement>(null);
@@ -130,10 +142,14 @@ export default function UnitActionPanel({
         const order = unitOrders.get(unit.id);
         const isDefault = defaultIds.has(unit.id);
         const isActive = activeUnitId === unit.id;
+        const isMergeLocked = mergeLockedBy.has(unit.id);
         const isTutorialTarget = tutorialHighlightUnitId === unit.id;
-        const unitDef = UNIT_DEFS[unit.type];
-        const hpPct = Math.max(0, Math.min(1, unit.hp / unitDef.maxHp));
+        const effMaxHp = effectiveMaxHp(unit);
+        const hpPct = Math.max(0, Math.min(1, unit.hp / effMaxHp));
         const hpColor = hpPct > 0.6 ? '#22c55e' : hpPct > 0.3 ? '#fbbf24' : '#ef4444';
+        const mergeBadge = unit.mergeCount > 0
+          ? <span style={{ color: '#fbbf24', fontSize: '0.55rem', marginLeft: 2 }}>{unit.mergeCount + 1}x</span>
+          : null;
 
         return (
           <div key={unit.id}>
@@ -163,24 +179,32 @@ export default function UnitActionPanel({
                 if (el) cardRefs.current.set(unit.id, el);
                 else cardRefs.current.delete(unit.id);
               }}
-              onClick={() => !lockedIn && onUnitClick(unit.id)}
+              onClick={() => {
+                if (lockedIn) return;
+                if (isMergeLocked) { onOrderClear(mergeLockedBy.get(unit.id)!); return; }
+                onUnitClick(unit.id);
+              }}
               style={{
                 borderRadius: 5,
                 border: isActive
                   ? '1.5px solid #00d4ff'
+                  : isMergeLocked
+                    ? '1px solid #92400e'
                   : order
                     ? isDefault ? '1px solid #1e3a3a' : '1px solid #1e3a4a'
                     : '1px solid #334155',
                 background: isActive
                   ? 'rgba(0,212,255,0.08)'
+                  : isMergeLocked
+                    ? 'rgba(146,64,14,0.12)'
                   : order
                     ? isDefault ? 'rgba(12,20,32,0.6)' : 'rgba(15,25,40,0.7)'
                     : 'rgba(20,32,50,0.85)',
                 boxShadow: isActive ? '0 0 8px rgba(0,212,255,0.25)' : undefined,
                 cursor: lockedIn ? 'not-allowed' : 'pointer',
-                opacity: lockedIn ? 0.5 : isDefault ? 0.7 : 1,
+                opacity: lockedIn ? 0.5 : isMergeLocked ? 0.5 : isDefault ? 0.7 : 1,
                 transition: 'border-color 0.15s ease, background 0.15s ease',
-                animation: !order && !isActive && !lockedIn && !isTutorialTarget ? 'pulse-border 2.5s ease-in-out infinite' : undefined,
+                animation: !order && !isActive && !lockedIn && !isTutorialTarget && !isMergeLocked ? 'pulse-border 2.5s ease-in-out infinite' : undefined,
                 overflow: 'hidden',
                 flexShrink: 0,
                 position: isTutorialTarget ? 'relative' as const : undefined,
@@ -199,6 +223,7 @@ export default function UnitActionPanel({
                 >
                   <span style={{ color: isDefault ? '#64748b' : '#94a3b8', fontSize: '0.65rem', minWidth: 44, fontWeight: 600 }}>
                     {UNIT_LABEL[unit.type] ?? unit.type}
+                    {mergeBadge}
                   </span>
                   <span style={{ color: isDefault ? '#0891b2' : '#00d4ff', fontSize: '0.65rem', fontWeight: 700 }}>
                     {ORDER_BADGE[order.type]}
@@ -206,7 +231,7 @@ export default function UnitActionPanel({
                   <span style={{ color: '#475569', fontSize: '0.6rem', flex: 1, overflow: 'hidden', whiteSpace: 'nowrap' }}>
                     {orderLabel(order)}
                   </span>
-                  {!lockedIn && (
+                  {!lockedIn && !isMergeLocked && (
                     <span
                       role="button"
                       aria-label={`Clear order for ${UNIT_LABEL[unit.type]}`}
@@ -230,17 +255,18 @@ export default function UnitActionPanel({
                   <div className="flex items-center justify-between">
                     <span style={{ color: isActive ? '#00d4ff' : '#cbd5e1', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.05em' }}>
                       {UNIT_LABEL[unit.type] ?? unit.type}
+                      {mergeBadge}
                     </span>
                     <span style={{ color: '#475569', fontSize: '0.6rem' }}>
-                      {unit.hp}/{unitDef.maxHp}
+                      {unit.hp}/{effMaxHp}
                     </span>
                   </div>
                   {/* HP bar */}
                   <div style={{ height: 3, background: '#1e293b', borderRadius: 2, overflow: 'hidden' }}>
                     <div style={{ width: `${hpPct * 100}%`, height: '100%', background: hpColor, borderRadius: 2, transition: 'width 0.3s ease' }} />
                   </div>
-                  <div style={{ color: '#334155', fontSize: '0.6rem', letterSpacing: '0.08em' }}>
-                    {isActive ? 'CHOOSE ACTION…' : 'TAP TO ASSIGN'}
+                  <div style={{ color: isMergeLocked ? '#92400e' : '#334155', fontSize: '0.6rem', letterSpacing: '0.08em' }}>
+                    {isMergeLocked ? 'TAP TO UNMERGE' : isActive ? 'CHOOSE ACTION…' : 'TAP TO ASSIGN'}
                   </div>
                 </div>
               )}

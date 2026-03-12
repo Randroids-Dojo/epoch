@@ -1,8 +1,8 @@
 import { GameState, getOldestSnapshot } from './state';
-import { Unit, UNIT_DEFS } from './units';
+import { Unit, UNIT_DEFS, UnitType } from './units';
 import { Hex, hexKey, hexDistance, hexesInRange, hexNeighbors } from './hex';
 import { TERRAIN } from './terrain';
-import { PHASE_SURGE_SPEED_BONUS } from './commands';
+import { PHASE_SURGE_SPEED_BONUS, MERGE_RANGE } from './commands';
 import { StructureType, isComplete, isHarvestable } from './structures';
 
 export type TargetingCommandType = 'move' | 'attack' | 'gather' | 'defend' | 'chrono_shift' | 'phase_surge';
@@ -247,6 +247,47 @@ export function computeUnitGatherTargets(
       label: s.type === 'crystal_extractor' ? 'Crystal Extractor' : 'Flux Conduit',
       hex: s.hex,
       distance: dist,
+    });
+  }
+  targets.sort((a, b) => a.distance - b.distance);
+  return targets;
+}
+
+// ── Merge targeting ──────────────────────────────────────────────────────────
+
+/** Info about a friendly same-type unit that can be merged into the selected unit. */
+export interface MergeTarget {
+  unitId: string;
+  unitType: UnitType;
+  label: string;
+  hex: Hex;
+  distance: number;
+  hp: number;
+  maxHp: number;
+  mergeCount: number;
+}
+
+/** Returns same-type friendly units within MERGE_RANGE of the given unit. */
+export function computeUnitMergeTargets(
+  state: GameState,
+  unit: Unit,
+): MergeTarget[] {
+  const targets: MergeTarget[] = [];
+  for (const other of state.units.values()) {
+    if (other.id === unit.id) continue;
+    if (other.owner !== unit.owner) continue;
+    if (other.type !== unit.type) continue;
+    const dist = hexDistance(unit.hex, other.hex);
+    if (dist > MERGE_RANGE) continue;
+    targets.push({
+      unitId: other.id,
+      unitType: other.type,
+      label: UNIT_DEFS[other.type].label,
+      hex: other.hex,
+      distance: dist,
+      hp: other.hp,
+      maxHp: UNIT_DEFS[other.type].maxHp + other.bonusMaxHp,
+      mergeCount: other.mergeCount,
     });
   }
   targets.sort((a, b) => a.distance - b.distance);

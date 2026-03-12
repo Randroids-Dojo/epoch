@@ -1,7 +1,7 @@
 import { Camera, worldToCanvas } from './camera';
 import { BASE_HEX_SIZE, hexPath } from './drawHex';
 import { hexToPixel, hexEqual } from '../engine/hex';
-import { Unit, UnitType, UNIT_DEFS } from '../engine/units';
+import { Unit, UnitType, effectiveMaxHp } from '../engine/units';
 import { Structure, StructureType, STRUCTURE_DEFS } from '../engine/structures';
 import { HexCell } from '../engine/map';
 import { TERRAIN } from '../engine/terrain';
@@ -10,7 +10,7 @@ import { TimelineForkResult, ChronoScoutResult } from '../engine/simulation';
 import {
   ExecutionAnimation,
   getAnimatedUnitPosition, getCurrentPhase, getPhaseProgress,
-  PHASE_ATTACK, PHASE_BUILD,
+  PHASE_DEFEND, PHASE_ATTACK, PHASE_BUILD,
 } from './animation';
 
 // ── Shape helpers ───────────────────────────────────────────────────────────
@@ -51,6 +51,41 @@ function drawHpBar(
   const barColor = frac > 0.5 ? '#22c55e' : frac > 0.25 ? '#eab308' : '#ef4444';
   ctx.fillStyle = barColor;
   ctx.fillRect(bx, by, barW * frac, barH);
+}
+
+/** Draw a merge count badge above a unit (e.g. "2x", "10x"). */
+function drawMergeBadge(
+  ctx: CanvasRenderingContext2D,
+  sx: number, sy: number, r: number,
+  mergeCount: number,
+): void {
+  const label = `${mergeCount + 1}x`;
+  const fontSize = Math.max(7, r * 0.7);
+  ctx.font = `bold ${fontSize}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+
+  const bx = sx;
+  const by = sy - r - 3;
+
+  // Background pill
+  const textWidth = ctx.measureText(label).width;
+  const padX = 3;
+  const padY = 1;
+  const pillW = textWidth + padX * 2;
+  const pillH = fontSize + padY * 2;
+
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = '#fbbf24';
+  ctx.beginPath();
+  const pillR = pillH / 2;
+  ctx.roundRect(bx - pillW / 2, by - pillH, pillW, pillH, pillR);
+  ctx.fill();
+
+  // Text
+  ctx.fillStyle = '#0a0e1a';
+  ctx.globalAlpha = 1;
+  ctx.fillText(label, bx, by - padY);
 }
 
 // ── Unit shape painters ─────────────────────────────────────────────────────
@@ -447,7 +482,12 @@ export function drawUnits(
 
     ctx.globalAlpha = 0.85;
     paintUnit(ctx, sx, sy, r, unit.type, color);
-    drawHpBar(ctx, sx, sy, r, unit.hp, UNIT_DEFS[unit.type].maxHp);
+    drawHpBar(ctx, sx, sy, r, unit.hp, effectiveMaxHp(unit));
+
+    // Draw merge count badge above unit.
+    if (unit.mergeCount > 0) {
+      drawMergeBadge(ctx, sx, sy, r, unit.mergeCount);
+    }
 
     // Highlight ring for the selected/active unit.
     if (unit.id === selectedUnitId) {
@@ -846,6 +886,61 @@ export function drawDestroyedEntities(
     ctx.globalAlpha = (1 - ap) * 0.85;
     paintStructure(ctx, sx, sy, r, anim.structureType, color);
     drawDeathRing(ctx, sx, sy, r, ap, color);
+  }
+
+  ctx.globalAlpha = prevAlpha;
+}
+
+/**
+ * Draw merge animation: consumed units slide toward the survivor and fade out
+ * during the defend phase (0–0.5s).
+ */
+export function drawMergeAnimations(
+  ctx: CanvasRenderingContext2D,
+  animation: ExecutionAnimation,
+  cam: Camera,
+  elapsed: number,
+): void {
+  if (animation.mergedUnits.length === 0) return;
+
+  const dp = getPhaseProgress(elapsed, PHASE_DEFEND);
+  if (dp < 0) return;
+
+  const r = BASE_HEX_SIZE * cam.zoom * 0.32;
+  const prevAlpha = ctx.globalAlpha;
+
+  // Ease-out interpolation
+  const t = 1 - (1 - dp) * (1 - dp);
+
+  for (const anim of animation.mergedUnits) {
+    const color = anim.owner === 'player' ? '#00d4ff' : '#ff6b6b';
+
+    // Interpolate from original position toward survivor
+    const fx = cam.x + anim.fromPixel.x * cam.zoom;
+    const fy = cam.y + anim.fromPixel.y * cam.zoom;
+    const tx = cam.x + anim.toPixel.x * cam.zoom;
+    const ty = cam.y + anim.toPixel.y * cam.zoom;
+
+    const cx = fx + (tx - fx) * t;
+    const cy = fy + (ty - fy) * t;
+
+    // Fade out and shrink as it gets closer
+    const scale = 1 - t * 0.6;
+    ctx.globalAlpha = (1 - t) * 0.85;
+    paintUnit(ctx, cx, cy, r * scale, anim.unitType, color);
+
+    // Trail effect: thin line from original position
+    if (t > 0.1) {
+      ctx.globalAlpha = (1 - t) * 0.3;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(fx, fy);
+      ctx.lineTo(cx, cy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }
 
   ctx.globalAlpha = prevAlpha;

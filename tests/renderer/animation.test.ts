@@ -134,6 +134,7 @@ describe('getAnimatedUnitPosition', () => {
     fromPixel: from, toPixel: to,
     oldHp: 10, newHp: 10, maxHp: 15,
     wasDestroyed: false, wasSpawned: false, isDefending: false,
+    wasMergeConsumed: false, mergeCount: 0,
   };
 
   it('returns fromPixel before move phase', () => {
