@@ -80,6 +80,7 @@ function mapOrder(a: Hex, b: Hex): number {
  */
 function bfsPath(from: Hex, to: Hex, state: GameState, blocked: Set<string>): Hex[] {
   if (hexEqual(from, to)) return [];
+  const toKey = hexKey(to);
   const parent = new Map<string, Hex | null>([[hexKey(from), null]]);
   const queue: Hex[] = [from];
   let qi = 0;
@@ -88,7 +89,8 @@ function bfsPath(from: Hex, to: Hex, state: GameState, blocked: Set<string>): He
     const hex = queue[qi++];
     for (const nb of hexNeighbors(hex)) {
       const key = hexKey(nb);
-      if (parent.has(key) || blocked.has(key)) continue;
+      // Allow the destination hex even if it's in the blocked set (e.g. gather target on a structure).
+      if (parent.has(key) || (blocked.has(key) && key !== toKey)) continue;
       const cell = state.map.cells.get(key);
       if (!cell || !TERRAIN[cell.terrain].passable) continue;
       parent.set(key, hex);
@@ -342,9 +344,9 @@ function stepMove(state: GameState, commands: CommandEntry[], log: string[]): vo
     });
 
   // Build blocked set once; update it as units move so later movers see vacated hexes.
-  // Structures don't block movement.
   const blocked = new Set<string>();
   for (const u of state.units.values()) blocked.add(hexKey(u.hex));
+  for (const s of state.structures.values()) blocked.add(hexKey(s.hex));
 
   for (const { owner, command } of allMoves) {
     const unit = state.units.get(command.unitId);
@@ -611,6 +613,13 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
         continue;
       }
     }
+    // All other structures may NOT be placed on harvesting terrain.
+    if (command.structureType !== 'crystal_extractor' && command.structureType !== 'flux_conduit') {
+      if (cell.terrain === 'crystal_node' || cell.terrain === 'flux_vent') {
+        log.push(`${owner} Build ${command.structureType} failed — cannot build on resource terrain`);
+        continue;
+      }
+    }
 
     player.resources.cc -= def.costCC;
     player.resources.fx -= def.costFX;
@@ -710,6 +719,7 @@ function stepGather(state: GameState, commands: CommandEntry[], log: string[]): 
   // Build blocked set once for drone repositioning; reflects post-move unit positions.
   const blocked = new Set<string>();
   for (const u of state.units.values()) blocked.add(hexKey(u.hex));
+  for (const s of state.structures.values()) blocked.add(hexKey(s.hex));
 
   // Assign drones to their extractors / flux conduits.
   for (const { owner, command } of gathers) {
