@@ -1370,7 +1370,7 @@ export default function GameView() {
               PAUSED
             </div>
             <div className="mt-4 font-mono text-sm" style={{ color: '#64748b' }}>
-              Press Esc or tap to resume
+              {isMobile ? 'Tap to resume' : 'Press Esc or tap to resume'}
             </div>
           </div>
         )}
@@ -1452,7 +1452,7 @@ export default function GameView() {
               ? mode.slotIndex
               : null
           }
-          lockedIn={lockedIn}
+          lockedIn={lockedIn || paused}
           lockInFlash={lockInFlash}
           isMobile={isMobile}
           forkMode={timelineForkActive}
