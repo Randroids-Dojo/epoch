@@ -72,9 +72,7 @@ export type TutorialStep =
   | 'extractor_train_select_train'
   | 'extractor_train_select_sentry'
   | 'extractor_lock_in'
-  // Phase 3 — Epoch 3: barracks done, extractor still building → just lock in
-  | 'wait_lock_in'
-  // Phase 4 — Epoch 4: extractor done → gather + train a Pulse Sentry (same turn)
+  // Phase 3 — Epoch 3: extractor done → gather + train a Pulse Sentry (same turn)
   | 'gather_select_drone'
   | 'gather_select_gather'
   | 'gather_select_target'

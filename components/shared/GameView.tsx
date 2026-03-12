@@ -211,11 +211,7 @@ export default function GameView() {
         setTutorialStep('extractor_select_drone');
         break;
       case 'extractor_lock_in':
-        // Both buildings constructing — next epoch just lock in.
-        setTutorialStep('wait_lock_in');
-        break;
-      case 'wait_lock_in':
-        // Extractor should be done — teach gather + train on same turn.
+        // Extractor building — next epoch gather + train.
         setTutorialStep('gather_select_drone');
         break;
       case 'train_lock_in':
@@ -1507,7 +1503,6 @@ export default function GameView() {
           tutorialHighlightLockIn={
             tutorialStep === 'lock_in' ||
             tutorialStep === 'extractor_lock_in' ||
-            tutorialStep === 'wait_lock_in' ||
             tutorialStep === 'train_lock_in'
           }
           tutorialHighlightSlot={tutorialStep === 'train_select_slot' || tutorialStep === 'extractor_train_select_slot'}
