@@ -51,6 +51,27 @@ describe('trainFlow helpers', () => {
     expect(getTrainFailureReason(state, 'arc_ranger')).toBe('Not enough CC for Arc Ranger.');
   });
 
+  it('excludes structures already committed to a train command', () => {
+    const state = createInitialState(7);
+    const barracks: Structure = {
+      id: newId('s'),
+      owner: 'player',
+      type: 'barracks',
+      hex: { q: -8, r: 0 },
+      hp: 40,
+      buildProgress: 0,
+      assignedDroneId: null,
+    };
+    state.structures.set(barracks.id, barracks);
+
+    // Without exclusion, the barracks is eligible.
+    expect(getPlayerTrainEligibility(state)).toHaveLength(1);
+
+    // With the barracks excluded, no eligible structures remain.
+    const excluded = new Set([barracks.id]);
+    expect(getPlayerTrainEligibility(state, excluded)).toHaveLength(0);
+  });
+
   it('returns spawn blocked feedback when barracks and neighbors are occupied', () => {
     const state = createInitialState(7);
     const barracks: Structure = {

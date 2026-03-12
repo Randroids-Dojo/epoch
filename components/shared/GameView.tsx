@@ -169,9 +169,18 @@ export default function GameView() {
 
   const canChronoScout = hasChronoSpire && gameState.players.player.resources.te >= CHRONO_SCOUT_COST;
 
+  // Structure IDs already committed to a train command in other slots this epoch.
+  const committedTrainStructures = useMemo(() => {
+    const ids = new Set<string>();
+    for (const cmd of gameState.players.player.globalCommands) {
+      if (cmd?.type === 'train') ids.add(cmd.structureId);
+    }
+    return ids;
+  }, [gameState]);
+
   const canTrain = useMemo(
-    () => getPlayerTrainEligibility(gameState).length > 0,
-    [gameState],
+    () => getPlayerTrainEligibility(gameState, committedTrainStructures).length > 0,
+    [gameState, committedTrainStructures],
   );
 
   const hasEpochAnchor = gameState.players.player.epochAnchor !== null;
@@ -830,14 +839,21 @@ export default function GameView() {
       }
 
       if (type === 'train') {
-        const eligible = getPlayerTrainEligibility(state);
+        // Exclude structures already committed to train commands in other slots.
+        const excludeIds = new Set<string>();
+        for (let j = 0; j < state.players.player.globalCommands.length; j++) {
+          if (j === slotIndex) continue; // allow re-picking for the current slot
+          const cmd = state.players.player.globalCommands[j];
+          if (cmd?.type === 'train') excludeIds.add(cmd.structureId);
+        }
+        const eligible = getPlayerTrainEligibility(state, excludeIds);
         if (eligible.length === 0) {
           setMode({
             kind: 'train_picker',
             slotIndex,
             structureId: '',
             structureHex: { q: 0, r: 0 },
-            failureFeedback: 'Train requires a completed Barracks or War Foundry.',
+            failureFeedback: 'All production buildings are already assigned.',
           });
           return;
         }
@@ -935,7 +951,14 @@ export default function GameView() {
     }
 
     const unitDef = UNIT_DEFS[unitType];
-    const eligible = getPlayerTrainEligibility(state);
+    // Exclude structures committed to train commands in other slots.
+    const excludeIds = new Set<string>();
+    for (let j = 0; j < state.players.player.globalCommands.length; j++) {
+      if (j === m.slotIndex) continue;
+      const cmd = state.players.player.globalCommands[j];
+      if (cmd?.type === 'train') excludeIds.add(cmd.structureId);
+    }
+    const eligible = getPlayerTrainEligibility(state, excludeIds);
     const matchingBuilding = eligible.find((e) => e.structureType === unitDef.producedAt && e.hasSpawnSpace)
       ?? eligible.find((e) => e.structureType === unitDef.producedAt);
     const structureId = matchingBuilding?.structureId ?? m.structureId;
