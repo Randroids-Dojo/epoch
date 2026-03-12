@@ -1,5 +1,5 @@
 import { GAME_CONSTANTS } from './constants'
-import type { TargetingCommandType, GatherTarget } from '../engine/targeting'
+import type { TargetingCommandType, GatherTarget, MergeTarget } from '../engine/targeting'
 import type { StructureType } from '../engine/structures'
 
 // ── Interaction Mode (Planning Phase UI) ──────────────────────────────────────
@@ -43,6 +43,13 @@ export type InteractionMode =
       structureId: string;
       structureHex: { q: number; r: number };
       failureFeedback: string | null;
+    }
+
+  /** Merge picker: selecting which same-type units to merge into the selected unit. */
+  | {
+      kind: 'merge_picker';
+      unitId: string;
+      targets: MergeTarget[];
     }
 
 // ── Tutorial Steps ───────────────────────────────────────────────────────────

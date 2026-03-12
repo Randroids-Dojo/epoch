@@ -94,4 +94,20 @@ export interface Unit {
   assignedExtractorId: string | null;
   /** True if this unit has a Chrono Shift damage shield (absorbs all damage this epoch). */
   damageShield: boolean;
+  /** Number of times this unit has been merged with others (0 = never merged). */
+  mergeCount: number;
+  /** Extra max HP gained from merges. Effective maxHp = UNIT_DEFS[type].maxHp + bonusMaxHp. */
+  bonusMaxHp: number;
+  /** Extra attack gained from merges. Effective attack = UNIT_DEFS[type].attack + bonusAttack. */
+  bonusAttack: number;
+}
+
+/** Returns the effective max HP for a unit (base + merge bonus). */
+export function effectiveMaxHp(unit: Unit): number {
+  return UNIT_DEFS[unit.type].maxHp + unit.bonusMaxHp;
+}
+
+/** Returns the effective attack for a unit (base + merge bonus). */
+export function effectiveAttack(unit: Unit): number {
+  return UNIT_DEFS[unit.type].attack + unit.bonusAttack;
 }

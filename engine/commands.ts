@@ -117,6 +117,20 @@ export interface PhaseSurgeCommand {
   readonly targetHex: Hex;
 }
 
+/**
+ * Merge — combine one or more same-type friendly units within range into this unit.
+ * The surviving unit gains stats with diminishing returns for each merge.
+ */
+export interface MergeCommand {
+  readonly type: 'merge';
+  readonly unitId: string;
+  /** IDs of units to absorb (must be same type, same owner, within merge range). */
+  readonly targetUnitIds: readonly string[];
+}
+
+/** Range within which units can merge (hex distance). */
+export const MERGE_RANGE = 2;
+
 // ── Command categories ────────────────────────────────────────────────────────
 
 /** Commands tied to a specific unit (one per unit per epoch). */
@@ -127,7 +141,8 @@ export type UnitCommand =
   | DefendCommand
   | BuildCommand
   | ChronoShiftCommand
-  | PhaseSurgeCommand;
+  | PhaseSurgeCommand
+  | MergeCommand;
 
 /** Commands not tied to a specific unit (train, research, temporal abilities). */
 export type GlobalCommand =

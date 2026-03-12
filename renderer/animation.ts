@@ -8,7 +8,7 @@
 import { Hex, hexToPixel } from '../engine/hex';
 import { GameState } from '../engine/state';
 import { PlayerId } from '../engine/player';
-import { UnitType, UNIT_DEFS } from '../engine/units';
+import { UnitType, UNIT_DEFS, effectiveMaxHp } from '../engine/units';
 import { StructureType, STRUCTURE_DEFS } from '../engine/structures';
 import { BASE_HEX_SIZE } from './drawHex';
 
@@ -20,6 +20,8 @@ export interface UnitSnapshot {
   owner: PlayerId;
   type: UnitType;
   isDefending?: boolean;
+  mergeCount?: number;
+  bonusMaxHp?: number;
 }
 
 export interface StructSnapshot {
@@ -43,6 +45,12 @@ export interface UnitAnim {
   wasDestroyed: boolean;
   wasSpawned: boolean;
   isDefending: boolean;
+  /** True if this unit was consumed by a merge (animates toward survivor then fades). */
+  wasMergeConsumed: boolean;
+  /** Pixel position of the merge survivor this unit is being pulled toward. */
+  mergeSurvivorPixel?: { x: number; y: number };
+  /** Current merge count of the surviving unit (for badge display during anim). */
+  mergeCount: number;
 }
 
 export interface StructAnim {
@@ -86,6 +94,8 @@ export interface ExecutionAnimation {
   structures: Map<string, StructAnim>;
   destroyedUnits: UnitAnim[];
   destroyedStructures: StructAnim[];
+  /** Units consumed by merge — animate pulling toward survivor then fading. */
+  mergedUnits: UnitAnim[];
   eventLog: string[];
   startedAt: number; // performance.now()
 }
@@ -99,6 +109,18 @@ export function buildAnimationTimeline(
 ): ExecutionAnimation {
   const units = new Map<string, UnitAnim>();
   const destroyedUnits: UnitAnim[] = [];
+  const mergedUnits: UnitAnim[] = [];
+
+  // Detect merge survivors: units whose mergeCount increased.
+  // Build a map from (owner, type) → survivor pixel for merge animations.
+  const mergeSurvivorPixels = new Map<string, { x: number; y: number }>();
+  for (const [id, unit] of newState.units) {
+    const snap = unitSnaps.get(id);
+    if (snap && (unit.mergeCount > (snap.mergeCount ?? 0))) {
+      const key = `${unit.owner}:${unit.type}`;
+      mergeSurvivorPixels.set(key, hexToPixel(unit.hex, BASE_HEX_SIZE));
+    }
+  }
 
   // Units that existed before resolution.
   for (const [id, snap] of unitSnaps) {
@@ -109,21 +131,35 @@ export function buildAnimationTimeline(
       ? fromPixel
       : hexToPixel(newUnit.hex, BASE_HEX_SIZE);
 
+    // Check if this was merge-consumed (destroyed + a same-type survivor gained mergeCount).
+    const mergeKey = `${snap.owner}:${snap.type}`;
+    const survivorPixel = destroyed ? mergeSurvivorPixels.get(mergeKey) : undefined;
+    const wasMergeConsumed = destroyed && survivorPixel !== undefined;
+
+    const maxHp = destroyed
+      ? UNIT_DEFS[snap.type].maxHp + (snap.bonusMaxHp ?? 0)
+      : effectiveMaxHp(newUnit);
+
     const anim: UnitAnim = {
       unitId: id,
       owner: snap.owner,
       unitType: snap.type,
       fromPixel,
-      toPixel,
+      toPixel: wasMergeConsumed ? survivorPixel : toPixel,
       oldHp: snap.hp,
       newHp: destroyed ? -1 : newUnit.hp,
-      maxHp: UNIT_DEFS[snap.type].maxHp,
-      wasDestroyed: destroyed,
+      maxHp,
+      wasDestroyed: destroyed && !wasMergeConsumed,
       wasSpawned: false,
       isDefending: destroyed ? false : newUnit.isDefending,
+      wasMergeConsumed,
+      mergeSurvivorPixel: survivorPixel,
+      mergeCount: destroyed ? (snap.mergeCount ?? 0) : newUnit.mergeCount,
     };
 
-    if (destroyed) {
+    if (wasMergeConsumed) {
+      mergedUnits.push(anim);
+    } else if (destroyed) {
       destroyedUnits.push(anim);
     } else {
       units.set(id, anim);
@@ -142,10 +178,12 @@ export function buildAnimationTimeline(
       toPixel: pixel,
       oldHp: 0,
       newHp: unit.hp,
-      maxHp: UNIT_DEFS[unit.type].maxHp,
+      maxHp: effectiveMaxHp(unit),
       wasDestroyed: false,
       wasSpawned: true,
       isDefending: false,
+      wasMergeConsumed: false,
+      mergeCount: unit.mergeCount,
     });
   }
 
@@ -200,6 +238,7 @@ export function buildAnimationTimeline(
     structures,
     destroyedUnits,
     destroyedStructures,
+    mergedUnits,
     eventLog: newState.eventLog,
     startedAt: performance.now(),
   };
@@ -249,7 +288,7 @@ export function getPhaseProgress(elapsed: number, phase: PhaseConfig): number {
 const MOVE_ARROW = '\u2192'; // →
 
 export function categorizeLogEntry(entry: string): AnimPhase {
-  if (entry.includes('defending')) return 'defend';
+  if (entry.includes('defending') || entry.includes('merged')) return 'defend';
   if (entry.includes(MOVE_ARROW) || entry.includes('→')) return 'move';
   if (entry.includes('attacks') || entry.includes('destroyed')) return 'attack';
   return 'build'; // build, train, gather, temporal

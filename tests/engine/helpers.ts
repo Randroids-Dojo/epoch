@@ -14,7 +14,8 @@ export function makeStateWithDifficulty(difficulty: AIDifficulty, seed = 42): Ga
 function isUnitCommand(cmd: Command): cmd is UnitCommand {
   return (
     cmd.type === 'move' || cmd.type === 'attack' || cmd.type === 'gather' ||
-    cmd.type === 'defend' || cmd.type === 'build' || cmd.type === 'chrono_shift'
+    cmd.type === 'defend' || cmd.type === 'build' || cmd.type === 'chrono_shift' ||
+    cmd.type === 'phase_surge' || cmd.type === 'merge'
   );
 }
 

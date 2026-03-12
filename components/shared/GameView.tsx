@@ -19,6 +19,7 @@ import {
   computeUnitPhaseSurgeTargets,
   computeUnitBuildTargets,
   computeUnitGatherTargets,
+  computeUnitMergeTargets,
   TargetingCommandType,
   BuildStructureType,
 } from '@/engine/targeting';
@@ -48,6 +49,7 @@ import ExecutionOverlay from '../hud/ExecutionOverlay';
 import Minimap from '../hud/Minimap';
 import HexTargetPicker from '../hud/HexTargetPicker';
 import GatherTargetPicker from '../hud/GatherTargetPicker';
+import MergeTargetPicker from '../hud/MergeTargetPicker';
 
 const PLANNING_DURATION = GAME_CONSTANTS.PLANNING_PHASE_DURATION_MS / 1000;
 const BASE_BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks', 'tech_lab', 'watchtower'];
@@ -520,7 +522,7 @@ export default function GameView() {
 
     const unitSnaps = new Map<string, UnitSnapshot>();
     for (const [id, u] of state.units) {
-      unitSnaps.set(id, { hex: { ...u.hex }, hp: u.hp, owner: u.owner, type: u.type });
+      unitSnaps.set(id, { hex: { ...u.hex }, hp: u.hp, owner: u.owner, type: u.type, mergeCount: u.mergeCount, bonusMaxHp: u.bonusMaxHp });
     }
     const structSnaps = new Map<string, StructSnapshot>();
     for (const [id, s] of state.structures) {
@@ -758,6 +760,12 @@ export default function GameView() {
         return;
       }
 
+      if (type === 'merge') {
+        const targets = computeUnitMergeTargets(state, unit);
+        setMode({ kind: 'merge_picker', unitId, targets });
+        return;
+      }
+
       if (type === 'move') {
         const eligibleKeys = computeUnitMoveTargets(state, unit);
         setMode({ kind: 'targeting', unitId, commandType: 'move', eligibleKeys });
@@ -870,6 +878,12 @@ export default function GameView() {
     const m = modeRef.current;
     if (m.kind !== 'gather_picker') return;
     commitUnitOrder(m.unitId, { type: 'gather', unitId: m.unitId, targetHex: hex });
+  }, [commitUnitOrder]);
+
+  const handleMergeConfirm = useCallback((selectedIds: string[]) => {
+    const m = modeRef.current;
+    if (m.kind !== 'merge_picker') return;
+    commitUnitOrder(m.unitId, { type: 'merge', unitId: m.unitId, targetUnitIds: selectedIds });
   }, [commitUnitOrder]);
 
   const handleHexTargetSelect = useCallback((hex: Hex) => {
@@ -1049,7 +1063,7 @@ export default function GameView() {
   // ── Unit picker props (derived from current mode) ─────────────────────────
   const activeUnitId =
     mode.kind === 'unit_picker_open' ? mode.unitId :
-    mode.kind === 'targeting' || mode.kind === 'build_select' || mode.kind === 'build_targeting' || mode.kind === 'gather_picker' ? mode.unitId :
+    mode.kind === 'targeting' || mode.kind === 'build_select' || mode.kind === 'build_targeting' || mode.kind === 'gather_picker' || mode.kind === 'merge_picker' ? mode.unitId :
     null;
 
   const unitForPicker = activeUnitId ? gameState.units.get(activeUnitId) : null;
@@ -1065,7 +1079,8 @@ export default function GameView() {
     const canBuild = unitForPicker.type === 'drone' && gameState.players.player.resources.cc >= 3;
     const unitHasChrono = !!(getOldestSnapshot(gameState)?.has(unitForPicker.id));
     const canChronoShift = playerTechTier >= 1 && gameState.players.player.resources.te >= CHRONO_SHIFT_COST && unitHasChrono;
-    return { canAttack, canGather, canBuild, canChronoShift, unitType: unitForPicker.type };
+    const canMerge = computeUnitMergeTargets(gameState, unitForPicker).length > 0;
+    return { canAttack, canGather, canBuild, canChronoShift, canMerge, unitType: unitForPicker.type };
   })() : null;
 
   // Position for unit picker: to the right of the panel, aligned to the card.
@@ -1146,6 +1161,7 @@ export default function GameView() {
             canGather={unitPickerProps.canGather}
             canBuild={unitPickerProps.canBuild}
             canChronoShift={unitPickerProps.canChronoShift}
+            canMerge={unitPickerProps.canMerge}
             tutorialHighlightType={
               tutorialStep === 'select_build' || tutorialStep === 'extractor_select_build' ? 'build'
               : tutorialStep === 'gather_select_gather' ? 'gather'
@@ -1318,6 +1334,17 @@ export default function GameView() {
               targets={mode.targets}
               tutorialHighlight={tutorialStep === 'gather_select_target'}
               onSelect={handleGatherSelect}
+              onClose={() => setMode({ kind: 'idle' })}
+            />
+          </div>
+        )}
+
+        {/* Merge target picker */}
+        {mode.kind === 'merge_picker' && !isExecuting && (
+          <div style={{ position: 'absolute', top: unitPickerTop, left: 188 }}>
+            <MergeTargetPicker
+              targets={mode.targets}
+              onConfirm={handleMergeConfirm}
               onClose={() => setMode({ kind: 'idle' })}
             />
           </div>
