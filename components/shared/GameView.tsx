@@ -50,6 +50,7 @@ import Minimap from '../hud/Minimap';
 import HexTargetPicker from '../hud/HexTargetPicker';
 import GatherTargetPicker from '../hud/GatherTargetPicker';
 import MergeTargetPicker from '../hud/MergeTargetPicker';
+import DifficultyHelpButton from './DifficultyHelpModal';
 
 const PLANNING_DURATION = GAME_CONSTANTS.PLANNING_PHASE_DURATION_MS / 1000;
 const BASE_BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks', 'tech_lab', 'watchtower'];
@@ -62,6 +63,10 @@ const DIFFICULTY_OPTIONS: { value: AIDifficulty; label: string; desc: string }[]
   { value: 'commander',    label: 'Commander',     desc: 'Mixed archetypes · Uses Chrono Shift' },
   { value: 'epoch_master', label: 'Epoch Master',  desc: 'Full archetype blend · All abilities' },
 ];
+
+const DIFFICULTY_LABELS = Object.fromEntries(
+  DIFFICULTY_OPTIONS.map((o) => [o.value, o.label]),
+) as Record<AIDifficulty, string>;
 
 // Module-level code in 'use client' files can still run during SSR prerender,
 // so the typeof-window guard is needed here even though call sites are client-only.
@@ -1439,14 +1444,17 @@ export default function GameView() {
                 </button>
               ))}
             </div>
-            <button
-              data-testid="start-game-btn"
-              className="mt-2 font-mono text-sm tracking-widest uppercase px-8 py-2 border"
-              style={{ color: COLORS.CYAN, borderColor: COLORS.CYAN, background: 'rgba(0,229,255,0.08)' }}
-              onClick={() => handleStartGame(difficulty)}
-            >
-              BEGIN
-            </button>
+            <div className="flex gap-3 mt-2">
+              <DifficultyHelpButton labels={DIFFICULTY_LABELS} />
+              <button
+                data-testid="start-game-btn"
+                className="font-mono text-sm tracking-widest uppercase px-8 py-2 border"
+                style={{ color: COLORS.CYAN, borderColor: COLORS.CYAN, background: 'rgba(0,229,255,0.08)' }}
+                onClick={() => handleStartGame(difficulty)}
+              >
+                BEGIN
+              </button>
+            </div>
           </div>
         )}
 
