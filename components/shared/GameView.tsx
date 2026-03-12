@@ -48,6 +48,7 @@ import ExecutionOverlay from '../hud/ExecutionOverlay';
 import Minimap from '../hud/Minimap';
 import HexTargetPicker from '../hud/HexTargetPicker';
 import GatherTargetPicker from '../hud/GatherTargetPicker';
+import DifficultyHelpButton from './DifficultyHelpModal';
 
 const PLANNING_DURATION = GAME_CONSTANTS.PLANNING_PHASE_DURATION_MS / 1000;
 const BASE_BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks', 'tech_lab', 'watchtower'];
@@ -61,6 +62,10 @@ const DIFFICULTY_OPTIONS: { value: AIDifficulty; label: string; desc: string }[]
   { value: 'epoch_master', label: 'Epoch Master',  desc: 'Full archetype blend · All abilities' },
 ];
 
+const DIFFICULTY_LABELS = Object.fromEntries(
+  DIFFICULTY_OPTIONS.map((o) => [o.value, o.label]),
+) as Record<AIDifficulty, string>;
+
 // Module-level code in 'use client' files can still run during SSR prerender,
 // so the typeof-window guard is needed here even though call sites are client-only.
 function isSkipSetup(): boolean {
@@ -70,7 +75,6 @@ function isSkipSetup(): boolean {
 
 export default function GameView() {
   const [showSetup, setShowSetup]   = useState(true);
-  const [showDifficultyHelp, setShowDifficultyHelp] = useState(false);
   const [difficulty, setDifficulty] = useState<AIDifficulty>('adept');
   const [gameState, setGameState]   = useState<GameState>(() => createInitialState(42));
   const [mode, setMode]             = useState<InteractionMode>({ kind: 'idle' });
@@ -1405,14 +1409,7 @@ export default function GameView() {
               ))}
             </div>
             <div className="flex gap-3 mt-2">
-              <button
-                data-testid="difficulty-help-btn"
-                className="font-mono text-sm tracking-widest uppercase px-4 py-2 border"
-                style={{ color: '#94a3b8', borderColor: '#334155', background: 'transparent' }}
-                onClick={() => setShowDifficultyHelp(true)}
-              >
-                ?
-              </button>
+              <DifficultyHelpButton labels={DIFFICULTY_LABELS} />
               <button
                 data-testid="start-game-btn"
                 className="font-mono text-sm tracking-widest uppercase px-8 py-2 border"
@@ -1422,77 +1419,6 @@ export default function GameView() {
                 BEGIN
               </button>
             </div>
-
-            {/* Difficulty help modal */}
-            {showDifficultyHelp && (
-              <div
-                data-testid="difficulty-help-modal"
-                className="absolute inset-0 flex items-center justify-center"
-                style={{ background: 'rgba(10,14,26,0.95)', zIndex: 60 }}
-                onClick={() => setShowDifficultyHelp(false)}
-              >
-                <div
-                  className="font-mono max-w-lg w-full mx-4 p-6 border"
-                  style={{ borderColor: '#334155', background: '#0a0e1a' }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="flex justify-between items-center mb-4">
-                    <div className="text-sm font-bold tracking-widest uppercase" style={{ color: COLORS.CYAN }}>
-                      Difficulty Details
-                    </div>
-                    <button
-                      data-testid="difficulty-help-close"
-                      className="text-sm px-2 py-1 border"
-                      style={{ color: '#94a3b8', borderColor: '#334155' }}
-                      onClick={() => setShowDifficultyHelp(false)}
-                    >
-                      X
-                    </button>
-                  </div>
-
-                  <table className="w-full text-xs" style={{ color: '#94a3b8' }}>
-                    <thead>
-                      <tr style={{ color: '#64748b' }}>
-                        <th className="text-left py-1 pr-2"></th>
-                        <th className="text-center py-1 px-1">Slots</th>
-                        <th className="text-center py-1 px-1">Temporal</th>
-                        <th className="text-left py-1 pl-2">Behavior</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr style={{ borderTop: '1px solid #1e293b' }}>
-                        <td className="py-2 pr-2 font-bold" style={{ color: COLORS.CYAN }}>Novice</td>
-                        <td className="py-2 px-1 text-center">1</td>
-                        <td className="py-2 px-1 text-center">None</td>
-                        <td className="py-2 pl-2">Single archetype, ~30% suboptimal moves</td>
-                      </tr>
-                      <tr style={{ borderTop: '1px solid #1e293b' }}>
-                        <td className="py-2 pr-2 font-bold" style={{ color: COLORS.CYAN }}>Adept</td>
-                        <td className="py-2 px-1 text-center">2</td>
-                        <td className="py-2 px-1 text-center">Echo</td>
-                        <td className="py-2 pl-2">Mild adaptation, optimizes resources</td>
-                      </tr>
-                      <tr style={{ borderTop: '1px solid #1e293b' }}>
-                        <td className="py-2 pr-2 font-bold" style={{ color: COLORS.CYAN }}>Commander</td>
-                        <td className="py-2 px-1 text-center">2</td>
-                        <td className="py-2 px-1 text-center">Echo + Shift</td>
-                        <td className="py-2 pl-2">Blended archetypes, adapts to player patterns</td>
-                      </tr>
-                      <tr style={{ borderTop: '1px solid #1e293b' }}>
-                        <td className="py-2 pr-2 font-bold" style={{ color: COLORS.CYAN }}>Epoch Master</td>
-                        <td className="py-2 px-1 text-center">3</td>
-                        <td className="py-2 px-1 text-center">All</td>
-                        <td className="py-2 pl-2">Full blending, exploits player habits</td>
-                      </tr>
-                    </tbody>
-                  </table>
-
-                  <div className="mt-4 text-xs" style={{ color: '#475569' }}>
-                    Difficulty only affects the AI opponent. Your options stay the same across all levels.
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
