@@ -1116,7 +1116,7 @@ export default function GameView() {
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden">
-      {gameState.phase !== 'over' && (
+      {gameState.phase !== 'over' && !showSetup && (
         <PlanningBar
           epoch={gameState.epoch}
           resources={gameState.players.player.resources}
@@ -1492,7 +1492,7 @@ export default function GameView() {
       </div>
 
       {/* Global command tray — shown only during planning */}
-      {gameState.phase === 'planning' && !isExecuting && (
+      {gameState.phase === 'planning' && !isExecuting && !showSetup && (
         <CommandTray
           globalCommands={gameState.players.player.globalCommands}
           selectedGlobalSlot={
