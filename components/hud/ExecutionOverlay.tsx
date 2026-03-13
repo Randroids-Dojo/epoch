@@ -38,7 +38,7 @@ export default function ExecutionOverlay({
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col font-mono">
       {/* Phase label + beat label */}
-      <div className="flex flex-col items-center gap-1 pt-2">
+      <div className="flex flex-col items-center gap-1" style={{ paddingTop: 32 }}>
         <div
           data-testid="phase-label"
           className="rounded px-3 py-1 text-xs font-bold tracking-widest uppercase"

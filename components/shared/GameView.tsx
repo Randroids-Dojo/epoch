@@ -1553,7 +1553,7 @@ export default function GameView() {
             onClick={togglePause}
             className="absolute font-mono text-xs tracking-wider uppercase"
             style={{
-              top: 8,
+              top: isMobile ? 32 : 8,
               right: 8,
               zIndex: 40,
               padding: '6px 14px',
