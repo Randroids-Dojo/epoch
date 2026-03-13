@@ -59,7 +59,7 @@ export default function CommandTray({
 
   return (
     <div
-      className="shrink-0 flex items-center pl-4 pr-6 py-3 font-mono"
+      className="shrink-0 flex items-center overflow-visible pl-4 pr-6 py-3 font-mono"
       style={{ gap: slot.gap, background: 'rgba(11,10,15,0.95)', borderTop: '1px solid #2a2535' }}
     >
       {/* Global command slots */}
@@ -159,7 +159,7 @@ export default function CommandTray({
         data-testid="lock-in-btn"
         disabled={lockedIn}
         onClick={onLockIn}
-        className={`rounded px-3 py-2 text-xs font-bold tracking-widest uppercase${tutorialHighlightLockIn ? ' tutorial-highlight' : ''}`}
+        className={`shrink-0 rounded px-3 py-2 text-xs font-bold tracking-widest uppercase${tutorialHighlightLockIn ? ' tutorial-highlight' : ''}`}
         style={{
           background: lockedIn
             ? 'rgba(30,41,59,0.5)'
@@ -174,7 +174,7 @@ export default function CommandTray({
           position: tutorialHighlightLockIn ? 'relative' as const : undefined,
         }}
       >
-        {tutorialHighlightLockIn && <span className="tutorial-tooltip" style={{ top: -24, left: 0 }}>LOCK IN YOUR ORDERS</span>}
+        {tutorialHighlightLockIn && <span className="tutorial-tooltip" style={{ top: -24, right: 0 }}>LOCK IN YOUR ORDERS</span>}
         {lockedIn
           ? (isMobile ? 'LOCKED' : 'LOCKED IN')
           : forkMode

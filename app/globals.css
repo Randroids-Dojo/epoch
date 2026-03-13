@@ -435,10 +435,10 @@ body {
 
 @media (max-width: 480px) {
   .epoch-feedback-panel {
-    right: 0.75rem;
     left: 0.75rem;
+    right: 0.75rem;
     width: auto;
-    bottom: 8.25rem;
+    bottom: 4rem;
   }
 
   .epoch-fab-menu {
