@@ -118,6 +118,14 @@ export default function GameCanvas({
   const [selectedCell, setSelectedCell] = useState<HexCell | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Clear selection when execution starts (animation becomes non-null).
+  useEffect(() => {
+    if (animation) {
+      selectedRef.current = null;
+      setSelectedCell(null);
+    }
+  }, [animation]);
+
   // Keep mode accessible in render without re-creating the callback.
   const modeRef = useRef<InteractionMode>(mode);
   modeRef.current = mode;
@@ -379,9 +387,12 @@ export default function GameCanvas({
     const key = hexKey(hex);
     const map = mapRef.current;
     if (map?.cells.has(key)) {
-      const next = key === selectedRef.current ? null : key;
-      selectedRef.current = next;
-      setSelectedCell(next ? (map.cells.get(next) ?? null) : null);
+      // Only toggle hex selection in idle mode — targeting taps are actions, not selections.
+      if (modeRef.current.kind === 'idle') {
+        const next = key === selectedRef.current ? null : key;
+        selectedRef.current = next;
+        setSelectedCell(next ? (map.cells.get(next) ?? null) : null);
+      }
     }
     onHexClickRef.current(hex);
   }, []);
