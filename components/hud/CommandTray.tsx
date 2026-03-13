@@ -59,12 +59,11 @@ export default function CommandTray({
 
   return (
     <div
-      className="absolute right-0 bottom-0 flex flex-col items-end gap-1.5 font-mono"
-      style={{ zIndex: 30, padding: '8px 8px', pointerEvents: 'auto' }}
+      className="absolute right-0 flex items-center font-mono"
+      style={{ bottom: 64, zIndex: 30, padding: '0 8px', gap: slot.gap, pointerEvents: 'auto' }}
     >
-      {/* Command slots — horizontal row */}
-      <div className="flex items-center" style={{ gap: slot.gap }}>
-        {globalCommands.map((cmd, i) => {
+      {/* Command slots + Lock button — single horizontal row */}
+      {globalCommands.map((cmd, i) => {
           const isSelected = selectedGlobalSlot === i;
           const isTutorial = i === firstEmptySlot;
           return (
@@ -82,13 +81,13 @@ export default function CommandTray({
                 opacity: lockedIn ? 0.5 : 1,
                 border: isSelected
                   ? '1.5px solid #e63946'
-                  : '1px solid #2a2535',
+                  : '1px solid #475569',
                 boxShadow: isSelected
                   ? '0 0 8px rgba(230,57,70,0.35), inset 0 0 8px rgba(230,57,70,0.08)'
                   : undefined,
                 background: isSelected
-                  ? 'rgba(230,57,70,0.06)'
-                  : 'rgba(22,20,28,0.6)',
+                  ? 'rgba(230,57,70,0.12)'
+                  : 'rgba(11,10,15,0.92)',
                 animation: !cmd && !isSelected && !lockedIn ? 'pulse-border 2.5s ease-in-out infinite' : undefined,
                 transition: 'border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease',
                 fontFamily: 'inherit',
@@ -140,18 +139,17 @@ export default function CommandTray({
                 <>
                   <span
                     className="absolute left-1 top-0.5"
-                    style={{ color: '#1e293b', fontSize: '0.6rem' }}
+                    style={{ color: '#475569', fontSize: '0.6rem' }}
                   >
                     {i + 1}
                   </span>
-                  <span style={{ color: '#2a2535', fontSize: '1.1rem' }}>+</span>
+                  <span style={{ color: '#64748b', fontSize: '1.1rem' }}>+</span>
                   {isTutorial && <span className="tutorial-tooltip" style={{ top: -24, left: -4 }}>CLICK TO ADD ORDER</span>}
                 </>
               )}
             </button>
           );
         })}
-      </div>
 
       {/* Lock-In button */}
       <button

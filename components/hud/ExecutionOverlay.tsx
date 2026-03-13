@@ -89,8 +89,8 @@ export default function ExecutionOverlay({
         </div>
       </div>
 
-      {/* Skip button — bottom right */}
-      <div className="pointer-events-auto flex justify-end pb-6 pr-6 pl-4">
+      {/* Skip button — bottom right, raised above dead zone */}
+      <div className="pointer-events-auto flex justify-end pr-2" style={{ paddingBottom: 64 }}>
         <button
           data-testid="skip-btn"
           onClick={onSkip}
