@@ -58,6 +58,7 @@ import IntroAnimation from '../animations/IntroAnimation';
 import VictoryAnimation from '../animations/VictoryAnimation';
 import MergeTargetPicker from '../hud/MergeTargetPicker';
 import DifficultyHelpButton from './DifficultyHelpModal';
+import { useDifficultyUnlock } from '@/lib/useDifficultyUnlock';
 
 const PLANNING_DURATION = GAME_CONSTANTS.PLANNING_PHASE_DURATION_MS / 1000;
 const BASE_BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks', 'tech_lab', 'watchtower'];
@@ -106,7 +107,8 @@ function captureAllEpochStats(state: GameState): { player: EpochSideStats; ai: E
 
 export default function GameView() {
   const [showSetup, setShowSetup]   = useState(true);
-  const [difficulty, setDifficulty] = useState<AIDifficulty>('adept');
+  const { maxUnlocked, isUnlocked, recordVictory } = useDifficultyUnlock();
+  const [difficulty, setDifficulty] = useState<AIDifficulty>(() => maxUnlocked);
   const [introPlaying, setIntroPlaying] = useState(true);
   const [gameState, setGameState]   = useState<GameState>(() => createInitialState(42));
   const [mode, setMode]             = useState<InteractionMode>({ kind: 'idle' });
@@ -680,6 +682,13 @@ export default function GameView() {
       handleResolveRef.current();
     }
   }, [timeLeft, gameState.phase, lockedIn, showSetup]);
+
+  // ── Unlock next difficulty on victory ────────────────────────────────────
+  useEffect(() => {
+    if (gameState.phase === 'over' && gameState.winner === 'player') {
+      recordVictory(difficulty);
+    }
+  }, [gameState.phase, gameState.winner, difficulty, recordVictory]);
 
   // ── Play Again / Start ────────────────────────────────────────────────────
   const handlePlayAgain = useCallback(() => {
@@ -1577,22 +1586,32 @@ export default function GameView() {
               SELECT DIFFICULTY
             </div>
             <div className="flex flex-col gap-3 w-72">
-              {DIFFICULTY_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  data-testid={`difficulty-${opt.value}`}
-                  className="text-left px-4 py-3 border font-mono transition-colors"
-                  style={{
-                    color: difficulty === opt.value ? COLORS.CYAN : '#94a3b8',
-                    borderColor: difficulty === opt.value ? COLORS.CYAN : '#334155',
-                    background: difficulty === opt.value ? 'rgba(0,229,255,0.06)' : 'transparent',
-                  }}
-                  onClick={() => setDifficulty(opt.value)}
-                >
-                  <div className="text-sm font-bold tracking-wider">{opt.label}</div>
-                  <div className="text-xs mt-0.5" style={{ color: '#64748b' }}>{opt.desc}</div>
-                </button>
-              ))}
+              {DIFFICULTY_OPTIONS.map((opt) => {
+                const locked = !isUnlocked(opt.value);
+                return (
+                  <button
+                    key={opt.value}
+                    data-testid={`difficulty-${opt.value}`}
+                    disabled={locked}
+                    className="text-left px-4 py-3 border font-mono transition-colors"
+                    style={{
+                      color: locked ? '#334155' : difficulty === opt.value ? COLORS.CYAN : '#94a3b8',
+                      borderColor: locked ? '#1e293b' : difficulty === opt.value ? COLORS.CYAN : '#334155',
+                      background: locked ? 'transparent' : difficulty === opt.value ? 'rgba(0,229,255,0.06)' : 'transparent',
+                      cursor: locked ? 'not-allowed' : 'pointer',
+                      opacity: locked ? 0.5 : 1,
+                    }}
+                    onClick={() => { if (!locked) setDifficulty(opt.value); }}
+                  >
+                    <div className="text-sm font-bold tracking-wider">
+                      {locked ? `[LOCKED] ${opt.label}` : opt.label}
+                    </div>
+                    <div className="text-xs mt-0.5" style={{ color: locked ? '#1e293b' : '#64748b' }}>
+                      {locked ? 'Beat the previous difficulty to unlock' : opt.desc}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
             <div className="flex gap-3 mt-2">
               <DifficultyHelpButton labels={DIFFICULTY_LABELS} />
