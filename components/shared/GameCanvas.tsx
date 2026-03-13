@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { GameMap, HexCell } from '@/engine/map';
 import { GameState } from '@/engine/state';
 import { Hex, hexKey, hexToPixel, pixelToHex } from '@/engine/hex';
-import { Camera, DEFAULT_ZOOM, zoomToward, canvasToWorld } from '@/renderer/camera';
+import { Camera, DEFAULT_ZOOM, zoomToward, canvasToWorld, lerpCamera } from '@/renderer/camera';
+import { ActionBeat, getSequenceCameraTarget } from '@/renderer/actionSequence';
 import { BASE_HEX_SIZE, drawBackground, drawHexCell } from '@/renderer/drawHex';
 import { drawUnits, drawStructures, drawTargetingOverlay, drawRangeBorders, drawCommandArrows, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawMergeAnimations, drawEchoOverlay, drawTimelineForkOverlay, drawChronoScoutOverlay, drawParticles } from '@/renderer/drawEntities';
 import { TimelineForkResult, ChronoScoutResult } from '@/engine/simulation';
@@ -22,6 +23,8 @@ interface GameCanvasProps {
   gameState: GameState;
   mode: InteractionMode;
   animation: ExecutionAnimation | null;
+  /** Cinematic camera beats for the execution animation. */
+  actionBeats: ActionBeat[] | null;
   echoCommands: Command[] | null;
   timelineForkResult?: TimelineForkResult | null;
   chronoScoutResult?: ChronoScoutResult | null;
@@ -63,6 +66,7 @@ export default function GameCanvas({
   gameState,
   mode,
   animation,
+  actionBeats,
   echoCommands,
   timelineForkResult,
   chronoScoutResult,
@@ -76,6 +80,12 @@ export default function GameCanvas({
   const frameRef  = useRef<number>(0);
   const dprRef    = useRef(1);
   const lastFrameTimeRef = useRef(0);
+
+  // ── Cinematic camera state ────────────────────────────────────────────────
+  /** User camera saved when cinematic sequence starts, restored on end. */
+  const savedCamRef = useRef<Camera | null>(null);
+  const actionBeatsRef = useRef<ActionBeat[] | null>(null);
+  actionBeatsRef.current = actionBeats;
 
   // Keep mapRef in sync with the current game state map.
   mapRef.current = gameState.map;
@@ -130,12 +140,51 @@ export default function GameCanvas({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const cam  = camRef.current;
+    let cam  = camRef.current;
     const dpr  = dprRef.current;
     const cssW = canvas.clientWidth;
     const cssH = canvas.clientHeight;
     const gs   = gameStateRef.current;
     const m    = modeRef.current;
+
+    // ── Cinematic camera drive during execution ───────────────────────────
+    const aBeats = actionBeatsRef.current;
+    const curAnim = animationRef.current;
+    if (curAnim && aBeats && aBeats.length > 0) {
+      // Save user camera on first frame of animation.
+      if (!savedCamRef.current) {
+        savedCamRef.current = { ...cam };
+      }
+
+      const elapsed = (performance.now() - curAnim.startedAt) / 1000;
+      const target = getSequenceCameraTarget(aBeats, elapsed);
+
+      if (target) {
+        // Build target camera: center the target world position on screen.
+        const targetCam: Camera = {
+          x: cssW / 2 - target.worldX * target.zoom,
+          y: cssH / 2 - target.worldY * target.zoom,
+          zoom: target.zoom,
+        };
+
+        // Smooth lerp toward target (chasing spring feel).
+        cam = lerpCamera(cam, targetCam, 0.12);
+        camRef.current = cam;
+      }
+    } else if (savedCamRef.current) {
+      // Animation ended — smoothly return to user camera.
+      const saved = savedCamRef.current;
+      const dist = Math.abs(cam.x - saved.x) + Math.abs(cam.y - saved.y) + Math.abs(cam.zoom - saved.zoom) * 100;
+      if (dist < 1) {
+        // Close enough — snap and clear.
+        camRef.current = saved;
+        cam = saved;
+        savedCamRef.current = null;
+      } else {
+        cam = lerpCamera(cam, saved, 0.1);
+        camRef.current = cam;
+      }
+    }
 
     // Reset transform every frame so DPR scaling is idempotent.
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

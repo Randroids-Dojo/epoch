@@ -43,6 +43,19 @@ export function worldToCanvas(
   return { x: cam.x + wx * cam.zoom, y: cam.y + wy * cam.zoom };
 }
 
+/**
+ * Linearly interpolate between two cameras.
+ * t=0 returns `from`, t=1 returns `to`.
+ */
+export function lerpCamera(from: Camera, to: Camera, t: number): Camera {
+  const c = Math.max(0, Math.min(1, t));
+  return {
+    x: from.x + (to.x - from.x) * c,
+    y: from.y + (to.y - from.y) * c,
+    zoom: from.zoom + (to.zoom - from.zoom) * c,
+  };
+}
+
 /** Canvas CSS-pixel space → world-space. */
 export function canvasToWorld(
   cx: number,

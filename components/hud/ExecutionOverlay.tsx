@@ -1,10 +1,12 @@
 'use client';
 
 import { ExecutionAnimation, getCurrentPhase, getVisibleLogEntries } from '@/renderer/animation';
+import { ActionBeat, getSequenceCameraTarget } from '@/renderer/actionSequence';
 
 interface ExecutionOverlayProps {
   animation: ExecutionAnimation;
   elapsed: number;
+  actionBeats?: ActionBeat[] | null;
   onSkip(): void;
   tutorialHighlightSkip?: boolean;
 }
@@ -19,6 +21,7 @@ const PHASE_LABELS: Record<string, string> = {
 export default function ExecutionOverlay({
   animation,
   elapsed,
+  actionBeats,
   onSkip,
   tutorialHighlightSkip,
 }: ExecutionOverlayProps) {
@@ -26,10 +29,16 @@ export default function ExecutionOverlay({
   const phaseLabel = phase ? PHASE_LABELS[phase] ?? phase.toUpperCase() : 'RESOLVING';
   const visibleEntries = getVisibleLogEntries(animation.eventLog, elapsed);
 
+  // Current cinematic beat label.
+  const beatTarget = actionBeats && actionBeats.length > 0
+    ? getSequenceCameraTarget(actionBeats, elapsed)
+    : null;
+  const beatLabel = beatTarget?.label || '';
+
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col font-mono">
-      {/* Phase label */}
-      <div className="flex justify-center pt-2">
+      {/* Phase label + beat label */}
+      <div className="flex flex-col items-center gap-1 pt-2">
         <div
           data-testid="phase-label"
           className="rounded px-3 py-1 text-xs font-bold tracking-widest uppercase"
@@ -41,6 +50,20 @@ export default function ExecutionOverlay({
         >
           {phaseLabel}
         </div>
+        {beatLabel && (
+          <div
+            data-testid="beat-label"
+            className="rounded px-3 py-1 text-xs font-semibold"
+            style={{
+              background: 'rgba(11,10,15,0.85)',
+              border: '1px solid rgba(230,57,70,0.2)',
+              color: '#f1faee',
+              animation: 'fadeIn 0.25s ease forwards',
+            }}
+          >
+            {beatLabel}
+          </div>
+        )}
       </div>
 
       {/* Event log — left side */}

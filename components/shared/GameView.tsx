@@ -37,6 +37,7 @@ import {
   PHASE_MOVE, PHASE_ATTACK, PHASE_BUILD,
   categorizeLogEntry,
 } from '@/renderer/animation';
+import { ActionBeat, buildActionSequence } from '@/renderer/actionSequence';
 import { audioEngine } from '@/audio/engine';
 import GameCanvas from './GameCanvas';
 import { CameraSnapshot } from './GameCanvas';
@@ -399,12 +400,14 @@ export default function GameView() {
 
   // ── Execution animation ref ───────────────────────────────────────────────
   const animationRef = useRef<ExecutionAnimation | null>(null);
+  const [actionBeats, setActionBeats] = useState<ActionBeat[] | null>(null);
 
   // ── finishExecution ───────────────────────────────────────────────────────
   const finishExecutionRef = useRef<() => void>(() => {});
 
   const finishExecution = useCallback(() => {
     animationRef.current = null;
+    setActionBeats(null);
     setAnimElapsed(0);
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
@@ -625,6 +628,7 @@ export default function GameView() {
 
     const anim = buildAnimationTimeline(unitSnaps, structSnaps, state);
     animationRef.current = anim;
+    setActionBeats(buildActionSequence(anim, state.map));
 
     execSoundsRef.current = { move: false, attack: false, build: false };
     audioEngine.playEpochTransition();
@@ -667,19 +671,19 @@ export default function GameView() {
 
   // ── Countdown timer ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (lockedIn || gameState.phase !== 'planning' || showSetup || paused) return;
+    if (lockedIn || gameState.phase !== 'planning' || showSetup || paused || epochStatsPopup || pendingBonusCard) return;
 
     const id = setInterval(() => {
       setTimeLeft((t) => Math.max(0, t - 1));
     }, 1000);
     return () => clearInterval(id);
-  }, [lockedIn, gameState.phase, showSetup, paused]);
+  }, [lockedIn, gameState.phase, showSetup, paused, epochStatsPopup, pendingBonusCard]);
 
   useEffect(() => {
-    if (timeLeft === 0 && gameState.phase === 'planning' && !lockedIn && !showSetup) {
+    if (timeLeft === 0 && gameState.phase === 'planning' && !lockedIn && !showSetup && !epochStatsPopup && !pendingBonusCard) {
       handleResolveRef.current();
     }
-  }, [timeLeft, gameState.phase, lockedIn, showSetup]);
+  }, [timeLeft, gameState.phase, lockedIn, showSetup, epochStatsPopup, pendingBonusCard]);
 
   // ── Play Again / Start ────────────────────────────────────────────────────
   const handlePlayAgain = useCallback(() => {
@@ -1272,6 +1276,7 @@ export default function GameView() {
           gameState={gameState}
           mode={mode}
           animation={animationRef.current}
+          actionBeats={actionBeats}
           echoCommands={echoCommands}
           timelineForkResult={timelineForkResult}
           chronoScoutResult={chronoScoutResult}
@@ -1281,7 +1286,7 @@ export default function GameView() {
         />
 
         {/* Unit action panel — left sidebar */}
-        {gameState.phase === 'planning' && !isExecuting && (
+        {gameState.phase === 'planning' && !isExecuting && !epochStatsPopup && !pendingBonusCard && (
           <UnitActionPanel
             gameState={gameState}
             mode={mode}
@@ -1518,6 +1523,7 @@ export default function GameView() {
           <ExecutionOverlay
             animation={animationRef.current}
             elapsed={animElapsed}
+            actionBeats={actionBeats}
             onSkip={handleSkip}
             tutorialHighlightSkip={tutorialActive}
           />
@@ -1629,7 +1635,7 @@ export default function GameView() {
       </div>
 
       {/* Global command tray — shown only during planning */}
-      {gameState.phase === 'planning' && !isExecuting && !showSetup && (
+      {gameState.phase === 'planning' && !isExecuting && !showSetup && !epochStatsPopup && !pendingBonusCard && (
         <CommandTray
           globalCommands={gameState.players.player.globalCommands}
           selectedGlobalSlot={
