@@ -538,8 +538,8 @@ export default function GameCanvas({
       {/* Hex info panel — only in idle mode */}
       {mode.kind === 'idle' && selectedCell && (
         <div
-          className="pointer-events-none absolute bottom-4 left-4 rounded border border-slate-700 px-3 py-2 font-mono text-xs"
-          style={{ background: 'rgba(11,10,15,0.92)', color: '#94a3b8' }}
+          className="pointer-events-none absolute left-1/2 -translate-x-1/2 rounded border border-slate-700 px-3 py-2 font-mono text-xs text-center"
+          style={{ bottom: 128, background: 'rgba(11,10,15,0.92)', color: '#94a3b8', zIndex: 20 }}
         >
           <div className="mb-1" style={{ color: '#e63946' }}>
             Hex ({selectedCell.hex.q}, {selectedCell.hex.r})
