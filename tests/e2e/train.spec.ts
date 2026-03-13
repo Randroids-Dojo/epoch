@@ -32,8 +32,8 @@ test('queues a train command when barracks and CC are available', async ({ page 
   await page.getByRole('menuitem', { name: 'Pulse Sentry' }).click();
 
   const slot = page.getByTestId('command-slot-0');
-  await expect(slot).toContainText('TR');
-  await expect(slot).toContainText('pulse_sentry');
+  // Slot shows a Unicode icon + aria-label for the command type (icons replaced text labels).
+  await expect(slot.locator('[aria-label="train"]')).toBeVisible();
 });
 
 test('train button is disabled when no barracks exists', async ({ page }) => {

@@ -31,18 +31,20 @@ test('minimap is visible and placed by form factor', async ({ page }) => {
   const minimap = page.getByTestId('minimap');
   await expect(minimap).toBeVisible();
 
+  // Desktop: top-left (left-4 top-8)
   const desktopBox = await minimap.boundingBox();
   expect(desktopBox).not.toBeNull();
-  expect(desktopBox!.x).toBeGreaterThan(1000);
+  expect(desktopBox!.x).toBeLessThan(120);
   expect(desktopBox!.y).toBeLessThan(180);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
 
+  // Mobile: top-left (left-3, top offset for dead zone)
   const mobileBox = await page.getByTestId('minimap').boundingBox();
   expect(mobileBox).not.toBeNull();
   expect(mobileBox!.x).toBeLessThan(120);
-  expect(mobileBox!.y + mobileBox!.height).toBeGreaterThan(680);
+  expect(mobileBox!.y).toBeLessThan(120);
 });
 
 test('minimap viewport updates after camera movement', async ({ page }) => {
