@@ -267,12 +267,16 @@ test('smoke: player can play full match from planning to game-over @smoke', asyn
 
   await page.goto('/');
 
+  // Wait for the intro animation to finish before interacting with the difficulty picker.
+  // The IntroAnimation overlay (zIndex 100) covers the screen and absorbs clicks,
+  // so start-game-btn is not reachable until the intro dismisses itself (~3.8s).
+  await expect(page.getByTestId('intro-animation')).not.toBeVisible({ timeout: 10_000 });
+
   // Dismiss the difficulty-picker setup overlay
-  await expect(page.getByTestId('difficulty-picker')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('difficulty-picker')).toBeVisible({ timeout: 5_000 });
   await page.getByTestId('start-game-btn').click({ force: true });
 
-  // Intro animation takes ~4s; allow extra time in slow CI.
-  await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 5_000 });
 
   for (let epoch = 0; epoch < 20; epoch++) {
     const snap = await getSnapshot(page);
