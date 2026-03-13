@@ -41,6 +41,11 @@ import { audioEngine } from '@/audio/engine';
 import GameCanvas from './GameCanvas';
 import { CameraSnapshot } from './GameCanvas';
 import EpochStatsPopup, { EpochSideStats, EpochStatsSnapshot } from '../hud/EpochStatsPopup';
+import BonusCard from '../hud/BonusCard';
+import {
+  PendingBonusCard, SwipeDirection,
+  shouldOfferBonusCard, drawBonusCard, applyBonusCard,
+} from '@/engine/bonusCards';
 import CommandTray from '../hud/CommandTray';
 import CommandPicker from '../hud/CommandPicker';
 import UnitActionPanel from '../hud/UnitActionPanel';
@@ -129,7 +134,29 @@ export default function GameView() {
   // ── Epoch stats popup state ─────────────────────────────────────────────
   const [epochStatsPopup, setEpochStatsPopup] = useState<EpochStatsSnapshot | null>(null);
   const preEpochStatsRef = useRef<{ player: EpochSideStats; ai: EpochSideStats; epoch: number } | null>(null);
-  const dismissEpochStats = useCallback(() => setEpochStatsPopup(null), []);
+
+  // ── Bonus card state ───────────────────────────────────────────────────
+  const [pendingBonusCard, setPendingBonusCard] = useState<PendingBonusCard | null>(null);
+  const [bonusAppliedMsg, setBonusAppliedMsg] = useState<string | null>(null);
+
+  const dismissEpochStats = useCallback(() => {
+    const popup = epochStatsPopup;
+    setEpochStatsPopup(null);
+    // After dismissing epoch stats, check if a bonus card should appear.
+    if (popup && shouldOfferBonusCard(popup.epoch)) {
+      setPendingBonusCard(drawBonusCard(popup.epoch));
+    }
+  }, [epochStatsPopup]);
+
+  const handleBonusSwipe = useCallback((direction: SwipeDirection) => {
+    if (!pendingBonusCard) return;
+    const state = gameStateRef.current;
+    const msg = applyBonusCard(state, pendingBonusCard.card.id, direction);
+    setGameState({ ...state });
+    setPendingBonusCard(null);
+    setBonusAppliedMsg(msg);
+    setTimeout(() => setBonusAppliedMsg(null), 2500);
+  }, [pendingBonusCard]);
 
   // Stable refs so callbacks always see the latest values.
   const gameStateRef = useRef(gameState);
@@ -1201,6 +1228,42 @@ export default function GameView() {
           stats={epochStatsPopup}
           onDismiss={dismissEpochStats}
         />
+      )}
+
+      {/* Bonus card — swipe left/right for a reward (every 4 epochs) */}
+      {pendingBonusCard && (
+        <BonusCard
+          card={pendingBonusCard.card}
+          onSwipe={handleBonusSwipe}
+        />
+      )}
+
+      {/* Bonus applied toast */}
+      {bonusAppliedMsg && (
+        <div
+          data-testid="bonus-applied-toast"
+          style={{
+            position: 'fixed',
+            top: 16,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 10001,
+            background: 'rgba(13,12,20,0.95)',
+            border: '1px solid #ffd700',
+            borderRadius: 6,
+            padding: '8px 18px',
+            color: '#ffd700',
+            fontSize: 12,
+            fontFamily: 'monospace',
+            fontWeight: 700,
+            letterSpacing: '0.08em',
+            textShadow: '0 0 8px rgba(255,215,0,0.4)',
+            animation: 'fadeIn 0.3s ease',
+            pointerEvents: 'none',
+          }}
+        >
+          BONUS: {bonusAppliedMsg}
+        </div>
       )}
 
       {/* Canvas area fills remaining space */}
