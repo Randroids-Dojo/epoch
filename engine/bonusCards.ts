@@ -118,7 +118,7 @@ export const BONUS_CARDS: Record<BonusCardId, BonusCardDef> = {
       description: 'All units gain a damage shield',
     },
     right: {
-      label: '+3 UNIT HP',
+      label: '+5 UNIT HP',
       description: 'Reinforce all combat units',
     },
   },
@@ -139,7 +139,7 @@ export const BONUS_CARDS: Record<BonusCardId, BonusCardDef> = {
       description: 'All structures finish instantly',
     },
     right: {
-      label: '+5 CC, +2 FX, +1 TE',
+      label: '+6 CC, +3 FX, +1 TE',
       description: 'A balanced resource infusion',
     },
   },
@@ -156,13 +156,20 @@ export function shouldOfferBonusCard(completedEpoch: number): boolean {
   return completedEpoch >= START_EPOCH && completedEpoch % BONUS_INTERVAL === 0;
 }
 
-/** Fixed card rotation order. drone_swarm first since it's a good early-game bonus. */
+/**
+ * Fixed card rotation order, balanced for game pacing:
+ *  4 — drone_swarm:     immediate economy boost (free workers or tougher workers)
+ *  8 — temporal_surge:  strategic fork early enough for recurring TE to compound
+ * 12 — crystal_windfall: resource injection when pushing mid-game tech
+ * 16 — chrono_harvest:  rush-build is relevant while War Foundries are building
+ * 20 — phase_rift:      combat capstone before final push
+ */
 const CARD_SEQUENCE: BonusCardId[] = [
   'drone_swarm',
-  'crystal_windfall',
   'temporal_surge',
-  'phase_rift',
+  'crystal_windfall',
   'chrono_harvest',
+  'phase_rift',
 ];
 
 /** Pick a bonus card for the given epoch. Cycles through CARD_SEQUENCE in order. */
@@ -258,16 +265,16 @@ export function applyBonusCard(
         }
         return 'All units shielded';
       }
-      // +3 HP to all combat (non-drone) units.
+      // +5 HP to all combat (non-drone) units.
       let buffed = 0;
       for (const u of state.units.values()) {
         if (u.owner === 'player' && u.type !== 'drone') {
-          u.hp += 3;
-          u.bonusMaxHp += 3;
+          u.hp += 5;
+          u.bonusMaxHp += 5;
           buffed++;
         }
       }
-      return `+3 HP to ${buffed} unit${buffed !== 1 ? 's' : ''}`;
+      return `+5 HP to ${buffed} unit${buffed !== 1 ? 's' : ''}`;
     }
 
     case 'chrono_harvest': {
@@ -282,10 +289,10 @@ export function applyBonusCard(
         }
         return rushed > 0 ? `${rushed} structure${rushed !== 1 ? 's' : ''} completed` : 'No structures to rush';
       }
-      player.resources.cc += 5;
-      player.resources.fx += 2;
+      player.resources.cc += 6;
+      player.resources.fx += 3;
       player.resources.te += 1;
-      return '+5 CC, +2 FX, +1 TE';
+      return '+6 CC, +3 FX, +1 TE';
     }
 
     default: {

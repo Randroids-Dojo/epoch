@@ -46,10 +46,9 @@ describe('drawBonusCard', () => {
     expect(card.card.id).toBe('drone_swarm');
   });
 
-  it('returns different cards for different epochs', () => {
-    const card4 = drawBonusCard(4);
-    const card8 = drawBonusCard(8);
-    expect(card4.card.id).not.toBe(card8.card.id);
+  it('returns temporal_surge second at epoch 8', () => {
+    const card = drawBonusCard(8);
+    expect(card.card.id).toBe('temporal_surge');
   });
 
   it('cycles through all 5 cards over 5 bonus intervals', () => {
@@ -143,12 +142,12 @@ describe('applyBonusCard', () => {
     }
   });
 
-  it('chrono_harvest right gives +5 CC, +2 FX, +1 TE', () => {
+  it('chrono_harvest right gives +6 CC, +3 FX, +1 TE', () => {
     const r = state.players.player.resources;
     const cc = r.cc, fx = r.fx, te = r.te;
     applyBonusCard(state, 'chrono_harvest', 'right');
-    expect(r.cc).toBe(cc + 5);
-    expect(r.fx).toBe(fx + 2);
+    expect(r.cc).toBe(cc + 6);
+    expect(r.fx).toBe(fx + 3);
     expect(r.te).toBe(te + 1);
   });
 });
