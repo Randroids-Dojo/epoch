@@ -565,7 +565,7 @@ export default function GameCanvas({
       />
 
       {/* Hex info panel — only in idle mode */}
-      {mode.kind === 'idle' && selectedCell && <HexInfoPanel gameState={gameState} cell={selectedCell} />}
+      {mode.kind === 'idle' && !animation && selectedCell && <HexInfoPanel gameState={gameState} cell={selectedCell} />}
 
       {/* Controls hint — offset right of UnitActionPanel (180px wide) to avoid overlap */}
       {!animation && <div
