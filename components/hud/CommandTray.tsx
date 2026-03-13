@@ -1,7 +1,8 @@
 'use client';
 
 import { GlobalCommand } from '@/engine/commands';
-import { SLOT_LAYOUT } from '@/lib/constants';
+import { UnitType } from '@/engine/units';
+import { DEAD_ZONE, SLOT_LAYOUT } from '@/lib/constants';
 
 interface CommandTrayProps {
   globalCommands: Array<GlobalCommand | null>;
@@ -21,7 +22,7 @@ interface CommandTrayProps {
 }
 
 /** Compact icon per unit type (matches canvas shapes) */
-const UNIT_ICON: Record<string, string> = {
+const UNIT_ICON: Record<UnitType, string> = {
   drone:           '●',
   pulse_sentry:    '▦',
   arc_ranger:      '◆',
@@ -33,11 +34,10 @@ const UNIT_ICON: Record<string, string> = {
 };
 
 /** Compact icon per global command type */
-const CMD_ICON: Record<string, string> = {
+const CMD_ICON: Record<GlobalCommand['type'], string> = {
   train:          '⚙',
   research:       '⬆',
   temporal:       '⏳',
-  chrono_shift:   '↯',
   epoch_anchor:   '⚓',
   timeline_fork:  '⑂',
   chrono_scout:   '👁',
@@ -67,7 +67,7 @@ export default function CommandTray({
   return (
     <div
       className="absolute right-0 flex items-center font-mono"
-      style={{ bottom: 64, zIndex: 30, padding: '0 8px', gap: slot.gap, pointerEvents: 'auto' }}
+      style={{ bottom: DEAD_ZONE.BOTTOM, zIndex: 30, padding: '0 8px', gap: slot.gap, pointerEvents: 'auto' }}
     >
       {/* Command slots + Lock button — single horizontal row */}
       {globalCommands.map((cmd, i) => {

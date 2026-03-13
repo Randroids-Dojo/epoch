@@ -19,6 +19,12 @@ export const SLOT_LAYOUT = {
 
 export const MOBILE_BREAKPOINT_PX = 480
 
+/** Safe-area offsets to avoid hard-to-reach phone edges. */
+export const DEAD_ZONE = {
+  TOP: 32,
+  BOTTOM: 64,
+} as const
+
 export const GAME_CONSTANTS = {
   GRID_COLS: 12,
   GRID_ROWS: 8,

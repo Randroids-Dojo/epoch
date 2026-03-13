@@ -5,6 +5,7 @@ import { GameState } from '@/engine/state';
 import { hexKey, hexToPixel } from '@/engine/hex';
 import { BASE_HEX_SIZE } from '@/renderer/drawHex';
 import { CameraSnapshot } from '@/components/shared/GameCanvas';
+import { DEAD_ZONE } from '@/lib/constants';
 
 interface MinimapProps {
   gameState: GameState;
@@ -161,7 +162,7 @@ export default function Minimap({ gameState, cameraSnapshot, isMobile, onRecente
     <div
       data-testid="minimap"
       className={`absolute z-10 ${isMobile ? 'left-3' : 'left-4 top-8'}`}
-      style={isMobile ? { top: 32 } : undefined}
+      style={isMobile ? { top: DEAD_ZONE.TOP } : undefined}
     >
       <div className="relative">
         <div className="overflow-hidden rounded border border-red-900/60 bg-[#0b0a0f]/90 p-2 shadow-lg backdrop-blur-sm">

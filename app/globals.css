@@ -33,6 +33,11 @@ textarea {
   user-select: text;
 }
 
+/* Restore default touch handling on canvas for pinch-zoom / pan gestures */
+canvas {
+  touch-action: auto;
+}
+
 /* ── Epoch Stats Popup Animations ──────────────────────────────────────── */
 
 @keyframes epoch-popup-in {

@@ -26,7 +26,7 @@ import {
 import { generateAICommands } from '@/engine/ai';
 import { isComplete, STRUCTURE_DEFS } from '@/engine/structures';
 import { PlayerId } from '@/engine/player';
-import { COLORS, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
+import { COLORS, DEAD_ZONE, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
 import { InteractionMode, TutorialStep } from '@/lib/types';
 import { Unit, UNIT_DEFS, effectiveAttack } from '@/engine/units';
 import { findUnitAt } from '@/engine/state';
@@ -1312,7 +1312,7 @@ export default function GameView() {
         />
 
         {/* Unit action panel — left sidebar */}
-        {gameState.phase === 'planning' && !isExecuting && !epochStatsPopup && !pendingBonusCard && (
+        {showPlanningHud && (
           <UnitActionPanel
             gameState={gameState}
             mode={mode}
@@ -1566,7 +1566,7 @@ export default function GameView() {
             onClick={togglePause}
             className="absolute font-mono text-xs tracking-wider uppercase"
             style={{
-              top: isMobile ? 32 : 8,
+              top: isMobile ? DEAD_ZONE.TOP : 8,
               right: 8,
               zIndex: 40,
               padding: '6px 14px',

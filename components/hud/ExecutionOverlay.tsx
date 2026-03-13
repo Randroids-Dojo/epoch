@@ -2,6 +2,7 @@
 
 import { ExecutionAnimation, getCurrentPhase, getVisibleLogEntries } from '@/renderer/animation';
 import { ActionBeat, getSequenceCameraTarget } from '@/renderer/actionSequence';
+import { DEAD_ZONE } from '@/lib/constants';
 
 interface ExecutionOverlayProps {
   animation: ExecutionAnimation;
@@ -38,7 +39,7 @@ export default function ExecutionOverlay({
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col font-mono">
       {/* Phase label + beat label */}
-      <div className="flex flex-col items-center gap-1" style={{ paddingTop: 32 }}>
+      <div className="flex flex-col items-center gap-1" style={{ paddingTop: DEAD_ZONE.TOP }}>
         <div
           data-testid="phase-label"
           className="rounded px-3 py-1 text-xs font-bold tracking-widest uppercase"
@@ -90,7 +91,7 @@ export default function ExecutionOverlay({
       </div>
 
       {/* Skip button — bottom right, raised above dead zone */}
-      <div className="pointer-events-auto flex justify-end pr-3" style={{ paddingBottom: 64 }}>
+      <div className="pointer-events-auto flex justify-end pr-3" style={{ paddingBottom: DEAD_ZONE.BOTTOM }}>
         <button
           data-testid="skip-btn"
           onClick={onSkip}
