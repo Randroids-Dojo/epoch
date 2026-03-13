@@ -90,7 +90,7 @@ export default function ExecutionOverlay({
       </div>
 
       {/* Skip button — bottom right, raised above dead zone */}
-      <div className="pointer-events-auto flex justify-end pr-2" style={{ paddingBottom: 64 }}>
+      <div className="pointer-events-auto flex justify-end pr-3" style={{ paddingBottom: 64 }}>
         <button
           data-testid="skip-btn"
           onClick={onSkip}
@@ -105,7 +105,7 @@ export default function ExecutionOverlay({
           }}
         >
           SKIP
-          {tutorialHighlightSkip && <span className="tutorial-tooltip" style={{ top: -28, left: '50%', transform: 'translateX(-50%)' }}>SKIP ANIMATION</span>}
+          {tutorialHighlightSkip && <span className="tutorial-tooltip" style={{ top: -28, right: 0 }}>SKIP ANIMATION</span>}
         </button>
       </div>
     </div>
