@@ -59,7 +59,7 @@ export default function CommandTray({
 
   return (
     <div
-      className="shrink-0 flex items-center px-4 py-3 font-mono"
+      className="shrink-0 flex items-center pl-4 pr-6 py-3 font-mono"
       style={{ gap: slot.gap, background: 'rgba(11,10,15,0.95)', borderTop: '1px solid #2a2535' }}
     >
       {/* Global command slots */}

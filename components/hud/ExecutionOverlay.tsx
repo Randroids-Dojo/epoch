@@ -90,7 +90,7 @@ export default function ExecutionOverlay({
       </div>
 
       {/* Skip button — bottom right */}
-      <div className="pointer-events-auto flex justify-end p-4">
+      <div className="pointer-events-auto flex justify-end pb-6 pr-6 pl-4">
         <button
           data-testid="skip-btn"
           onClick={onSkip}
