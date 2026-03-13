@@ -168,7 +168,7 @@ const CARD_SEQUENCE: BonusCardId[] = [
 /** Pick a bonus card for the given epoch. Cycles through CARD_SEQUENCE in order. */
 export function drawBonusCard(completedEpoch: number): PendingBonusCard {
   // Bonus card index: epoch 4 → 0, epoch 8 → 1, epoch 12 → 2, ...
-  const bonusIndex = (completedEpoch / BONUS_INTERVAL) - 1;
+  const bonusIndex = Math.floor(completedEpoch / BONUS_INTERVAL) - 1;
   const id = CARD_SEQUENCE[bonusIndex % CARD_SEQUENCE.length];
   return { card: BONUS_CARDS[id], epoch: completedEpoch };
 }
@@ -286,6 +286,11 @@ export function applyBonusCard(
       player.resources.fx += 2;
       player.resources.te += 1;
       return '+5 CC, +2 FX, +1 TE';
+    }
+
+    default: {
+      const _exhaustive: never = cardId;
+      return _exhaustive;
     }
   }
 }

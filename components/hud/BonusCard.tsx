@@ -14,8 +14,7 @@ const DISMISS_VELOCITY = 0.4; // px/ms — fast flick also counts
 export default function BonusCard({ card, onSwipe }: BonusCardProps) {
   const [offsetX, setOffsetX] = useState(0);
   const [dismissed, setDismissed] = useState<SwipeDirection | null>(null);
-  const startRef = useRef<{ x: number; y: number; t: number } | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const startRef = useRef<{ x: number; t: number } | null>(null);
 
   const dismiss = useCallback((dir: SwipeDirection) => {
     if (dismissed) return;
@@ -23,62 +22,54 @@ export default function BonusCard({ card, onSwipe }: BonusCardProps) {
     setTimeout(() => onSwipe(dir), 300);
   }, [dismissed, onSwipe]);
 
+  /** Check if the drag exceeded the swipe threshold and dismiss or reset. */
+  const resolveDrag = useCallback(() => {
+    if (!startRef.current) return;
+    const elapsed = Date.now() - startRef.current.t;
+    const velocity = Math.abs(offsetX) / Math.max(elapsed, 1);
+    const hitThreshold = Math.abs(offsetX) >= SWIPE_THRESHOLD || velocity >= DISMISS_VELOCITY;
+
+    if (hitThreshold && offsetX !== 0) {
+      dismiss(offsetX < 0 ? 'left' : 'right');
+    } else {
+      setOffsetX(0);
+    }
+    startRef.current = null;
+  }, [offsetX, dismiss]);
+
   // ── Touch (mobile swipe) ─────────────────────────────────────────────────
   const onTouchStart = useCallback((e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    startRef.current = { x: touch.clientX, y: touch.clientY, t: Date.now() };
+    startRef.current = { x: e.touches[0].clientX, t: Date.now() };
     setOffsetX(0);
   }, []);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
     if (!startRef.current) return;
-    const dx = e.touches[0].clientX - startRef.current.x;
-    setOffsetX(dx);
+    setOffsetX(e.touches[0].clientX - startRef.current.x);
   }, []);
 
   const onTouchEnd = useCallback(() => {
-    if (!startRef.current) return;
-    const elapsed = Date.now() - startRef.current.t;
-    const velocity = Math.abs(offsetX) / Math.max(elapsed, 1);
-    const hitThreshold = Math.abs(offsetX) >= SWIPE_THRESHOLD || velocity >= DISMISS_VELOCITY;
-
-    if (hitThreshold && offsetX !== 0) {
-      dismiss(offsetX < 0 ? 'left' : 'right');
-    } else {
-      setOffsetX(0);
-    }
-    startRef.current = null;
-  }, [offsetX, dismiss]);
+    resolveDrag();
+  }, [resolveDrag]);
 
   // ── Mouse drag (desktop drag) ────────────────────────────────────────────
   const mouseDown = useRef(false);
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     mouseDown.current = true;
-    startRef.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+    startRef.current = { x: e.clientX, t: Date.now() };
     setOffsetX(0);
   }, []);
 
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     if (!mouseDown.current || !startRef.current) return;
-    const dx = e.clientX - startRef.current.x;
-    setOffsetX(dx);
+    setOffsetX(e.clientX - startRef.current.x);
   }, []);
 
   const onMouseUp = useCallback(() => {
     if (!mouseDown.current) return;
     mouseDown.current = false;
-    if (!startRef.current) return;
-    const elapsed = Date.now() - startRef.current.t;
-    const velocity = Math.abs(offsetX) / Math.max(elapsed, 1);
-    const hitThreshold = Math.abs(offsetX) >= SWIPE_THRESHOLD || velocity >= DISMISS_VELOCITY;
-
-    if (hitThreshold && offsetX !== 0) {
-      dismiss(offsetX < 0 ? 'left' : 'right');
-    } else {
-      setOffsetX(0);
-    }
-    startRef.current = null;
-  }, [offsetX, dismiss]);
+    resolveDrag();
+  }, [resolveDrag]);
 
   const onMouseLeave = useCallback(() => {
     if (mouseDown.current) {
@@ -184,7 +175,6 @@ export default function BonusCard({ card, onSwipe }: BonusCardProps) {
 
       {/* The draggable card */}
       <div
-        ref={containerRef}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
