@@ -14,7 +14,7 @@ test('AI takes actions during execution @smoke', async ({ page }) => {
   await lockInAndWaitForExecution(page);
 
   // Skip execution so the resolved event log is available in game state.
-  await page.keyboard.press('Escape');
+  await page.keyboard.press('Space');
   await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 5000 });
 
   const eventLog: string[] = await page.evaluate(() =>
@@ -29,7 +29,7 @@ test('AI builds structures over multiple epochs', async ({ page }) => {
 
   for (let i = 0; i < 3; i++) {
     await lockInAndWaitForExecution(page);
-    await page.keyboard.press('Escape');
+    await page.keyboard.press('Space');
     await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 5000 });
   }
 
