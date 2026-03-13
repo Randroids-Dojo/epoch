@@ -671,19 +671,19 @@ export default function GameView() {
 
   // ── Countdown timer ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (lockedIn || gameState.phase !== 'planning' || showSetup || paused) return;
+    if (lockedIn || gameState.phase !== 'planning' || showSetup || paused || epochStatsPopup || pendingBonusCard) return;
 
     const id = setInterval(() => {
       setTimeLeft((t) => Math.max(0, t - 1));
     }, 1000);
     return () => clearInterval(id);
-  }, [lockedIn, gameState.phase, showSetup, paused]);
+  }, [lockedIn, gameState.phase, showSetup, paused, epochStatsPopup, pendingBonusCard]);
 
   useEffect(() => {
-    if (timeLeft === 0 && gameState.phase === 'planning' && !lockedIn && !showSetup) {
+    if (timeLeft === 0 && gameState.phase === 'planning' && !lockedIn && !showSetup && !epochStatsPopup && !pendingBonusCard) {
       handleResolveRef.current();
     }
-  }, [timeLeft, gameState.phase, lockedIn, showSetup]);
+  }, [timeLeft, gameState.phase, lockedIn, showSetup, epochStatsPopup, pendingBonusCard]);
 
   // ── Play Again / Start ────────────────────────────────────────────────────
   const handlePlayAgain = useCallback(() => {
@@ -1286,7 +1286,7 @@ export default function GameView() {
         />
 
         {/* Unit action panel — left sidebar */}
-        {gameState.phase === 'planning' && !isExecuting && (
+        {gameState.phase === 'planning' && !isExecuting && !epochStatsPopup && !pendingBonusCard && (
           <UnitActionPanel
             gameState={gameState}
             mode={mode}
@@ -1635,7 +1635,7 @@ export default function GameView() {
       </div>
 
       {/* Global command tray — shown only during planning */}
-      {gameState.phase === 'planning' && !isExecuting && !showSetup && (
+      {gameState.phase === 'planning' && !isExecuting && !showSetup && !epochStatsPopup && !pendingBonusCard && (
         <CommandTray
           globalCommands={gameState.players.player.globalCommands}
           selectedGlobalSlot={
