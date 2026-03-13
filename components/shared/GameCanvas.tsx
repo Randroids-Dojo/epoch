@@ -99,6 +99,9 @@ export default function GameCanvas({
   const modeRef = useRef<InteractionMode>(mode);
   modeRef.current = mode;
 
+  // Guard against touch → synthetic mouse double-tap.
+  const lastTouchTapTime = useRef(0);
+
   // ── Pan state ──────────────────────────────────────────────────────────────
   const dragging  = useRef(false);
   const dragStart = useRef({ x: 0, y: 0, camX: 0, camY: 0 });
@@ -385,6 +388,8 @@ export default function GameCanvas({
     const dy = e.clientY - dragStart.current.y;
     dragging.current = false;
     setIsDragging(false);
+    // Skip synthetic mouse events that follow a touch tap (prevents double-fire toggle).
+    if (Date.now() - lastTouchTapTime.current < 500) return;
     if (Math.abs(dx) < MOUSE_TAP_PX && Math.abs(dy) < MOUSE_TAP_PX) {
       fireHexTap(e.clientX, e.clientY);
     }
@@ -459,6 +464,7 @@ export default function GameCanvas({
         const dx = t.clientX - dragStart.current.x;
         const dy = t.clientY - dragStart.current.y;
         if (Math.abs(dx) < TOUCH_TAP_PX && Math.abs(dy) < TOUCH_TAP_PX) {
+          lastTouchTapTime.current = Date.now();
           fireHexTap(t.clientX, t.clientY);
         }
       }
