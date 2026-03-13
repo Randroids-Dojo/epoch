@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GameMap, HexCell } from '@/engine/map';
-import { GameState } from '@/engine/state';
+import { GameState, findUnitAt, findStructureAt } from '@/engine/state';
+import { STRUCTURE_DEFS } from '@/engine/structures';
 import { Hex, hexKey, hexToPixel, pixelToHex } from '@/engine/hex';
 import { Camera, DEFAULT_ZOOM, zoomToward, canvasToWorld, lerpCamera } from '@/renderer/camera';
 import { ActionBeat, getSequenceCameraTarget } from '@/renderer/actionSequence';
@@ -51,6 +52,28 @@ export interface CameraCenterRequest {
   nonce: number;
   worldX: number;
   worldY: number;
+}
+
+function HexInfoPanel({ gameState, cell }: { gameState: GameState; cell: HexCell }) {
+  const unit = findUnitAt(gameState, cell.hex);
+  const structure = findStructureAt(gameState, cell.hex);
+  const title = structure
+    ? STRUCTURE_DEFS[structure.type].label
+    : unit
+      ? UNIT_DEFS[unit.type].label
+      : `Hex (${cell.hex.q}, ${cell.hex.r})`;
+
+  return (
+    <div
+      className="pointer-events-none absolute left-1/2 -translate-x-1/2 rounded border border-slate-700 px-3 py-2 font-mono text-xs text-center"
+      style={{ bottom: 128, background: 'rgba(11,10,15,0.92)', color: '#94a3b8', zIndex: 20 }}
+    >
+      <div className="mb-1" style={{ color: '#e63946' }}>{title}</div>
+      {structure && <div>{structure.owner === 'player' ? 'Friendly' : 'Enemy'}</div>}
+      {unit && !structure && <div>{unit.owner === 'player' ? 'Friendly' : 'Enemy'} unit</div>}
+      <div>{cell.terrain.replace('_', ' ')}</div>
+    </div>
+  );
 }
 
 function getInitialCamera(map: GameMap, cssW: number, cssH: number): Camera {
@@ -542,18 +565,7 @@ export default function GameCanvas({
       />
 
       {/* Hex info panel — only in idle mode */}
-      {mode.kind === 'idle' && selectedCell && (
-        <div
-          className="pointer-events-none absolute left-1/2 -translate-x-1/2 rounded border border-slate-700 px-3 py-2 font-mono text-xs text-center"
-          style={{ bottom: 128, background: 'rgba(11,10,15,0.92)', color: '#94a3b8', zIndex: 20 }}
-        >
-          <div className="mb-1" style={{ color: '#e63946' }}>
-            Hex ({selectedCell.hex.q}, {selectedCell.hex.r})
-          </div>
-          <div>Terrain: {selectedCell.terrain.replace('_', ' ')}</div>
-          <div>Fog: {selectedCell.fog}</div>
-        </div>
-      )}
+      {mode.kind === 'idle' && selectedCell && <HexInfoPanel gameState={gameState} cell={selectedCell} />}
 
       {/* Controls hint — offset right of UnitActionPanel (180px wide) to avoid overlap */}
       {!animation && <div
