@@ -5,6 +5,7 @@ import { GameState } from '@/engine/state';
 import { Unit, effectiveMaxHp } from '@/engine/units';
 import { UnitCommand } from '@/engine/commands';
 import { InteractionMode } from '@/lib/types';
+import { DEAD_ZONE } from '@/lib/constants';
 
 interface UnitActionPanelProps {
   gameState: GameState;
@@ -126,8 +127,9 @@ export default function UnitActionPanel({
   return (
     <div
       ref={panelRef}
-      className="absolute left-0 bottom-0 overflow-y-auto font-mono"
+      className="absolute left-0 overflow-y-auto font-mono"
       style={{
+        bottom: DEAD_ZONE.BOTTOM,
         width: 180,
         zIndex: 30,
         display: 'flex',
@@ -136,7 +138,7 @@ export default function UnitActionPanel({
         padding: '8px 6px',
         background: 'transparent',
         pointerEvents: 'auto',
-        maxHeight: '100%',
+        maxHeight: 'calc(100% - 64px)',
       }}
     >
       {playerUnits.map((unit, idx) => {

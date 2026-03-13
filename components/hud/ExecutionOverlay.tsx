@@ -1,10 +1,10 @@
 'use client';
 
-import { ExecutionAnimation, getCurrentPhase, getVisibleLogEntries } from '@/renderer/animation';
+import { getCurrentPhase } from '@/renderer/animation';
 import { ActionBeat, getSequenceCameraTarget } from '@/renderer/actionSequence';
+import { DEAD_ZONE } from '@/lib/constants';
 
 interface ExecutionOverlayProps {
-  animation: ExecutionAnimation;
   elapsed: number;
   actionBeats?: ActionBeat[] | null;
   onSkip(): void;
@@ -19,7 +19,6 @@ const PHASE_LABELS: Record<string, string> = {
 };
 
 export default function ExecutionOverlay({
-  animation,
   elapsed,
   actionBeats,
   onSkip,
@@ -27,7 +26,6 @@ export default function ExecutionOverlay({
 }: ExecutionOverlayProps) {
   const phase = getCurrentPhase(elapsed);
   const phaseLabel = phase ? PHASE_LABELS[phase] ?? phase.toUpperCase() : 'RESOLVING';
-  const visibleEntries = getVisibleLogEntries(animation.eventLog, elapsed);
 
   // Current cinematic beat label.
   const beatTarget = actionBeats && actionBeats.length > 0
@@ -38,7 +36,7 @@ export default function ExecutionOverlay({
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col font-mono">
       {/* Phase label + beat label */}
-      <div className="flex flex-col items-center gap-1 pt-2">
+      <div className="flex flex-col items-center gap-1" style={{ paddingTop: DEAD_ZONE.TOP }}>
         <div
           data-testid="phase-label"
           className="rounded px-3 py-1 text-xs font-bold tracking-widest uppercase"
@@ -66,31 +64,11 @@ export default function ExecutionOverlay({
         )}
       </div>
 
-      {/* Event log — left side */}
-      <div
-        className="flex-1 overflow-hidden p-4"
-        style={{ maxWidth: 320 }}
-      >
-        <div className="flex flex-col gap-1">
-          {visibleEntries.map((entry, i) => (
-            <div
-              key={i}
-              data-testid="log-entry"
-              className="rounded px-2 py-0.5 text-xs"
-              style={{
-                background: 'rgba(11,10,15,0.88)',
-                color: '#94a3b8',
-                animation: 'fadeIn 0.3s ease forwards',
-              }}
-            >
-              {entry}
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Spacer — pushes skip button to bottom */}
+      <div className="flex-1" />
 
-      {/* Skip button — bottom right */}
-      <div className="pointer-events-auto flex justify-end p-4">
+      {/* Skip button — bottom right, raised above dead zone */}
+      <div className="pointer-events-auto flex justify-end pr-3" style={{ paddingBottom: DEAD_ZONE.BOTTOM }}>
         <button
           data-testid="skip-btn"
           onClick={onSkip}
@@ -105,7 +83,7 @@ export default function ExecutionOverlay({
           }}
         >
           SKIP
-          {tutorialHighlightSkip && <span className="tutorial-tooltip" style={{ top: -28, left: '50%', transform: 'translateX(-50%)' }}>SKIP ANIMATION</span>}
+          {tutorialHighlightSkip && <span className="tutorial-tooltip" style={{ top: -28, right: 0 }}>SKIP ANIMATION</span>}
         </button>
       </div>
     </div>

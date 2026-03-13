@@ -49,21 +49,26 @@ describe('computeEligibleHexes', () => {
     expect(result.size).toBe(0);
   });
 
-  it('move: returns passable visible/explored hexes excluding own unit positions', () => {
+  it('move: returns passable visible/explored hexes and unexplored hexes, excluding own unit positions', () => {
     const state = createInitialState(1);
     const result = computeEligibleHexes(state, 'move');
-    // All returned hexes must be passable and not occupied by player
+    // Returned hexes include unexplored (fog-of-war targeting allowed).
+    // For visible/explored hexes: must be passable and not occupied by player.
     for (const key of result) {
       const cell = state.map.cells.get(key)!;
-      expect(cell.fog).not.toBe('unexplored');
-      // No player unit on these hexes
-      for (const unit of state.units.values()) {
-        if (unit.owner === 'player') {
-          expect(hexKey(unit.hex)).not.toBe(key);
+      if (cell.fog !== 'unexplored') {
+        // No player unit on these hexes
+        for (const unit of state.units.values()) {
+          if (unit.owner === 'player') {
+            expect(hexKey(unit.hex)).not.toBe(key);
+          }
         }
       }
     }
     expect(result.size).toBeGreaterThan(0);
+    // Verify unexplored hexes are included
+    const hasUnexplored = [...result].some(k => state.map.cells.get(k)?.fog === 'unexplored');
+    expect(hasUnexplored).toBe(true);
   });
 
   it('attack: returns only visible hexes with enemy unit or structure', () => {
@@ -131,23 +136,28 @@ describe('computeEligibleHexes', () => {
     expect(result.size).toBe(0);
   });
 
-  it('move: excludes crystal_node and flux_vent resource terrain', () => {
+  it('move: excludes crystal_node and flux_vent for visible/explored hexes', () => {
     const state = createInitialState(1);
     const result = computeEligibleHexes(state, 'move');
     for (const key of result) {
       const cell = state.map.cells.get(key)!;
-      expect(cell.terrain).not.toBe('crystal_node');
-      expect(cell.terrain).not.toBe('flux_vent');
+      // Unexplored hexes are allowed regardless of terrain (player can't see it)
+      if (cell.fog !== 'unexplored') {
+        expect(cell.terrain).not.toBe('crystal_node');
+        expect(cell.terrain).not.toBe('flux_vent');
+      }
     }
   });
 
-  it('phase_surge: excludes crystal_node and flux_vent resource terrain', () => {
+  it('phase_surge: excludes crystal_node and flux_vent for visible/explored hexes', () => {
     const state = createInitialState(1);
     const result = computeEligibleHexes(state, 'phase_surge');
     for (const key of result) {
       const cell = state.map.cells.get(key)!;
-      expect(cell.terrain).not.toBe('crystal_node');
-      expect(cell.terrain).not.toBe('flux_vent');
+      if (cell.fog !== 'unexplored') {
+        expect(cell.terrain).not.toBe('crystal_node');
+        expect(cell.terrain).not.toBe('flux_vent');
+      }
     }
   });
 });

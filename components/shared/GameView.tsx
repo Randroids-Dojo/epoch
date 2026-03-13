@@ -26,7 +26,7 @@ import {
 import { generateAICommands } from '@/engine/ai';
 import { isComplete, STRUCTURE_DEFS } from '@/engine/structures';
 import { PlayerId } from '@/engine/player';
-import { COLORS, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
+import { COLORS, DEAD_ZONE, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
 import { InteractionMode, TutorialStep } from '@/lib/types';
 import { Unit, UNIT_DEFS, effectiveAttack } from '@/engine/units';
 import { findUnitAt } from '@/engine/state';
@@ -60,6 +60,7 @@ import VictoryAnimation from '../animations/VictoryAnimation';
 import MergeTargetPicker from '../hud/MergeTargetPicker';
 import DifficultyHelpButton from './DifficultyHelpModal';
 import { useDifficultyUnlock } from '@/lib/useDifficultyUnlock';
+import FeedbackFab from './FeedbackFab';
 
 const PLANNING_DURATION = GAME_CONSTANTS.PLANNING_PHASE_DURATION_MS / 1000;
 const BASE_BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks', 'tech_lab', 'watchtower'];
@@ -275,18 +276,31 @@ export default function GameView() {
         setTutorialStep('extractor_select_drone');
         break;
       case 'extractor_lock_in':
-        // Barracks done, extractor still building — next epoch train a sentry.
-        setTutorialStep('train_select_slot');
+        // Barracks done, extractor still building — wait for next planning phase.
+        setTutorialStep('wait_for_train_epoch');
         break;
       case 'train_lock_in':
-        // Sentry training queued — next epoch gather with extractor.
-        setTutorialStep('gather_select_drone');
+        // Sentry training queued — wait for next planning phase.
+        setTutorialStep('wait_for_gather_epoch');
         break;
       case 'gather_lock_in':
         setTutorialStep(null); // tutorial complete
         break;
     }
   }, [tutorialActive, tutorialStep, lockedIn, gameState]);
+
+  // Advance wait steps when the next planning phase begins.
+  useEffect(() => {
+    if (!tutorialActive || gameState.phase !== 'planning' || lockedIn) return;
+    switch (tutorialStep) {
+      case 'wait_for_train_epoch':
+        setTutorialStep('train_select_slot');
+        break;
+      case 'wait_for_gather_epoch':
+        setTutorialStep('gather_select_drone');
+        break;
+    }
+  }, [tutorialActive, tutorialStep, gameState.phase, lockedIn]);
 
   // Mode-driven step advancement (runs on mode / gameState changes).
   useEffect(() => {
@@ -1202,6 +1216,9 @@ export default function GameView() {
 
   const isExecuting = animationRef.current !== null;
 
+  // Planning HUD is visible only during planning when no post-epoch popups are active.
+  const showPlanningHud = gameState.phase === 'planning' && !isExecuting && !epochStatsPopup && !pendingBonusCard;
+
   // Echo overlay: show previous AI commands when player has Echo queued.
   const hasEcho = gameState.players.player.globalCommands.some((c) => c?.type === 'temporal');
   const echoCommands = hasEcho ? gameState.prevEpochCommands.ai : null;
@@ -1225,7 +1242,7 @@ export default function GameView() {
     const canBuild = unitForPicker.type === 'drone' && gameState.players.player.resources.cc >= 3;
     const unitHasChrono = !!(getOldestSnapshot(gameState)?.has(unitForPicker.id));
     const canChronoShift = playerTechTier >= 1 && gameState.players.player.resources.te >= CHRONO_SHIFT_COST && unitHasChrono;
-    const canMerge = computeUnitMergeTargets(gameState, unitForPicker).length > 0;
+    const canMerge = unitForPicker.type !== 'drone' && computeUnitMergeTargets(gameState, unitForPicker).length > 0;
     return { canAttack, canGather, canBuild, canChronoShift, canMerge, unitType: unitForPicker.type };
   })() : null;
 
@@ -1295,7 +1312,7 @@ export default function GameView() {
         />
 
         {/* Unit action panel — left sidebar */}
-        {gameState.phase === 'planning' && !isExecuting && !epochStatsPopup && !pendingBonusCard && (
+        {showPlanningHud && (
           <UnitActionPanel
             gameState={gameState}
             mode={mode}
@@ -1309,16 +1326,19 @@ export default function GameView() {
           />
         )}
 
-        {/* Stats panel — right sidebar, desktop only (too wide for mobile viewports) */}
-        {!isMobile && <GameStatsPanel gameState={gameState} />}
+        {/* Stats panel — right sidebar, desktop only */}
+        {showPlanningHud && !isMobile && <GameStatsPanel gameState={gameState} />}
 
-        <Minimap
-          gameState={gameState}
-          cameraSnapshot={cameraSnapshot}
-          isMobile={isMobile}
-          onRecenter={queueRecenter}
-          onSnapHome={handleSnapHome}
-        />
+        {/* Minimap — visible during planning only */}
+        {showPlanningHud && (
+          <Minimap
+            gameState={gameState}
+            cameraSnapshot={cameraSnapshot}
+            isMobile={isMobile}
+            onRecenter={queueRecenter}
+            onSnapHome={handleSnapHome}
+          />
+        )}
 
         {/* Unit command picker */}
         {mode.kind === 'unit_picker_open' && !isExecuting && unitForPicker && unitPickerProps && (
@@ -1528,9 +1548,8 @@ export default function GameView() {
         )}
 
         {/* Execution overlay */}
-        {isExecuting && animationRef.current && (
+        {isExecuting && (
           <ExecutionOverlay
-            animation={animationRef.current}
             elapsed={animElapsed}
             actionBeats={actionBeats}
             onSkip={handleSkip}
@@ -1546,7 +1565,7 @@ export default function GameView() {
             onClick={togglePause}
             className="absolute font-mono text-xs tracking-wider uppercase"
             style={{
-              top: 8,
+              top: isMobile ? DEAD_ZONE.TOP : 8,
               right: 8,
               zIndex: 40,
               padding: '6px 14px',
@@ -1580,6 +1599,9 @@ export default function GameView() {
             </div>
           </div>
         )}
+
+        {/* Feedback FAB — only visible when paused */}
+        {paused && <FeedbackFab />}
 
         {/* Difficulty picker overlay */}
         {showSetup && (
@@ -1651,33 +1673,33 @@ export default function GameView() {
             </div>
           </div>
         )}
-      </div>
 
-      {/* Global command tray — shown only during planning */}
-      {gameState.phase === 'planning' && !isExecuting && !showSetup && !epochStatsPopup && !pendingBonusCard && (
-        <CommandTray
-          globalCommands={gameState.players.player.globalCommands}
-          selectedGlobalSlot={
-            mode.kind === 'global_picker_open' || mode.kind === 'train_picker'
-              ? mode.slotIndex
-              : null
-          }
-          lockedIn={lockedIn || paused}
-          lockInFlash={lockInFlash}
-          isMobile={isMobile}
-          forkMode={timelineForkActive}
-          tutorialHighlightLockIn={
-            tutorialStep === 'lock_in' ||
-            tutorialStep === 'extractor_lock_in' ||
-            tutorialStep === 'train_lock_in' ||
-            tutorialStep === 'gather_lock_in'
-          }
-          tutorialHighlightSlot={tutorialStep === 'train_select_slot' || tutorialStep === 'extractor_train_select_slot'}
-          onSlotClick={handleGlobalSlotClick}
-          onSlotClear={handleGlobalSlotClear}
-          onLockIn={handleLockIn}
-        />
-      )}
+        {/* Global command tray — bottom-right, aligned with unit cards */}
+        {gameState.phase === 'planning' && !isExecuting && !showSetup && !epochStatsPopup && !pendingBonusCard && (
+          <CommandTray
+            globalCommands={gameState.players.player.globalCommands}
+            selectedGlobalSlot={
+              mode.kind === 'global_picker_open' || mode.kind === 'train_picker'
+                ? mode.slotIndex
+                : null
+            }
+            lockedIn={lockedIn || paused}
+            lockInFlash={lockInFlash}
+            isMobile={isMobile}
+            forkMode={timelineForkActive}
+            tutorialHighlightLockIn={
+              tutorialStep === 'lock_in' ||
+              tutorialStep === 'extractor_lock_in' ||
+              tutorialStep === 'train_lock_in' ||
+              tutorialStep === 'gather_lock_in'
+            }
+            tutorialHighlightSlot={tutorialStep === 'train_select_slot' || tutorialStep === 'extractor_train_select_slot'}
+            onSlotClick={handleGlobalSlotClick}
+            onSlotClear={handleGlobalSlotClear}
+            onLockIn={handleLockIn}
+          />
+        )}
+      </div>
     </div>
   );
 }

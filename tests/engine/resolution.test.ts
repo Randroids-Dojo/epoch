@@ -136,7 +136,7 @@ describe('Move step', () => {
     expect(s.units.get(sentry.id)!.hex).toEqual({ q: 0, r: 0 });
   });
 
-  it('does not move onto crystal_node resource terrain', () => {
+  it('moves to closest reachable hex when target is crystal_node resource terrain', () => {
     const s = createInitialState(1);
     const sentry = addUnit(s, {
       owner: 'player', type: 'pulse_sentry',
@@ -153,11 +153,13 @@ describe('Move step', () => {
 
     resolveEpoch(s);
 
-    // Unit should stay put because the target is resource terrain
-    expect(s.units.get(sentry.id)!.hex).toEqual({ q: 0, r: 0 });
+    // Unit should move to the closest reachable hex near the target (not onto it)
+    const finalHex = s.units.get(sentry.id)!.hex;
+    expect(finalHex).not.toEqual({ q: 0, r: 0 }); // Did move
+    expect(finalHex).not.toEqual(targetHex);        // Not onto resource terrain
   });
 
-  it('does not move onto flux_vent resource terrain', () => {
+  it('moves to closest reachable hex when target is flux_vent resource terrain', () => {
     const s = createInitialState(1);
     const sentry = addUnit(s, {
       owner: 'player', type: 'pulse_sentry',
@@ -174,8 +176,10 @@ describe('Move step', () => {
 
     resolveEpoch(s);
 
-    // Unit should stay put because the target is resource terrain
-    expect(s.units.get(sentry.id)!.hex).toEqual({ q: 0, r: 0 });
+    // Unit should move to the closest reachable hex near the target (not onto it)
+    const finalHex = s.units.get(sentry.id)!.hex;
+    expect(finalHex).not.toEqual({ q: 0, r: 0 }); // Did move
+    expect(finalHex).not.toEqual(targetHex);        // Not onto resource terrain
   });
 
   it('paths around resource terrain instead of through it', () => {

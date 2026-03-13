@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
-import FeedbackFab from '@/components/shared/FeedbackFab'
 
 export const metadata: Metadata = {
   title: 'Epoch',
@@ -21,8 +20,19 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: [
+              // Suppress long-press context menu on game elements
+              `document.addEventListener('contextmenu',function(e){if(e.target.tagName!=='INPUT'&&e.target.tagName!=='TEXTAREA'){e.preventDefault()}});`,
+              // Suppress long-press haptic vibration by disabling the Vibration API.
+              // CSS touch-action:manipulation + -webkit-touch-callout:none handle the
+              // visual callout; this stops the motor vibration on Android.
+              `if(navigator.vibrate)navigator.vibrate=function(){return false};`,
+            ].join('\n'),
+          }}
+        />
         {children}
-        <FeedbackFab />
       </body>
     </html>
   )

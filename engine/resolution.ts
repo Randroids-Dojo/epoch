@@ -130,6 +130,55 @@ function bfsPath(from: Hex, to: Hex, state: GameState, blocked: Set<string>, opt
   return [];
 }
 
+/**
+ * When the intended target is unreachable, find the closest passable hex to
+ * the target that IS reachable from `from` within `maxSteps`.
+ *
+ * Strategy: BFS outward from `from` (limited to maxSteps depth) to find all
+ * reachable hexes, then pick the one closest to `target`.
+ */
+function findClosestReachable(
+  from: Hex, target: Hex, state: GameState, blocked: Set<string>, maxSteps: number,
+): Hex | null {
+  const fromKey = hexKey(from);
+  const dist = new Map<string, number>([[fromKey, 0]]);
+  const queue: Hex[] = [from];
+  let qi = 0;
+  let bestHex: Hex | null = null;
+  let bestDist = Infinity;
+
+  while (qi < queue.length) {
+    const hex = queue[qi++];
+    const hKey = hexKey(hex);
+    const d = dist.get(hKey)!;
+
+    // Evaluate this hex as a candidate (skip starting hex).
+    if (d > 0) {
+      const toTarget = hexDistance(hex, target);
+      if (toTarget < bestDist || (toTarget === bestDist && d < dist.get(hexKey(bestHex!))!)) {
+        bestDist = toTarget;
+        bestHex = hex;
+      }
+    }
+
+    // Don't expand beyond max movement range.
+    if (d >= maxSteps) continue;
+
+    for (const nb of hexNeighbors(hex)) {
+      const key = hexKey(nb);
+      if (dist.has(key)) continue;
+      if (blocked.has(key)) continue;
+      const cell = state.map.cells.get(key);
+      if (!cell || !TERRAIN[cell.terrain].passable) continue;
+      if (isResourceTerrain(cell.terrain)) continue;
+      dist.set(key, d + 1);
+      queue.push(nb);
+    }
+  }
+
+  return bestHex;
+}
+
 // ── Step 1: Defend ────────────────────────────────────────────────────────────
 
 function stepDefend(state: GameState, commands: CommandEntry[], log: string[]): void {
@@ -391,7 +440,18 @@ function stepMove(state: GameState, commands: CommandEntry[], log: string[]): vo
       }
     }
 
-    const path  = bfsPath(unit.hex, command.targetHex, state, blocked);
+    let path = bfsPath(unit.hex, command.targetHex, state, blocked);
+
+    // If target is unreachable (impassable terrain, blocked, etc.), find the
+    // closest reachable hex toward the target. This lets units move into fog
+    // of war and stop before hazards they couldn't see when planning.
+    if (path.length === 0 && !hexEqual(unit.hex, command.targetHex)) {
+      const best = findClosestReachable(unit.hex, command.targetHex, state, blocked, effectiveSpeed);
+      if (best) {
+        path = bfsPath(unit.hex, best, state, blocked);
+      }
+    }
+
     const steps = path.slice(0, effectiveSpeed);
     if (steps.length > 0) {
       const dest = steps[steps.length - 1];

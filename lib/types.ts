@@ -72,6 +72,9 @@ export type TutorialStep =
   | 'extractor_train_select_train'
   | 'extractor_train_select_sentry'
   | 'extractor_lock_in'
+  // Wait steps — tutorial pauses during execution animation, resumes on next planning phase
+  | 'wait_for_train_epoch'
+  | 'wait_for_gather_epoch'
   // Phase 3 — Epoch 3: barracks done, extractor still building → train a Pulse Sentry
   | 'train_select_slot'
   | 'train_select_train'

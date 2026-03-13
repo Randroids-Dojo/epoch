@@ -293,20 +293,3 @@ export function categorizeLogEntry(entry: string): AnimPhase {
   if (entry.includes('attacks') || entry.includes('destroyed')) return 'attack';
   return 'build'; // build, train, gather, temporal
 }
-
-/** Returns the log entries that should be visible at the given elapsed time. */
-export function getVisibleLogEntries(
-  eventLog: string[],
-  elapsed: number,
-): string[] {
-  const currentPhase = getCurrentPhase(elapsed);
-  if (currentPhase === null) return eventLog; // show all after animation
-
-  const phaseOrder: AnimPhase[] = ['defend', 'move', 'attack', 'build'];
-  const currentIdx = phaseOrder.indexOf(currentPhase);
-
-  return eventLog.filter((entry) => {
-    const entryPhase = categorizeLogEntry(entry);
-    return phaseOrder.indexOf(entryPhase) <= currentIdx;
-  });
-}

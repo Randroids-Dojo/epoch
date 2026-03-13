@@ -122,14 +122,12 @@ export default function FeedbackFab() {
         aria-label="Open menu"
         className={`epoch-fab${isOpen ? ' open' : ''}`}
       >
-        {/* Menu icon */}
-        <svg className="epoch-fab-icon epoch-fab-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <line x1="4" y1="7"  x2="20" y2="7"  />
-          <line x1="4" y1="12" x2="20" y2="12" />
-          <line x1="4" y1="17" x2="20" y2="17" />
+        {/* Chat bubble icon */}
+        <svg className="epoch-fab-icon epoch-fab-icon--default" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
         {/* Close icon */}
-        <svg className="epoch-fab-icon epoch-fab-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <svg className="epoch-fab-icon epoch-fab-icon--close" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
           <line x1="18" y1="6"  x2="6"  y2="18" />
           <line x1="6"  y1="6"  x2="18" y2="18" />
         </svg>

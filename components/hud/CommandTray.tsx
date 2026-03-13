@@ -1,7 +1,8 @@
 'use client';
 
 import { GlobalCommand } from '@/engine/commands';
-import { SLOT_LAYOUT } from '@/lib/constants';
+import { UnitType } from '@/engine/units';
+import { DEAD_ZONE, SLOT_LAYOUT } from '@/lib/constants';
 
 interface CommandTrayProps {
   globalCommands: Array<GlobalCommand | null>;
@@ -20,25 +21,31 @@ interface CommandTrayProps {
   onLockIn(): void;
 }
 
-const TYPE_CODE: Record<string, string> = {
-  train:          'TR',
-  research:       'RS',
-  temporal:       'TM',
-  chrono_shift:   'SH',
-  epoch_anchor:   'AN',
-  timeline_fork:  'FK',
-  chrono_scout:   'SC',
+/** Compact icon per unit type (matches canvas shapes) */
+const UNIT_ICON: Record<UnitType, string> = {
+  drone:           '●',
+  pulse_sentry:    '▦',
+  arc_ranger:      '◆',
+  phase_walker:    '▲',
+  temporal_warden: '⬡',
+  void_striker:    '⬢',
+  flux_weaver:     '✶',
+  chrono_titan:    '◉',
 };
 
-function cmdLabel(cmd: GlobalCommand): string {
-  switch (cmd.type) {
-    case 'train':        return `${cmd.unitType}@${cmd.structureId.slice(-3)}`;
-    case 'research':     return 'TECH';
-    case 'temporal':     return 'ECHO';
-    case 'epoch_anchor': return cmd.action === 'set' ? 'ANCHOR' : 'RECALL';
-    case 'timeline_fork': return 'FORK';
-    case 'chrono_scout': return 'SCOUT';
-  }
+/** Compact icon per global command type */
+const CMD_ICON: Record<GlobalCommand['type'], string> = {
+  train:          '⚙',
+  research:       '⬆',
+  temporal:       '⏳',
+  epoch_anchor:   '⚓',
+  timeline_fork:  '⑂',
+  chrono_scout:   '👁',
+};
+
+function cmdIcon(cmd: GlobalCommand): string {
+  if (cmd.type === 'train') return UNIT_ICON[cmd.unitType] ?? '?';
+  return CMD_ICON[cmd.type] ?? '?';
 }
 
 export default function CommandTray({
@@ -59,107 +66,99 @@ export default function CommandTray({
 
   return (
     <div
-      className="shrink-0 flex items-center px-4 py-3 font-mono"
-      style={{ gap: slot.gap, background: 'rgba(11,10,15,0.95)', borderTop: '1px solid #2a2535' }}
+      className="absolute right-0 flex items-center font-mono"
+      style={{ bottom: DEAD_ZONE.BOTTOM, zIndex: 30, padding: '0 8px', gap: slot.gap, pointerEvents: 'auto' }}
     >
-      {/* Global command slots */}
+      {/* Command slots + Lock button — single horizontal row */}
       {globalCommands.map((cmd, i) => {
-        const isSelected = selectedGlobalSlot === i;
-        const isTutorial = i === firstEmptySlot;
-        return (
-          <button
-            key={i}
-            data-testid={`command-slot-${i}`}
-            type="button"
-            disabled={lockedIn}
-            onClick={() => onSlotClick(i)}
-            className={`relative flex items-center justify-center rounded text-xs select-none${isTutorial ? ' tutorial-highlight' : ''}`}
-            style={{
-              width: slot.width,
-              height: slot.height,
-              cursor: lockedIn ? 'not-allowed' : 'pointer',
-              opacity: lockedIn ? 0.5 : 1,
-              border: isSelected
-                ? '1.5px solid #e63946'
-                : '1px solid #2a2535',
-              boxShadow: isSelected
-                ? '0 0 8px rgba(230,57,70,0.35), inset 0 0 8px rgba(230,57,70,0.08)'
-                : undefined,
-              background: isSelected
-                ? 'rgba(230,57,70,0.06)'
-                : 'rgba(22,20,28,0.6)',
-              animation: !cmd && !isSelected && !lockedIn ? 'pulse-border 2.5s ease-in-out infinite' : undefined,
-              transition: 'border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease',
-              fontFamily: 'inherit',
-            }}
-          >
-            {cmd ? (
-              <>
-                <span
-                  className="absolute left-1 top-0.5"
-                  style={{ color: '#2a2535', fontSize: '0.6rem' }}
-                >
-                  {i + 1}
-                </span>
-                <div className="flex flex-col items-center gap-0.5">
-                  <span style={{ color: '#e63946', fontWeight: 700 }}>
-                    {TYPE_CODE[cmd.type] ?? cmd.type.slice(0, 2).toUpperCase()}
+          const isSelected = selectedGlobalSlot === i;
+          const isTutorial = i === firstEmptySlot;
+          return (
+            <button
+              key={i}
+              data-testid={`command-slot-${i}`}
+              type="button"
+              disabled={lockedIn}
+              onClick={() => onSlotClick(i)}
+              className={`relative flex items-center justify-center rounded text-xs select-none${isTutorial ? ' tutorial-highlight' : ''}`}
+              style={{
+                width: slot.width,
+                height: slot.height,
+                cursor: lockedIn ? 'not-allowed' : 'pointer',
+                opacity: lockedIn ? 0.5 : 1,
+                border: isSelected
+                  ? '1.5px solid #e63946'
+                  : '1px solid #475569',
+                boxShadow: isSelected
+                  ? '0 0 8px rgba(230,57,70,0.35), inset 0 0 8px rgba(230,57,70,0.08)'
+                  : undefined,
+                background: isSelected
+                  ? 'rgba(230,57,70,0.12)'
+                  : 'rgba(11,10,15,0.92)',
+                animation: !cmd && !isSelected && !lockedIn ? 'pulse-border 2.5s ease-in-out infinite' : undefined,
+                transition: 'border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease',
+                fontFamily: 'inherit',
+              }}
+            >
+              {cmd ? (
+                <>
+                  <span
+                    className="absolute left-0.5 top-0"
+                    style={{ color: '#475569', fontSize: '0.5rem', lineHeight: 1 }}
+                  >
+                    {i + 1}
                   </span>
-                  <span style={{ color: '#64748b', fontSize: '0.6rem' }}>
-                    {cmdLabel(cmd)}
+                  <span style={{ fontSize: '1.2rem', lineHeight: 1 }} aria-label={cmd.type}>
+                    {cmdIcon(cmd)}
                   </span>
-                </div>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  className="absolute right-0.5 top-0.5 flex items-center justify-center rounded"
-                  style={{
-                    width: 16, height: 16,
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#475569',
-                    cursor: 'pointer',
-                    fontSize: '0.7rem',
-                    lineHeight: 1,
-                  }}
-                  onClick={(e) => { e.stopPropagation(); onSlotClear(i); }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onSlotClear(i);
-                    }
-                  }}
-                  aria-label={`Clear slot ${i + 1}`}
-                >
-                  ×
-                </span>
-              </>
-            ) : (
-              <>
-                <span
-                  className="absolute left-1 top-0.5"
-                  style={{ color: '#1e293b', fontSize: '0.6rem' }}
-                >
-                  {i + 1}
-                </span>
-                <span style={{ color: '#2a2535', fontSize: '1.1rem' }}>+</span>
-                {isTutorial && <span className="tutorial-tooltip" style={{ top: -24, left: -4 }}>CLICK TO ADD ORDER</span>}
-              </>
-            )}
-          </button>
-        );
-      })}
-
-      {/* Spacer */}
-      <div className="flex-1" />
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="absolute right-0 top-0 flex items-center justify-center"
+                    style={{
+                      width: 14, height: 14,
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#475569',
+                      cursor: 'pointer',
+                      fontSize: '0.65rem',
+                      lineHeight: 1,
+                    }}
+                    onClick={(e) => { e.stopPropagation(); onSlotClear(i); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onSlotClear(i);
+                      }
+                    }}
+                    aria-label={`Clear slot ${i + 1}`}
+                  >
+                    ×
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span
+                    className="absolute left-1 top-0.5"
+                    style={{ color: '#475569', fontSize: '0.6rem' }}
+                  >
+                    {i + 1}
+                  </span>
+                  <span style={{ color: '#64748b', fontSize: '1.1rem' }}>+</span>
+                  {isTutorial && <span className="tutorial-tooltip" style={{ top: -24, left: -4 }}>CLICK TO ADD ORDER</span>}
+                </>
+              )}
+            </button>
+          );
+        })}
 
       {/* Lock-In button */}
       <button
         data-testid="lock-in-btn"
         disabled={lockedIn}
         onClick={onLockIn}
-        className={`rounded px-3 py-2 text-xs font-bold tracking-widest uppercase${tutorialHighlightLockIn ? ' tutorial-highlight' : ''}`}
+        className={`shrink-0 rounded px-3 py-2 text-xs font-bold tracking-widest uppercase${tutorialHighlightLockIn ? ' tutorial-highlight' : ''}`}
         style={{
           background: lockedIn
             ? 'rgba(30,41,59,0.5)'
@@ -174,7 +173,7 @@ export default function CommandTray({
           position: tutorialHighlightLockIn ? 'relative' as const : undefined,
         }}
       >
-        {tutorialHighlightLockIn && <span className="tutorial-tooltip" style={{ top: -24, left: 0 }}>LOCK IN YOUR ORDERS</span>}
+        {tutorialHighlightLockIn && <span className="tutorial-tooltip" style={{ top: -24, right: 0 }}>LOCK IN YOUR ORDERS</span>}
         {lockedIn
           ? (isMobile ? 'LOCKED' : 'LOCKED IN')
           : forkMode

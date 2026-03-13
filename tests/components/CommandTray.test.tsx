@@ -28,7 +28,7 @@ describe('CommandTray', () => {
     }
   });
 
-  it('filled slot shows type code and label', () => {
+  it('filled slot shows command icon', () => {
     render(
       <CommandTray
         globalCommands={filledCommands}
@@ -40,12 +40,13 @@ describe('CommandTray', () => {
         onLockIn={() => {}}
       />,
     );
-    expect(screen.getByText('RS')).toBeInTheDocument();
-    expect(screen.getByText('TECH')).toBeInTheDocument();
+    // Research command renders ⬆ icon with aria-label
+    expect(screen.getByLabelText('research')).toBeInTheDocument();
+    expect(screen.getByText('⬆')).toBeInTheDocument();
   });
 
 
-  it('train command shows unit type and structure hint', () => {
+  it('train command shows unit type icon', () => {
     const trainCommands: Array<GlobalCommand | null> = [
       { type: 'train', structureId: 's12345', unitType: 'arc_ranger' },
       null,
@@ -63,8 +64,9 @@ describe('CommandTray', () => {
       />,
     );
 
-    expect(screen.getByText('TR')).toBeInTheDocument();
-    expect(screen.getByText('arc_ranger@345')).toBeInTheDocument();
+    // Train arc_ranger renders ◆ icon
+    expect(screen.getByLabelText('train')).toBeInTheDocument();
+    expect(screen.getByText('◆')).toBeInTheDocument();
   });
 
   it('clicking × calls onSlotClear with the correct index', () => {

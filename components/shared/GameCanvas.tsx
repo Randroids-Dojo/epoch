@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { GameMap, HexCell } from '@/engine/map';
-import { GameState } from '@/engine/state';
+import { GameState, findUnitAt, findStructureAt } from '@/engine/state';
+import { STRUCTURE_DEFS } from '@/engine/structures';
 import { Hex, hexKey, hexToPixel, pixelToHex } from '@/engine/hex';
 import { Camera, DEFAULT_ZOOM, zoomToward, canvasToWorld, lerpCamera } from '@/renderer/camera';
 import { ActionBeat, getSequenceCameraTarget } from '@/renderer/actionSequence';
@@ -53,6 +54,28 @@ export interface CameraCenterRequest {
   worldY: number;
 }
 
+function HexInfoPanel({ gameState, cell }: { gameState: GameState; cell: HexCell }) {
+  const unit = findUnitAt(gameState, cell.hex);
+  const structure = findStructureAt(gameState, cell.hex);
+  const title = structure
+    ? STRUCTURE_DEFS[structure.type].label
+    : unit
+      ? UNIT_DEFS[unit.type].label
+      : `Hex (${cell.hex.q}, ${cell.hex.r})`;
+
+  return (
+    <div
+      className="pointer-events-none absolute left-1/2 -translate-x-1/2 rounded border border-slate-700 px-3 py-2 font-mono text-xs text-center"
+      style={{ bottom: 128, background: 'rgba(11,10,15,0.92)', color: '#94a3b8', zIndex: 20 }}
+    >
+      <div className="mb-1" style={{ color: '#e63946' }}>{title}</div>
+      {structure && <div>{structure.owner === 'player' ? 'Friendly' : 'Enemy'}</div>}
+      {unit && !structure && <div>{unit.owner === 'player' ? 'Friendly' : 'Enemy'} unit</div>}
+      <div>{cell.terrain.replace('_', ' ')}</div>
+    </div>
+  );
+}
+
 function getInitialCamera(map: GameMap, cssW: number, cssH: number): Camera {
   const { x: wx, y: wy } = hexToPixel(map.playerStart, BASE_HEX_SIZE);
   return {
@@ -95,9 +118,20 @@ export default function GameCanvas({
   const [selectedCell, setSelectedCell] = useState<HexCell | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Clear selection when execution starts (animation becomes non-null).
+  useEffect(() => {
+    if (animation) {
+      selectedRef.current = null;
+      setSelectedCell(null);
+    }
+  }, [animation]);
+
   // Keep mode accessible in render without re-creating the callback.
   const modeRef = useRef<InteractionMode>(mode);
   modeRef.current = mode;
+
+  // Guard against touch → synthetic mouse double-tap.
+  const lastTouchTapTime = useRef(0);
 
   // ── Pan state ──────────────────────────────────────────────────────────────
   const dragging  = useRef(false);
@@ -353,9 +387,12 @@ export default function GameCanvas({
     const key = hexKey(hex);
     const map = mapRef.current;
     if (map?.cells.has(key)) {
-      const next = key === selectedRef.current ? null : key;
-      selectedRef.current = next;
-      setSelectedCell(next ? (map.cells.get(next) ?? null) : null);
+      // Only toggle hex selection in idle mode — targeting taps are actions, not selections.
+      if (modeRef.current.kind === 'idle') {
+        const next = key === selectedRef.current ? null : key;
+        selectedRef.current = next;
+        setSelectedCell(next ? (map.cells.get(next) ?? null) : null);
+      }
     }
     onHexClickRef.current(hex);
   }, []);
@@ -385,6 +422,8 @@ export default function GameCanvas({
     const dy = e.clientY - dragStart.current.y;
     dragging.current = false;
     setIsDragging(false);
+    // Skip synthetic mouse events that follow a touch tap (prevents double-fire toggle).
+    if (Date.now() - lastTouchTapTime.current < 500) return;
     if (Math.abs(dx) < MOUSE_TAP_PX && Math.abs(dy) < MOUSE_TAP_PX) {
       fireHexTap(e.clientX, e.clientY);
     }
@@ -459,6 +498,7 @@ export default function GameCanvas({
         const dx = t.clientX - dragStart.current.x;
         const dy = t.clientY - dragStart.current.y;
         if (Math.abs(dx) < TOUCH_TAP_PX && Math.abs(dy) < TOUCH_TAP_PX) {
+          lastTouchTapTime.current = Date.now();
           fireHexTap(t.clientX, t.clientY);
         }
       }
@@ -536,18 +576,7 @@ export default function GameCanvas({
       />
 
       {/* Hex info panel — only in idle mode */}
-      {mode.kind === 'idle' && selectedCell && (
-        <div
-          className="pointer-events-none absolute bottom-4 left-4 rounded border border-slate-700 px-3 py-2 font-mono text-xs"
-          style={{ background: 'rgba(11,10,15,0.92)', color: '#94a3b8' }}
-        >
-          <div className="mb-1" style={{ color: '#e63946' }}>
-            Hex ({selectedCell.hex.q}, {selectedCell.hex.r})
-          </div>
-          <div>Terrain: {selectedCell.terrain.replace('_', ' ')}</div>
-          <div>Fog: {selectedCell.fog}</div>
-        </div>
-      )}
+      {mode.kind === 'idle' && !animation && selectedCell && <HexInfoPanel gameState={gameState} cell={selectedCell} />}
 
       {/* Controls hint — offset right of UnitActionPanel (180px wide) to avoid overlap */}
       {!animation && <div
