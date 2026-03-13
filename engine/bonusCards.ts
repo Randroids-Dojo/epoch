@@ -51,8 +51,8 @@ export const BONUS_CARDS: Record<BonusCardId, BonusCardDef> = {
       '    *  .  *    ',
     ],
     left: {
-      label: '+2 TEMPORAL ENERGY',
-      description: 'Channel raw chrono power',
+      label: '+1 TE PER EPOCH',
+      description: 'Permanent chrono regen boost',
     },
     right: {
       label: '+1 COMMAND SLOT',
@@ -156,14 +156,21 @@ export function shouldOfferBonusCard(completedEpoch: number): boolean {
   return completedEpoch >= START_EPOCH && completedEpoch % BONUS_INTERVAL === 0;
 }
 
-/** Pick a random bonus card for the given epoch (seeded by epoch for variety). */
+/** Fixed card rotation order. drone_swarm first since it's a good early-game bonus. */
+const CARD_SEQUENCE: BonusCardId[] = [
+  'drone_swarm',
+  'crystal_windfall',
+  'temporal_surge',
+  'phase_rift',
+  'chrono_harvest',
+];
+
+/** Pick a bonus card for the given epoch. Cycles through CARD_SEQUENCE in order. */
 export function drawBonusCard(completedEpoch: number): PendingBonusCard {
-  const ids = Object.keys(BONUS_CARDS) as BonusCardId[];
-  // Simple deterministic-ish pick based on epoch so each interval feels different.
-  const index = completedEpoch % ids.length;
-  // Rotate through the list so players see variety across games.
-  const rotated = [...ids.slice(index), ...ids.slice(0, index)];
-  return { card: BONUS_CARDS[rotated[0]], epoch: completedEpoch };
+  // Bonus card index: epoch 4 → 0, epoch 8 → 1, epoch 12 → 2, ...
+  const bonusIndex = (completedEpoch / BONUS_INTERVAL) - 1;
+  const id = CARD_SEQUENCE[bonusIndex % CARD_SEQUENCE.length];
+  return { card: BONUS_CARDS[id], epoch: completedEpoch };
 }
 
 // ── Apply Bonus ──────────────────────────────────────────────────────────────
@@ -179,8 +186,8 @@ export function applyBonusCard(
   switch (cardId) {
     case 'temporal_surge': {
       if (direction === 'left') {
-        player.resources.te += 2;
-        return '+2 Temporal Energy';
+        player.bonusTeRegen += 1;
+        return '+1 TE per epoch (permanent)';
       }
       player.commandSlots += 1;
       player.globalCommands = [...player.globalCommands, null];

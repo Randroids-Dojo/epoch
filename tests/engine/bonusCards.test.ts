@@ -6,6 +6,7 @@ import {
   BONUS_CARDS,
 } from '@/engine/bonusCards';
 import { createInitialState, resetIdSeq, GameState } from '@/engine/state';
+import { resolveEpoch } from '@/engine/resolution';
 
 describe('shouldOfferBonusCard', () => {
   it('returns false for epochs before 4', () => {
@@ -40,11 +41,23 @@ describe('drawBonusCard', () => {
     expect(BONUS_CARDS[pending.card.id]).toBeDefined();
   });
 
+  it('returns drone_swarm first at epoch 4', () => {
+    const card = drawBonusCard(4);
+    expect(card.card.id).toBe('drone_swarm');
+  });
+
   it('returns different cards for different epochs', () => {
     const card4 = drawBonusCard(4);
     const card8 = drawBonusCard(8);
-    // Different epochs should pick different cards (they cycle)
     expect(card4.card.id).not.toBe(card8.card.id);
+  });
+
+  it('cycles through all 5 cards over 5 bonus intervals', () => {
+    const seen = new Set<string>();
+    for (let epoch = 4; epoch <= 20; epoch += 4) {
+      seen.add(drawBonusCard(epoch).card.id);
+    }
+    expect(seen.size).toBe(5);
   });
 });
 
@@ -56,11 +69,28 @@ describe('applyBonusCard', () => {
     state = createInitialState(42);
   });
 
-  it('temporal_surge left gives +2 TE', () => {
-    const before = state.players.player.resources.te;
+  it('temporal_surge left gives +1 recurring TE regen', () => {
+    expect(state.players.player.bonusTeRegen).toBe(0);
     const msg = applyBonusCard(state, 'temporal_surge', 'left');
-    expect(state.players.player.resources.te).toBe(before + 2);
-    expect(msg).toContain('Temporal Energy');
+    expect(state.players.player.bonusTeRegen).toBe(1);
+    expect(msg).toContain('per epoch');
+  });
+
+  it('temporal_surge recurring TE regen applies during resolution', () => {
+    state.players.player.bonusTeRegen = 1;
+    state.players.player.resources.te = 0;
+    // Lock both players in to allow resolution.
+    state.players.player.lockedIn = true;
+    state.players.ai.lockedIn = true;
+    resolveEpoch(state);
+    // Passive +1, bonus +1, lock-in +1 = 3 TE
+    expect(state.players.player.resources.te).toBe(3);
+  });
+
+  it('temporal_surge left stacks across multiple cards', () => {
+    applyBonusCard(state, 'temporal_surge', 'left');
+    applyBonusCard(state, 'temporal_surge', 'left');
+    expect(state.players.player.bonusTeRegen).toBe(2);
   });
 
   it('temporal_surge right gives +1 command slot', () => {
