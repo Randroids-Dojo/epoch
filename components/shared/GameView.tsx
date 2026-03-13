@@ -60,6 +60,7 @@ import VictoryAnimation from '../animations/VictoryAnimation';
 import MergeTargetPicker from '../hud/MergeTargetPicker';
 import DifficultyHelpButton from './DifficultyHelpModal';
 import { useDifficultyUnlock } from '@/lib/useDifficultyUnlock';
+import FeedbackFab from './FeedbackFab';
 
 const PLANNING_DURATION = GAME_CONSTANTS.PLANNING_PHASE_DURATION_MS / 1000;
 const BASE_BUILD_OPTIONS: BuildStructureType[] = ['crystal_extractor', 'barracks', 'tech_lab', 'watchtower'];
@@ -1202,6 +1203,9 @@ export default function GameView() {
 
   const isExecuting = animationRef.current !== null;
 
+  // Planning HUD is visible only during planning when no post-epoch popups are active.
+  const showPlanningHud = gameState.phase === 'planning' && !isExecuting && !epochStatsPopup && !pendingBonusCard;
+
   // Echo overlay: show previous AI commands when player has Echo queued.
   const hasEcho = gameState.players.player.globalCommands.some((c) => c?.type === 'temporal');
   const echoCommands = hasEcho ? gameState.prevEpochCommands.ai : null;
@@ -1309,16 +1313,19 @@ export default function GameView() {
           />
         )}
 
-        {/* Stats panel — right sidebar, desktop only (too wide for mobile viewports) */}
-        {!isMobile && <GameStatsPanel gameState={gameState} />}
+        {/* Stats panel — right sidebar, desktop only */}
+        {showPlanningHud && !isMobile && <GameStatsPanel gameState={gameState} />}
 
-        <Minimap
-          gameState={gameState}
-          cameraSnapshot={cameraSnapshot}
-          isMobile={isMobile}
-          onRecenter={queueRecenter}
-          onSnapHome={handleSnapHome}
-        />
+        {/* Minimap — visible during planning only */}
+        {showPlanningHud && (
+          <Minimap
+            gameState={gameState}
+            cameraSnapshot={cameraSnapshot}
+            isMobile={isMobile}
+            onRecenter={queueRecenter}
+            onSnapHome={handleSnapHome}
+          />
+        )}
 
         {/* Unit command picker */}
         {mode.kind === 'unit_picker_open' && !isExecuting && unitForPicker && unitPickerProps && (
@@ -1580,6 +1587,9 @@ export default function GameView() {
             </div>
           </div>
         )}
+
+        {/* Feedback FAB — only visible when paused */}
+        <FeedbackFab visible={paused} />
 
         {/* Difficulty picker overlay */}
         {showSetup && (

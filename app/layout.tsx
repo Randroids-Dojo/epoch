@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
-import FeedbackFab from '@/components/shared/FeedbackFab'
 
 export const metadata: Metadata = {
   title: 'Epoch',
@@ -22,7 +21,6 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {children}
-        <FeedbackFab />
       </body>
     </html>
   )
