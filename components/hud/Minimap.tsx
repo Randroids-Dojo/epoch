@@ -160,7 +160,7 @@ export default function Minimap({ gameState, cameraSnapshot, isMobile, onRecente
   return (
     <div
       data-testid="minimap"
-      className={`absolute z-10 ${isMobile ? 'bottom-16 left-3' : 'right-4 top-8'}`}
+      className={`absolute z-10 ${isMobile ? 'top-3 left-3' : 'left-4 top-8'}`}
     >
       <div className="relative">
         <div className="overflow-hidden rounded border border-red-900/60 bg-[#0b0a0f]/90 p-2 shadow-lg backdrop-blur-sm">

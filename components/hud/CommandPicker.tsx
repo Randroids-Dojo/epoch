@@ -138,9 +138,9 @@ export default function CommandPicker(props: CommandPickerProps) {
   // ── Positioning ─────────────────────────────────────────────────────────────
   const posStyle: React.CSSProperties = isUnitContext
     ? {
-        top: (position as UnitPickerPosition).top,
+        bottom: TRAY_HEIGHT + 8,
         left: PANEL_WIDTH + 8,
-        bottom: undefined,
+        top: undefined,
       }
     : {
         bottom: TRAY_HEIGHT + 8,

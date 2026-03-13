@@ -126,16 +126,17 @@ export default function UnitActionPanel({
   return (
     <div
       ref={panelRef}
-      className="absolute left-0 top-0 bottom-0 overflow-y-auto font-mono"
+      className="absolute left-0 bottom-0 overflow-y-auto font-mono"
       style={{
         width: 180,
         zIndex: 30,
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'column-reverse',
         gap: 4,
         padding: '8px 6px',
         background: 'transparent',
         pointerEvents: 'auto',
+        maxHeight: '100%',
       }}
     >
       {playerUnits.map((unit, idx) => {

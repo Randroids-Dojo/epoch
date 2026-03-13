@@ -155,7 +155,7 @@ export default function EpochStatsPopup({ stats, onDismiss }: EpochStatsPopupPro
           flexDirection: 'column',
           gap: 20,
         }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={onDismiss}
       >
         {/* Header */}
         <div className="text-center">
