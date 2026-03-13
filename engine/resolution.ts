@@ -977,6 +977,10 @@ function stepPostResolution(state: GameState, commands: CommandEntry[]): void {
 
     // Passive TE regeneration (+1 per epoch, capped at 10).
     p.resources.te = Math.min(p.resources.te + 1, 10);
+    // Bonus card TE regen (recurring).
+    if (p.bonusTeRegen > 0) {
+      p.resources.te = Math.min(p.resources.te + p.bonusTeRegen, 10);
+    }
     // Early lock-in bonus.
     if (p.lockedIn) {
       p.resources.te = Math.min(p.resources.te + 1, 10);

@@ -79,6 +79,8 @@ export interface PlayerState {
   timelineForkUsed: boolean;
   /** Unit IDs whose orders were auto-populated as default tasks (e.g. drones gathering). */
   defaultOrderUnitIds: Set<string>;
+  /** Bonus TE regenerated per epoch from bonus cards. Stacks across multiple cards. */
+  bonusTeRegen: number;
 }
 
 export interface GameState {
@@ -216,6 +218,7 @@ export function createInitialState(seed?: number, difficulty: AIDifficulty = 'ad
       epochAnchor:          null,
       timelineForkUsed:     false,
       defaultOrderUnitIds:  new Set(),
+      bonusTeRegen:         0,
     };
   };
 
