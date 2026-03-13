@@ -22,7 +22,15 @@ export default function RootLayout({
       <body>
         <script
           dangerouslySetInnerHTML={{
-            __html: `document.addEventListener('contextmenu',function(e){if(e.target.tagName!=='INPUT'&&e.target.tagName!=='TEXTAREA'){e.preventDefault()}});`,
+            __html: [
+              // Suppress long-press context menu on game elements
+              `document.addEventListener('contextmenu',function(e){if(e.target.tagName!=='INPUT'&&e.target.tagName!=='TEXTAREA'){e.preventDefault()}});`,
+              // Suppress long-press vibration/callout on Android & iOS.
+              // preventDefault on touchstart stops the browser from entering
+              // its long-press detection flow (which triggers haptic feedback).
+              // Only applied to non-interactive elements so buttons/inputs work.
+              `document.addEventListener('touchstart',function(e){var t=e.target;var n=t.tagName;if(n==='INPUT'||n==='TEXTAREA'||n==='BUTTON'||n==='SELECT'||t.closest('button,a,[role=button]'))return;e.preventDefault()},{passive:false});`,
+            ].join('\n'),
           }}
         />
         {children}
