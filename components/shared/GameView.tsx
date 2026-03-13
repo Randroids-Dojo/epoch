@@ -276,18 +276,31 @@ export default function GameView() {
         setTutorialStep('extractor_select_drone');
         break;
       case 'extractor_lock_in':
-        // Barracks done, extractor still building — next epoch train a sentry.
-        setTutorialStep('train_select_slot');
+        // Barracks done, extractor still building — wait for next planning phase.
+        setTutorialStep('wait_for_train_epoch');
         break;
       case 'train_lock_in':
-        // Sentry training queued — next epoch gather with extractor.
-        setTutorialStep('gather_select_drone');
+        // Sentry training queued — wait for next planning phase.
+        setTutorialStep('wait_for_gather_epoch');
         break;
       case 'gather_lock_in':
         setTutorialStep(null); // tutorial complete
         break;
     }
   }, [tutorialActive, tutorialStep, lockedIn, gameState]);
+
+  // Advance wait steps when the next planning phase begins.
+  useEffect(() => {
+    if (!tutorialActive || gameState.phase !== 'planning' || lockedIn) return;
+    switch (tutorialStep) {
+      case 'wait_for_train_epoch':
+        setTutorialStep('train_select_slot');
+        break;
+      case 'wait_for_gather_epoch':
+        setTutorialStep('gather_select_drone');
+        break;
+    }
+  }, [tutorialActive, tutorialStep, gameState.phase, lockedIn]);
 
   // Mode-driven step advancement (runs on mode / gameState changes).
   useEffect(() => {
