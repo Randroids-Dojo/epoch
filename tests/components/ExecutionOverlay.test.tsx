@@ -42,13 +42,6 @@ describe('ExecutionOverlay', () => {
     expect(screen.getByTestId('phase-label')).toHaveTextContent('COMBAT');
   });
 
-  it('shows log entries for current and previous phases', () => {
-    render(<ExecutionOverlay animation={makeAnimation()} elapsed={2.0} onSkip={() => {}} />);
-    const entries = screen.getAllByTestId('log-entry');
-    // During move phase: defend + move entries visible.
-    expect(entries.length).toBe(2);
-  });
-
   it('calls onSkip when skip button is clicked', () => {
     const onSkip = vi.fn();
     render(<ExecutionOverlay animation={makeAnimation()} elapsed={0} onSkip={onSkip} />);
@@ -56,8 +49,8 @@ describe('ExecutionOverlay', () => {
     expect(onSkip).toHaveBeenCalledOnce();
   });
 
-  it('renders with empty event log', () => {
-    render(<ExecutionOverlay animation={makeAnimation({ eventLog: [] })} elapsed={0} onSkip={() => {}} />);
+  it('renders without log entries on screen', () => {
+    render(<ExecutionOverlay animation={makeAnimation()} elapsed={2.0} onSkip={() => {}} />);
     expect(screen.queryAllByTestId('log-entry')).toHaveLength(0);
   });
 });
