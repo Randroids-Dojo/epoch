@@ -17,7 +17,13 @@ export default function BonusCard({ card, onSwipe }: BonusCardProps) {
   const startRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Prevent body scroll while swiping
+  const dismiss = useCallback((dir: SwipeDirection) => {
+    if (dismissed) return;
+    setDismissed(dir);
+    setTimeout(() => onSwipe(dir), 300);
+  }, [dismissed, onSwipe]);
+
+  // ── Touch (mobile swipe) ─────────────────────────────────────────────────
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     const touch = e.touches[0];
     startRef.current = { x: touch.clientX, y: touch.clientY, t: Date.now() };
@@ -37,16 +43,14 @@ export default function BonusCard({ card, onSwipe }: BonusCardProps) {
     const hitThreshold = Math.abs(offsetX) >= SWIPE_THRESHOLD || velocity >= DISMISS_VELOCITY;
 
     if (hitThreshold && offsetX !== 0) {
-      const dir: SwipeDirection = offsetX < 0 ? 'left' : 'right';
-      setDismissed(dir);
-      setTimeout(() => onSwipe(dir), 300);
+      dismiss(offsetX < 0 ? 'left' : 'right');
     } else {
       setOffsetX(0);
     }
     startRef.current = null;
-  }, [offsetX, onSwipe]);
+  }, [offsetX, dismiss]);
 
-  // Mouse drag for desktop testing
+  // ── Mouse drag (desktop drag) ────────────────────────────────────────────
   const mouseDown = useRef(false);
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     mouseDown.current = true;
@@ -63,23 +67,19 @@ export default function BonusCard({ card, onSwipe }: BonusCardProps) {
   const onMouseUp = useCallback(() => {
     if (!mouseDown.current) return;
     mouseDown.current = false;
-    // Reuse touch-end logic
     if (!startRef.current) return;
     const elapsed = Date.now() - startRef.current.t;
     const velocity = Math.abs(offsetX) / Math.max(elapsed, 1);
     const hitThreshold = Math.abs(offsetX) >= SWIPE_THRESHOLD || velocity >= DISMISS_VELOCITY;
 
     if (hitThreshold && offsetX !== 0) {
-      const dir: SwipeDirection = offsetX < 0 ? 'left' : 'right';
-      setDismissed(dir);
-      setTimeout(() => onSwipe(dir), 300);
+      dismiss(offsetX < 0 ? 'left' : 'right');
     } else {
       setOffsetX(0);
     }
     startRef.current = null;
-  }, [offsetX, onSwipe]);
+  }, [offsetX, dismiss]);
 
-  // Reset on mouse leave
   const onMouseLeave = useCallback(() => {
     if (mouseDown.current) {
       mouseDown.current = false;
@@ -88,30 +88,33 @@ export default function BonusCard({ card, onSwipe }: BonusCardProps) {
     }
   }, []);
 
-  // Keyboard fallback
+  // ── Keyboard (arrow keys) ────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (dismissed) return;
       if (e.key === 'ArrowLeft') {
-        setDismissed('left');
-        setTimeout(() => onSwipe('left'), 300);
+        e.preventDefault();
+        dismiss('left');
       } else if (e.key === 'ArrowRight') {
-        setDismissed('right');
-        setTimeout(() => onSwipe('right'), 300);
+        e.preventDefault();
+        dismiss('right');
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [dismissed, onSwipe]);
+  }, [dismissed, dismiss]);
 
-  // Derive visual feedback
+  // ── Visual feedback ──────────────────────────────────────────────────────
   const progress = Math.min(1, Math.abs(offsetX) / SWIPE_THRESHOLD);
   const leaning: SwipeDirection | null = offsetX < -10 ? 'left' : offsetX > 10 ? 'right' : null;
 
-  const leftColor = leaning === 'left'
+  const leftHighlight = leaning === 'left';
+  const rightHighlight = leaning === 'right';
+
+  const leftBg = leftHighlight
     ? `rgba(0, 180, 255, ${0.15 + progress * 0.35})`
     : 'rgba(0, 180, 255, 0.06)';
-  const rightColor = leaning === 'right'
+  const rightBg = rightHighlight
     ? `rgba(52, 211, 153, ${0.15 + progress * 0.35})`
     : 'rgba(52, 211, 153, 0.06)';
 
@@ -120,6 +123,21 @@ export default function BonusCard({ card, onSwipe }: BonusCardProps) {
   const dismissTransform = dismissed
     ? `translateX(${dismissed === 'left' ? '-120%' : '120%'}) rotate(${dismissed === 'left' ? -15 : 15}deg)`
     : `translateX(${offsetX}px) rotate(${rotation}deg)`;
+
+  // Shared button style for the clickable option panels.
+  const optionBtnStyle = (side: 'left' | 'right'): React.CSSProperties => ({
+    flex: 1,
+    padding: '10px 8px',
+    borderRadius: 6,
+    border: `1px solid ${side === 'left'
+      ? (leftHighlight ? `rgba(0,180,255,${0.4 + progress * 0.4})` : 'rgba(0,180,255,0.2)')
+      : (rightHighlight ? `rgba(52,211,153,${0.4 + progress * 0.4})` : 'rgba(52,211,153,0.2)')
+    }`,
+    background: side === 'left' ? leftBg : rightBg,
+    transition: 'background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
+    cursor: 'pointer',
+    textAlign: 'left' as const,
+  });
 
   return (
     <div
@@ -138,7 +156,7 @@ export default function BonusCard({ card, onSwipe }: BonusCardProps) {
         userSelect: 'none',
       }}
     >
-      {/* Swipe hints */}
+      {/* Swipe hints above card */}
       <div
         style={{
           display: 'flex',
@@ -164,7 +182,7 @@ export default function BonusCard({ card, onSwipe }: BonusCardProps) {
         </div>
       </div>
 
-      {/* The card */}
+      {/* The draggable card */}
       <div
         ref={containerRef}
         onTouchStart={onTouchStart}
@@ -234,21 +252,15 @@ export default function BonusCard({ card, onSwipe }: BonusCardProps) {
           ))}
         </div>
 
-        {/* Two option columns */}
+        {/* Two clickable option panels */}
         <div style={{ display: 'flex', gap: 8 }}>
-          {/* Left option */}
-          <div
-            style={{
-              flex: 1,
-              padding: '10px 8px',
-              borderRadius: 6,
-              border: '1px solid rgba(0,180,255,0.2)',
-              background: leftColor,
-              transition: 'background 0.15s ease, border-color 0.15s ease',
-              borderColor: leaning === 'left'
-                ? `rgba(0,180,255,${0.4 + progress * 0.4})`
-                : 'rgba(0,180,255,0.2)',
-            }}
+          {/* Left option — click or swipe left */}
+          <button
+            type="button"
+            data-testid="bonus-option-left"
+            onClick={(e) => { e.stopPropagation(); dismiss('left'); }}
+            onMouseDown={(e) => e.stopPropagation()}
+            style={optionBtnStyle('left')}
           >
             <div
               className="font-mono font-bold uppercase"
@@ -259,21 +271,15 @@ export default function BonusCard({ card, onSwipe }: BonusCardProps) {
             <div className="font-mono" style={{ fontSize: 9, color: '#64748b', lineHeight: '12px' }}>
               {card.left.description}
             </div>
-          </div>
+          </button>
 
-          {/* Right option */}
-          <div
-            style={{
-              flex: 1,
-              padding: '10px 8px',
-              borderRadius: 6,
-              border: '1px solid rgba(52,211,153,0.2)',
-              background: rightColor,
-              transition: 'background 0.15s ease, border-color 0.15s ease',
-              borderColor: leaning === 'right'
-                ? `rgba(52,211,153,${0.4 + progress * 0.4})`
-                : 'rgba(52,211,153,0.2)',
-            }}
+          {/* Right option — click or swipe right */}
+          <button
+            type="button"
+            data-testid="bonus-option-right"
+            onClick={(e) => { e.stopPropagation(); dismiss('right'); }}
+            onMouseDown={(e) => e.stopPropagation()}
+            style={optionBtnStyle('right')}
           >
             <div
               className="font-mono font-bold uppercase"
@@ -284,11 +290,11 @@ export default function BonusCard({ card, onSwipe }: BonusCardProps) {
             <div className="font-mono" style={{ fontSize: 9, color: '#64748b', lineHeight: '12px' }}>
               {card.right.description}
             </div>
-          </div>
+          </button>
         </div>
       </div>
 
-      {/* Bottom hint */}
+      {/* Bottom hint — context-aware */}
       <div
         className="font-mono"
         style={{
@@ -300,7 +306,7 @@ export default function BonusCard({ card, onSwipe }: BonusCardProps) {
       >
         {leaning === 'left' && <span style={{ color: '#00b4ff' }}>Release for {card.left.label}</span>}
         {leaning === 'right' && <span style={{ color: '#34d399' }}>Release for {card.right.label}</span>}
-        {!leaning && 'Drag the card left or right'}
+        {!leaning && 'Swipe, click an option, or press arrow keys'}
       </div>
     </div>
   );
