@@ -29,7 +29,7 @@ function captureScreenshot(): string | null {
   }
 }
 
-export default function FeedbackFab({ visible = true }: { visible?: boolean }) {
+export default function FeedbackFab() {
   const [view, setView]              = useState<View>('closed');
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [message, setMessage]         = useState('');
@@ -39,11 +39,6 @@ export default function FeedbackFab({ visible = true }: { visible?: boolean }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { initConsoleCapture(); }, []);
-
-  // Reset to closed when hidden
-  useEffect(() => {
-    if (!visible && view !== 'closed') setView('closed');
-  }, [visible, view]);
 
   // Close on Escape or click-outside
   useEffect(() => {
@@ -117,8 +112,6 @@ export default function FeedbackFab({ visible = true }: { visible?: boolean }) {
   }
 
   const isOpen = view !== 'closed';
-
-  if (!visible) return null;
 
   return (
     <>

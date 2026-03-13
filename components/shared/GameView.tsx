@@ -1589,7 +1589,7 @@ export default function GameView() {
         )}
 
         {/* Feedback FAB — only visible when paused */}
-        <FeedbackFab visible={paused} />
+        {paused && <FeedbackFab />}
 
         {/* Difficulty picker overlay */}
         {showSetup && (
