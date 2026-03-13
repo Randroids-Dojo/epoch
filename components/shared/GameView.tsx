@@ -1216,9 +1216,9 @@ export default function GameView() {
     return { canAttack, canGather, canBuild, canChronoShift, canMerge, unitType: unitForPicker.type };
   })() : null;
 
-  // Position for unit picker: to the right of the panel, aligned to the card.
-  // We use a fixed top offset; the panel scrolls the card into view.
-  const unitPickerTop = 8;
+  // Position for unit picker: to the right of the panel, above the command tray.
+  // Cards now stack from the bottom, so pickers open from the bottom too.
+  const unitPickerBottom = 84;
 
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden">
@@ -1309,7 +1309,7 @@ export default function GameView() {
         {/* Unit command picker */}
         {mode.kind === 'unit_picker_open' && !isExecuting && unitForPicker && unitPickerProps && (
           <CommandPicker
-            position={{ kind: 'unit', top: unitPickerTop }}
+            position={{ kind: 'unit', top: unitPickerBottom }}
             playerTE={gameState.players.player.resources.te}
             playerCC={gameState.players.player.resources.cc}
             playerFX={gameState.players.player.resources.fx}
@@ -1407,7 +1407,7 @@ export default function GameView() {
             aria-label="Build structure picker"
             className="absolute font-mono text-xs"
             style={{
-              top: unitPickerTop,
+              bottom: unitPickerBottom,
               left: 188,
               zIndex: 100,
               background: '#0d1321',
@@ -1461,7 +1461,7 @@ export default function GameView() {
 
         {/* Hex target picker for move/attack targeting */}
         {mode.kind === 'targeting' && !isExecuting && unitForPicker && (mode.commandType === 'move' || mode.commandType === 'attack') && (
-          <div style={{ position: 'absolute', top: unitPickerTop, left: 188 }}>
+          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: 188 }}>
             <HexTargetPicker
               unitHex={unitForPicker.hex}
               radius={mode.commandType === 'move'
@@ -1478,7 +1478,7 @@ export default function GameView() {
 
         {/* Hex target picker for build placement */}
         {mode.kind === 'build_targeting' && !isExecuting && unitForPicker && (
-          <div style={{ position: 'absolute', top: unitPickerTop, left: 188 }}>
+          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: 188 }}>
             <HexTargetPicker
               unitHex={unitForPicker.hex}
               radius={UNIT_DEFS[unitForPicker.type].speed}
@@ -1492,7 +1492,7 @@ export default function GameView() {
 
         {/* Gather target list picker */}
         {mode.kind === 'gather_picker' && !isExecuting && (
-          <div style={{ position: 'absolute', top: unitPickerTop, left: 188 }}>
+          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: 188 }}>
             <GatherTargetPicker
               targets={mode.targets}
               tutorialHighlight={tutorialStep === 'gather_select_target'}
@@ -1504,7 +1504,7 @@ export default function GameView() {
 
         {/* Merge target picker */}
         {mode.kind === 'merge_picker' && !isExecuting && (
-          <div style={{ position: 'absolute', top: unitPickerTop, left: 188 }}>
+          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: 188 }}>
             <MergeTargetPicker
               targets={mode.targets}
               onConfirm={handleMergeConfirm}
