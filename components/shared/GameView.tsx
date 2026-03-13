@@ -37,6 +37,7 @@ import {
   PHASE_MOVE, PHASE_ATTACK, PHASE_BUILD,
   categorizeLogEntry,
 } from '@/renderer/animation';
+import { ActionBeat, buildActionSequence } from '@/renderer/actionSequence';
 import { audioEngine } from '@/audio/engine';
 import GameCanvas from './GameCanvas';
 import { CameraSnapshot } from './GameCanvas';
@@ -399,12 +400,14 @@ export default function GameView() {
 
   // ── Execution animation ref ───────────────────────────────────────────────
   const animationRef = useRef<ExecutionAnimation | null>(null);
+  const [actionBeats, setActionBeats] = useState<ActionBeat[] | null>(null);
 
   // ── finishExecution ───────────────────────────────────────────────────────
   const finishExecutionRef = useRef<() => void>(() => {});
 
   const finishExecution = useCallback(() => {
     animationRef.current = null;
+    setActionBeats(null);
     setAnimElapsed(0);
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
@@ -625,6 +628,7 @@ export default function GameView() {
 
     const anim = buildAnimationTimeline(unitSnaps, structSnaps, state);
     animationRef.current = anim;
+    setActionBeats(buildActionSequence(anim));
 
     execSoundsRef.current = { move: false, attack: false, build: false };
     audioEngine.playEpochTransition();
@@ -1272,6 +1276,7 @@ export default function GameView() {
           gameState={gameState}
           mode={mode}
           animation={animationRef.current}
+          actionBeats={actionBeats}
           echoCommands={echoCommands}
           timelineForkResult={timelineForkResult}
           chronoScoutResult={chronoScoutResult}
@@ -1518,6 +1523,7 @@ export default function GameView() {
           <ExecutionOverlay
             animation={animationRef.current}
             elapsed={animElapsed}
+            actionBeats={actionBeats}
             onSkip={handleSkip}
             tutorialHighlightSkip={tutorialActive}
           />
