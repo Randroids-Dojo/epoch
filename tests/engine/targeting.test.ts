@@ -130,4 +130,24 @@ describe('computeEligibleHexes', () => {
     const result = computeEligibleHexes(state, 'defend');
     expect(result.size).toBe(0);
   });
+
+  it('move: excludes crystal_node and flux_vent resource terrain', () => {
+    const state = createInitialState(1);
+    const result = computeEligibleHexes(state, 'move');
+    for (const key of result) {
+      const cell = state.map.cells.get(key)!;
+      expect(cell.terrain).not.toBe('crystal_node');
+      expect(cell.terrain).not.toBe('flux_vent');
+    }
+  });
+
+  it('phase_surge: excludes crystal_node and flux_vent resource terrain', () => {
+    const state = createInitialState(1);
+    const result = computeEligibleHexes(state, 'phase_surge');
+    for (const key of result) {
+      const cell = state.map.cells.get(key)!;
+      expect(cell.terrain).not.toBe('crystal_node');
+      expect(cell.terrain).not.toBe('flux_vent');
+    }
+  });
 });

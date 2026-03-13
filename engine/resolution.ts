@@ -74,12 +74,27 @@ function mapOrder(a: Hex, b: Hex): number {
   return a.r !== b.r ? a.r - b.r : a.q - b.q;
 }
 
+/** Options for BFS pathfinding. */
+interface BfsOptions {
+  /** Allow the destination hex even if it's in the blocked set (e.g. gather target on a structure). */
+  allowBlockedDest?: boolean;
+  /** Allow pathing through resource terrain (crystal_node, flux_vent). Only used for gather movement. */
+  allowResourceTerrain?: boolean;
+}
+
+/** Returns true if the terrain type is a resource spot (crystal_node or flux_vent). */
+function isResourceTerrain(terrain: string): boolean {
+  return terrain === 'crystal_node' || terrain === 'flux_vent';
+}
+
 /**
  * BFS shortest path from `from` to `to`, treating `blocked` as impassable.
  * Returns the list of hexes to traverse (not including `from`), or [] if unreachable.
  */
-function bfsPath(from: Hex, to: Hex, state: GameState, blocked: Set<string>): Hex[] {
+function bfsPath(from: Hex, to: Hex, state: GameState, blocked: Set<string>, opts?: BfsOptions): Hex[] {
   if (hexEqual(from, to)) return [];
+  const allowBlockedDest = opts?.allowBlockedDest ?? false;
+  const allowResourceTerrain = opts?.allowResourceTerrain ?? false;
   const toKey = hexKey(to);
   const parent = new Map<string, Hex | null>([[hexKey(from), null]]);
   const queue: Hex[] = [from];
@@ -89,10 +104,13 @@ function bfsPath(from: Hex, to: Hex, state: GameState, blocked: Set<string>): He
     const hex = queue[qi++];
     for (const nb of hexNeighbors(hex)) {
       const key = hexKey(nb);
-      // Allow the destination hex even if it's in the blocked set (e.g. gather target on a structure).
-      if (parent.has(key) || (blocked.has(key) && key !== toKey)) continue;
+      if (parent.has(key)) continue;
+      // Block occupied hexes; optionally allow the destination for gather paths.
+      if (blocked.has(key) && !(key === toKey && allowBlockedDest)) continue;
       const cell = state.map.cells.get(key);
       if (!cell || !TERRAIN[cell.terrain].passable) continue;
+      // Block resource terrain (crystal_node, flux_vent) unless explicitly allowed (gather paths).
+      if (!allowResourceTerrain && isResourceTerrain(cell.terrain)) continue;
       parent.set(key, hex);
       if (hexEqual(nb, to)) {
         // Reconstruct path (excluding from)
@@ -738,7 +756,7 @@ function stepGather(state: GameState, commands: CommandEntry[], log: string[]): 
     if (!hexEqual(unit.hex, command.targetHex)) {
       const ownKey = hexKey(unit.hex);
       blocked.delete(ownKey);
-      const path  = bfsPath(unit.hex, command.targetHex, state, blocked);
+      const path  = bfsPath(unit.hex, command.targetHex, state, blocked, { allowBlockedDest: true, allowResourceTerrain: true });
       const steps = path.slice(0, UNIT_DEFS.drone.speed);
       if (steps.length > 0) {
         unit.hex = steps[steps.length - 1];

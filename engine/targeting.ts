@@ -86,8 +86,9 @@ export function computeEligibleHexes(
     switch (type) {
       case 'phase_surge':
       case 'move':
-        // All passable visible/explored hexes not occupied by own units or structures.
+        // All passable visible/explored hexes not occupied by own units, structures, or resource terrain.
         if (!TERRAIN[cell.terrain].passable) continue;
+        if (cell.terrain === 'crystal_node' || cell.terrain === 'flux_vent') continue;
         if (unitOwnerByHex.get(key) === 'player') continue;
         if (structHexes.has(key)) continue;
         eligible.add(key);

@@ -23,7 +23,7 @@ test('skip button is visible during execution', async ({ page }) => {
 test('skipping execution returns to planning', async ({ page }) => {
   await page.goto('/');
   await enterExecution(page);
-  await page.keyboard.press('Escape');
+  await page.keyboard.press('Space');
   await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 5000 });
   await expect(page.getByTestId('phase-label')).not.toBeVisible();
 });
