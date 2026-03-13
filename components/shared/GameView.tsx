@@ -1242,7 +1242,7 @@ export default function GameView() {
     const canBuild = unitForPicker.type === 'drone' && gameState.players.player.resources.cc >= 3;
     const unitHasChrono = !!(getOldestSnapshot(gameState)?.has(unitForPicker.id));
     const canChronoShift = playerTechTier >= 1 && gameState.players.player.resources.te >= CHRONO_SHIFT_COST && unitHasChrono;
-    const canMerge = computeUnitMergeTargets(gameState, unitForPicker).length > 0;
+    const canMerge = unitForPicker.type !== 'drone' && computeUnitMergeTargets(gameState, unitForPicker).length > 0;
     return { canAttack, canGather, canBuild, canChronoShift, canMerge, unitType: unitForPicker.type };
   })() : null;
 
