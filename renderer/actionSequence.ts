@@ -18,6 +18,9 @@ import {
   PHASE_BUILD,
   TOTAL_DURATION,
 } from './animation';
+import { pixelToHex, hexKey } from '../engine/hex';
+import { GameMap } from '../engine/map';
+import { BASE_HEX_SIZE } from './drawHex';
 
 // ── Beat type ─────────────────────────────────────────────────────────────
 
@@ -166,15 +169,39 @@ function structName(type: string): string {
   return STRUCT_NAMES[type] ?? type;
 }
 
+// ── Fog-of-war visibility check ───────────────────────────────────────
+
+/**
+ * Returns true if the world-pixel position is on a hex currently visible
+ * to the player (fog state === 'visible'). Used to suppress cinematic
+ * beats for enemy events hidden in the fog of war.
+ */
+function isWorldPixelVisible(
+  wx: number,
+  wy: number,
+  map: GameMap,
+): boolean {
+  const hex = pixelToHex(wx, wy, BASE_HEX_SIZE);
+  const cell = map.cells.get(hexKey(hex));
+  return cell?.fog === 'visible';
+}
+
 // ── Sequence builder ──────────────────────────────────────────────────────
 
-export function buildActionSequence(anim: ExecutionAnimation): ActionBeat[] {
+export function buildActionSequence(
+  anim: ExecutionAnimation,
+  map: GameMap,
+): ActionBeat[] {
   const beats: ActionBeat[] = [];
+
+  // Helper: only include AI events if their position is visible to the player.
+  const isVisible = (owner: string, wx: number, wy: number): boolean =>
+    owner === 'player' || isWorldPixelVisible(wx, wy, map);
 
   // ── 1. DEFEND phase ─────────────────────────────────────────────────────
   const defenders: { x: number; y: number; weight: number; label: string }[] = [];
   for (const u of anim.units.values()) {
-    if (u.isDefending) {
+    if (u.isDefending && isVisible(u.owner, u.fromPixel.x, u.fromPixel.y)) {
       defenders.push({
         x: u.fromPixel.x, y: u.fromPixel.y,
         weight: 2,
@@ -184,7 +211,7 @@ export function buildActionSequence(anim: ExecutionAnimation): ActionBeat[] {
   }
   // Also show merge events during defend phase.
   for (const u of anim.mergedUnits) {
-    if (u.mergeSurvivorPixel) {
+    if (u.mergeSurvivorPixel && isVisible(u.owner, u.mergeSurvivorPixel.x, u.mergeSurvivorPixel.y)) {
       defenders.push({
         x: u.mergeSurvivorPixel.x, y: u.mergeSurvivorPixel.y,
         weight: 3,
@@ -204,9 +231,13 @@ export function buildActionSequence(anim: ExecutionAnimation): ActionBeat[] {
     const dy = u.toPixel.y - u.fromPixel.y;
     if (dx * dx + dy * dy > 1) {
       // Use midpoint of movement as focus point.
+      const mx = (u.fromPixel.x + u.toPixel.x) / 2;
+      const my = (u.fromPixel.y + u.toPixel.y) / 2;
+      // For AI units, only include if either endpoint is in player vision.
+      if (!isVisible(u.owner, u.fromPixel.x, u.fromPixel.y) &&
+          !isVisible(u.owner, u.toPixel.x, u.toPixel.y)) continue;
       movers.push({
-        x: (u.fromPixel.x + u.toPixel.x) / 2,
-        y: (u.fromPixel.y + u.toPixel.y) / 2,
+        x: mx, y: my,
         weight: u.owner === 'player' ? 3 : 1,
         label: `${unitName(u.unitType)} moves`,
       });
@@ -220,9 +251,9 @@ export function buildActionSequence(anim: ExecutionAnimation): ActionBeat[] {
   // ── 3. ATTACK phase ────────────────────────────────────────────────────
   const combatPoints: { x: number; y: number; weight: number; label: string }[] = [];
 
-  // Units that took damage.
+  // Units that took damage — only show if their position is visible.
   for (const u of anim.units.values()) {
-    if (u.newHp < u.oldHp) {
+    if (u.newHp < u.oldHp && isVisible(u.owner, u.toPixel.x, u.toPixel.y)) {
       combatPoints.push({
         x: u.toPixel.x, y: u.toPixel.y,
         weight: 3,
@@ -231,18 +262,20 @@ export function buildActionSequence(anim: ExecutionAnimation): ActionBeat[] {
     }
   }
 
-  // Destroyed units (high weight — dramatic!).
+  // Destroyed units — only show if position is visible.
   for (const u of anim.destroyedUnits) {
-    combatPoints.push({
-      x: u.fromPixel.x, y: u.fromPixel.y,
-      weight: 5,
-      label: `${unitName(u.unitType)} destroyed!`,
-    });
+    if (isVisible(u.owner, u.fromPixel.x, u.fromPixel.y)) {
+      combatPoints.push({
+        x: u.fromPixel.x, y: u.fromPixel.y,
+        weight: 5,
+        label: `${unitName(u.unitType)} destroyed!`,
+      });
+    }
   }
 
-  // Damaged structures.
+  // Damaged structures — only show if visible.
   for (const s of anim.structures.values()) {
-    if (s.wasDamaged) {
+    if (s.wasDamaged && isVisible(s.owner, s.pixel.x, s.pixel.y)) {
       combatPoints.push({
         x: s.pixel.x, y: s.pixel.y,
         weight: 4,
@@ -251,13 +284,15 @@ export function buildActionSequence(anim: ExecutionAnimation): ActionBeat[] {
     }
   }
 
-  // Destroyed structures.
+  // Destroyed structures — only show if visible.
   for (const s of anim.destroyedStructures) {
-    combatPoints.push({
-      x: s.pixel.x, y: s.pixel.y,
-      weight: 6,
-      label: `${structName(s.structureType)} destroyed!`,
-    });
+    if (isVisible(s.owner, s.pixel.x, s.pixel.y)) {
+      combatPoints.push({
+        x: s.pixel.x, y: s.pixel.y,
+        weight: 6,
+        label: `${structName(s.structureType)} destroyed!`,
+      });
+    }
   }
 
   if (combatPoints.length > 0) {
@@ -268,9 +303,9 @@ export function buildActionSequence(anim: ExecutionAnimation): ActionBeat[] {
   // ── 4. BUILD phase ─────────────────────────────────────────────────────
   const buildPoints: { x: number; y: number; weight: number; label: string }[] = [];
 
-  // Newly completed structures.
+  // Newly completed structures — only show if visible.
   for (const s of anim.structures.values()) {
-    if (s.wasBuilt) {
+    if (s.wasBuilt && isVisible(s.owner, s.pixel.x, s.pixel.y)) {
       buildPoints.push({
         x: s.pixel.x, y: s.pixel.y,
         weight: 3,
@@ -279,9 +314,9 @@ export function buildActionSequence(anim: ExecutionAnimation): ActionBeat[] {
     }
   }
 
-  // Spawned units.
+  // Spawned units — only show if visible.
   for (const u of anim.units.values()) {
-    if (u.wasSpawned) {
+    if (u.wasSpawned && isVisible(u.owner, u.toPixel.x, u.toPixel.y)) {
       buildPoints.push({
         x: u.toPixel.x, y: u.toPixel.y,
         weight: 2,

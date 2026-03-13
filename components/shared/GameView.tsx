@@ -628,7 +628,7 @@ export default function GameView() {
 
     const anim = buildAnimationTimeline(unitSnaps, structSnaps, state);
     animationRef.current = anim;
-    setActionBeats(buildActionSequence(anim));
+    setActionBeats(buildActionSequence(anim, state.map));
 
     execSoundsRef.current = { move: false, attack: false, build: false };
     audioEngine.playEpochTransition();
