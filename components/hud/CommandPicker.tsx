@@ -73,7 +73,7 @@ interface CommandPickerProps {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const TRAY_HEIGHT = 76;
+const TRAY_HEIGHT = 120; // 64px dead zone + ~48px single-row command tray
 const PANEL_WIDTH = 180;
 
 const BTN_ENABLED: React.CSSProperties = {
@@ -258,7 +258,7 @@ export default function CommandPicker(props: CommandPickerProps) {
       className="absolute font-mono text-xs"
       style={{
         ...posStyle,
-        zIndex: 100,
+        zIndex: 200,
         background: '#0d1321',
         border: '1px solid #334155',
         borderRadius: 6,
