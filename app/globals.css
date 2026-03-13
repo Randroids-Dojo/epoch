@@ -19,6 +19,17 @@ body {
   font-family: var(--font-mono);
   background-color: var(--color-navy);
   color: var(--color-ice);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Allow selection only in text inputs */
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* ── Epoch Stats Popup Animations ──────────────────────────────────────── */
