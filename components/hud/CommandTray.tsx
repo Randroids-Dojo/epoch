@@ -59,100 +59,99 @@ export default function CommandTray({
 
   return (
     <div
-      className="shrink-0 flex items-center overflow-visible pl-4 pr-6 py-3 font-mono"
-      style={{ gap: slot.gap, background: 'rgba(11,10,15,0.95)', borderTop: '1px solid #2a2535' }}
+      className="absolute right-0 bottom-0 flex flex-col items-end gap-1.5 font-mono"
+      style={{ zIndex: 30, padding: '8px 8px', pointerEvents: 'auto' }}
     >
-      {/* Global command slots */}
-      {globalCommands.map((cmd, i) => {
-        const isSelected = selectedGlobalSlot === i;
-        const isTutorial = i === firstEmptySlot;
-        return (
-          <button
-            key={i}
-            data-testid={`command-slot-${i}`}
-            type="button"
-            disabled={lockedIn}
-            onClick={() => onSlotClick(i)}
-            className={`relative flex items-center justify-center rounded text-xs select-none${isTutorial ? ' tutorial-highlight' : ''}`}
-            style={{
-              width: slot.width,
-              height: slot.height,
-              cursor: lockedIn ? 'not-allowed' : 'pointer',
-              opacity: lockedIn ? 0.5 : 1,
-              border: isSelected
-                ? '1.5px solid #e63946'
-                : '1px solid #2a2535',
-              boxShadow: isSelected
-                ? '0 0 8px rgba(230,57,70,0.35), inset 0 0 8px rgba(230,57,70,0.08)'
-                : undefined,
-              background: isSelected
-                ? 'rgba(230,57,70,0.06)'
-                : 'rgba(22,20,28,0.6)',
-              animation: !cmd && !isSelected && !lockedIn ? 'pulse-border 2.5s ease-in-out infinite' : undefined,
-              transition: 'border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease',
-              fontFamily: 'inherit',
-            }}
-          >
-            {cmd ? (
-              <>
-                <span
-                  className="absolute left-1 top-0.5"
-                  style={{ color: '#2a2535', fontSize: '0.6rem' }}
-                >
-                  {i + 1}
-                </span>
-                <div className="flex flex-col items-center gap-0.5">
-                  <span style={{ color: '#e63946', fontWeight: 700 }}>
-                    {TYPE_CODE[cmd.type] ?? cmd.type.slice(0, 2).toUpperCase()}
+      {/* Command slots — horizontal row */}
+      <div className="flex items-center" style={{ gap: slot.gap }}>
+        {globalCommands.map((cmd, i) => {
+          const isSelected = selectedGlobalSlot === i;
+          const isTutorial = i === firstEmptySlot;
+          return (
+            <button
+              key={i}
+              data-testid={`command-slot-${i}`}
+              type="button"
+              disabled={lockedIn}
+              onClick={() => onSlotClick(i)}
+              className={`relative flex items-center justify-center rounded text-xs select-none${isTutorial ? ' tutorial-highlight' : ''}`}
+              style={{
+                width: slot.width,
+                height: slot.height,
+                cursor: lockedIn ? 'not-allowed' : 'pointer',
+                opacity: lockedIn ? 0.5 : 1,
+                border: isSelected
+                  ? '1.5px solid #e63946'
+                  : '1px solid #2a2535',
+                boxShadow: isSelected
+                  ? '0 0 8px rgba(230,57,70,0.35), inset 0 0 8px rgba(230,57,70,0.08)'
+                  : undefined,
+                background: isSelected
+                  ? 'rgba(230,57,70,0.06)'
+                  : 'rgba(22,20,28,0.6)',
+                animation: !cmd && !isSelected && !lockedIn ? 'pulse-border 2.5s ease-in-out infinite' : undefined,
+                transition: 'border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease',
+                fontFamily: 'inherit',
+              }}
+            >
+              {cmd ? (
+                <>
+                  <span
+                    className="absolute left-1 top-0.5"
+                    style={{ color: '#2a2535', fontSize: '0.6rem' }}
+                  >
+                    {i + 1}
                   </span>
-                  <span style={{ color: '#64748b', fontSize: '0.6rem' }}>
-                    {cmdLabel(cmd)}
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span style={{ color: '#e63946', fontWeight: 700 }}>
+                      {TYPE_CODE[cmd.type] ?? cmd.type.slice(0, 2).toUpperCase()}
+                    </span>
+                    <span style={{ color: '#64748b', fontSize: '0.6rem' }}>
+                      {cmdLabel(cmd)}
+                    </span>
+                  </div>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="absolute right-0.5 top-0.5 flex items-center justify-center rounded"
+                    style={{
+                      width: 16, height: 16,
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#475569',
+                      cursor: 'pointer',
+                      fontSize: '0.7rem',
+                      lineHeight: 1,
+                    }}
+                    onClick={(e) => { e.stopPropagation(); onSlotClear(i); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onSlotClear(i);
+                      }
+                    }}
+                    aria-label={`Clear slot ${i + 1}`}
+                  >
+                    ×
                   </span>
-                </div>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  className="absolute right-0.5 top-0.5 flex items-center justify-center rounded"
-                  style={{
-                    width: 16, height: 16,
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#475569',
-                    cursor: 'pointer',
-                    fontSize: '0.7rem',
-                    lineHeight: 1,
-                  }}
-                  onClick={(e) => { e.stopPropagation(); onSlotClear(i); }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onSlotClear(i);
-                    }
-                  }}
-                  aria-label={`Clear slot ${i + 1}`}
-                >
-                  ×
-                </span>
-              </>
-            ) : (
-              <>
-                <span
-                  className="absolute left-1 top-0.5"
-                  style={{ color: '#1e293b', fontSize: '0.6rem' }}
-                >
-                  {i + 1}
-                </span>
-                <span style={{ color: '#2a2535', fontSize: '1.1rem' }}>+</span>
-                {isTutorial && <span className="tutorial-tooltip" style={{ top: -24, left: -4 }}>CLICK TO ADD ORDER</span>}
-              </>
-            )}
-          </button>
-        );
-      })}
-
-      {/* Spacer */}
-      <div className="flex-1" />
+                </>
+              ) : (
+                <>
+                  <span
+                    className="absolute left-1 top-0.5"
+                    style={{ color: '#1e293b', fontSize: '0.6rem' }}
+                  >
+                    {i + 1}
+                  </span>
+                  <span style={{ color: '#2a2535', fontSize: '1.1rem' }}>+</span>
+                  {isTutorial && <span className="tutorial-tooltip" style={{ top: -24, left: -4 }}>CLICK TO ADD ORDER</span>}
+                </>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
       {/* Lock-In button */}
       <button

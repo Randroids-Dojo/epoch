@@ -1661,33 +1661,33 @@ export default function GameView() {
             </div>
           </div>
         )}
-      </div>
 
-      {/* Global command tray — shown only during planning */}
-      {gameState.phase === 'planning' && !isExecuting && !showSetup && !epochStatsPopup && !pendingBonusCard && (
-        <CommandTray
-          globalCommands={gameState.players.player.globalCommands}
-          selectedGlobalSlot={
-            mode.kind === 'global_picker_open' || mode.kind === 'train_picker'
-              ? mode.slotIndex
-              : null
-          }
-          lockedIn={lockedIn || paused}
-          lockInFlash={lockInFlash}
-          isMobile={isMobile}
-          forkMode={timelineForkActive}
-          tutorialHighlightLockIn={
-            tutorialStep === 'lock_in' ||
-            tutorialStep === 'extractor_lock_in' ||
-            tutorialStep === 'train_lock_in' ||
-            tutorialStep === 'gather_lock_in'
-          }
-          tutorialHighlightSlot={tutorialStep === 'train_select_slot' || tutorialStep === 'extractor_train_select_slot'}
-          onSlotClick={handleGlobalSlotClick}
-          onSlotClear={handleGlobalSlotClear}
-          onLockIn={handleLockIn}
-        />
-      )}
+        {/* Global command tray — bottom-right, aligned with unit cards */}
+        {gameState.phase === 'planning' && !isExecuting && !showSetup && !epochStatsPopup && !pendingBonusCard && (
+          <CommandTray
+            globalCommands={gameState.players.player.globalCommands}
+            selectedGlobalSlot={
+              mode.kind === 'global_picker_open' || mode.kind === 'train_picker'
+                ? mode.slotIndex
+                : null
+            }
+            lockedIn={lockedIn || paused}
+            lockInFlash={lockInFlash}
+            isMobile={isMobile}
+            forkMode={timelineForkActive}
+            tutorialHighlightLockIn={
+              tutorialStep === 'lock_in' ||
+              tutorialStep === 'extractor_lock_in' ||
+              tutorialStep === 'train_lock_in' ||
+              tutorialStep === 'gather_lock_in'
+            }
+            tutorialHighlightSlot={tutorialStep === 'train_select_slot' || tutorialStep === 'extractor_train_select_slot'}
+            onSlotClick={handleGlobalSlotClick}
+            onSlotClear={handleGlobalSlotClear}
+            onLockIn={handleLockIn}
+          />
+        )}
+      </div>
     </div>
   );
 }
