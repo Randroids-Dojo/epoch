@@ -5,7 +5,7 @@ import { GameState } from '@/engine/state';
 import { Unit, effectiveMaxHp } from '@/engine/units';
 import { UnitCommand } from '@/engine/commands';
 import { InteractionMode } from '@/lib/types';
-import { DEAD_ZONE } from '@/lib/constants';
+import { DEAD_ZONE, UNIT_PANEL_WIDTH } from '@/lib/constants';
 
 interface UnitActionPanelProps {
   gameState: GameState;
@@ -130,7 +130,7 @@ export default function UnitActionPanel({
       className="absolute left-0 overflow-y-auto font-mono"
       style={{
         bottom: DEAD_ZONE.BOTTOM,
-        width: 180,
+        width: UNIT_PANEL_WIDTH,
         zIndex: 30,
         display: 'flex',
         flexDirection: 'column-reverse',
