@@ -1548,9 +1548,8 @@ export default function GameView() {
         )}
 
         {/* Execution overlay */}
-        {isExecuting && animationRef.current && (
+        {isExecuting && (
           <ExecutionOverlay
-            animation={animationRef.current}
             elapsed={animElapsed}
             actionBeats={actionBeats}
             onSkip={handleSkip}

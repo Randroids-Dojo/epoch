@@ -5,7 +5,7 @@ import {
   getCurrentPhase,
   getPhaseProgress,
   categorizeLogEntry,
-  getVisibleLogEntries,
+
   UnitSnapshot,
   StructSnapshot,
   PHASE_MOVE,
@@ -225,26 +225,3 @@ describe('categorizeLogEntry', () => {
   });
 });
 
-describe('getVisibleLogEntries', () => {
-  const log = [
-    'player pulse_sentry is defending',
-    'player drone → (1,0)',
-    'player arc_ranger attacks ai drone for 8',
-    'player began building Crystal Extractor',
-  ];
-
-  it('shows only defend entries during defend phase', () => {
-    const visible = getVisibleLogEntries(log, 0.2);
-    expect(visible).toEqual([log[0]]);
-  });
-
-  it('shows defend + move entries during move phase', () => {
-    const visible = getVisibleLogEntries(log, 1.0);
-    expect(visible).toEqual([log[0], log[1]]);
-  });
-
-  it('shows all entries after animation', () => {
-    const visible = getVisibleLogEntries(log, TOTAL_DURATION + 1);
-    expect(visible).toEqual(log);
-  });
-});

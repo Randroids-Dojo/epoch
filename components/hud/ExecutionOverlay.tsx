@@ -1,11 +1,10 @@
 'use client';
 
-import { ExecutionAnimation, getCurrentPhase } from '@/renderer/animation';
+import { getCurrentPhase } from '@/renderer/animation';
 import { ActionBeat, getSequenceCameraTarget } from '@/renderer/actionSequence';
 import { DEAD_ZONE } from '@/lib/constants';
 
 interface ExecutionOverlayProps {
-  animation: ExecutionAnimation;
   elapsed: number;
   actionBeats?: ActionBeat[] | null;
   onSkip(): void;
@@ -20,7 +19,6 @@ const PHASE_LABELS: Record<string, string> = {
 };
 
 export default function ExecutionOverlay({
-  animation,
   elapsed,
   actionBeats,
   onSkip,
