@@ -81,6 +81,9 @@ export default function DifficultyHelpButton({ labels }: DifficultyHelpButtonPro
             <div className="mt-4 text-xs" style={{ color: '#475569' }}>
               Difficulty only affects the AI opponent. Your options stay the same across all levels.
             </div>
+            <div className="mt-2 text-xs" style={{ color: '#475569' }}>
+              Difficulties unlock progressively. Beat the current highest difficulty to unlock the next one. Your progress is saved automatically.
+            </div>
           </div>
         </div>
       )}
