@@ -20,25 +20,32 @@ interface CommandTrayProps {
   onLockIn(): void;
 }
 
-const TYPE_CODE: Record<string, string> = {
-  train:          'TR',
-  research:       'RS',
-  temporal:       'TM',
-  chrono_shift:   'SH',
-  epoch_anchor:   'AN',
-  timeline_fork:  'FK',
-  chrono_scout:   'SC',
+/** Compact icon per unit type (matches canvas shapes) */
+const UNIT_ICON: Record<string, string> = {
+  drone:           '●',
+  pulse_sentry:    '▦',
+  arc_ranger:      '◆',
+  phase_walker:    '▲',
+  temporal_warden: '⬡',
+  void_striker:    '⬢',
+  flux_weaver:     '✶',
+  chrono_titan:    '◉',
 };
 
-function cmdLabel(cmd: GlobalCommand): string {
-  switch (cmd.type) {
-    case 'train':        return `${cmd.unitType}@${cmd.structureId.slice(-3)}`;
-    case 'research':     return 'TECH';
-    case 'temporal':     return 'ECHO';
-    case 'epoch_anchor': return cmd.action === 'set' ? 'ANCHOR' : 'RECALL';
-    case 'timeline_fork': return 'FORK';
-    case 'chrono_scout': return 'SCOUT';
-  }
+/** Compact icon per global command type */
+const CMD_ICON: Record<string, string> = {
+  train:          '⚙',
+  research:       '⬆',
+  temporal:       '⏳',
+  chrono_shift:   '↯',
+  epoch_anchor:   '⚓',
+  timeline_fork:  '⑂',
+  chrono_scout:   '👁',
+};
+
+function cmdIcon(cmd: GlobalCommand): string {
+  if (cmd.type === 'train') return UNIT_ICON[cmd.unitType] ?? '?';
+  return CMD_ICON[cmd.type] ?? '?';
 }
 
 export default function CommandTray({
@@ -96,30 +103,25 @@ export default function CommandTray({
               {cmd ? (
                 <>
                   <span
-                    className="absolute left-1 top-0.5"
-                    style={{ color: '#2a2535', fontSize: '0.6rem' }}
+                    className="absolute left-0.5 top-0"
+                    style={{ color: '#475569', fontSize: '0.5rem', lineHeight: 1 }}
                   >
                     {i + 1}
                   </span>
-                  <div className="flex flex-col items-center gap-0.5">
-                    <span style={{ color: '#e63946', fontWeight: 700 }}>
-                      {TYPE_CODE[cmd.type] ?? cmd.type.slice(0, 2).toUpperCase()}
-                    </span>
-                    <span style={{ color: '#64748b', fontSize: '0.6rem' }}>
-                      {cmdLabel(cmd)}
-                    </span>
-                  </div>
+                  <span style={{ fontSize: '1.2rem', lineHeight: 1 }} aria-label={cmd.type}>
+                    {cmdIcon(cmd)}
+                  </span>
                   <span
                     role="button"
                     tabIndex={0}
-                    className="absolute right-0.5 top-0.5 flex items-center justify-center rounded"
+                    className="absolute right-0 top-0 flex items-center justify-center"
                     style={{
-                      width: 16, height: 16,
+                      width: 14, height: 14,
                       background: 'transparent',
                       border: 'none',
                       color: '#475569',
                       cursor: 'pointer',
-                      fontSize: '0.7rem',
+                      fontSize: '0.65rem',
                       lineHeight: 1,
                     }}
                     onClick={(e) => { e.stopPropagation(); onSlotClear(i); }}
