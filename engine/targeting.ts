@@ -81,12 +81,16 @@ export function computeEligibleHexes(
   }
 
   for (const [key, cell] of state.map.cells) {
-    if (cell.fog === 'unexplored') continue;
-
     switch (type) {
       case 'phase_surge':
       case 'move':
-        // All passable visible/explored hexes not occupied by own units, structures, or resource terrain.
+        // Unexplored hexes are valid move targets — the unit will adapt
+        // its path during resolution if the terrain turns out impassable.
+        if (cell.fog === 'unexplored') {
+          eligible.add(key);
+          break;
+        }
+        // Visible/explored hexes: must be passable, not resource terrain, not occupied.
         if (!TERRAIN[cell.terrain].passable) continue;
         if (cell.terrain === 'crystal_node' || cell.terrain === 'flux_vent') continue;
         if (unitOwnerByHex.get(key) === 'player') continue;
