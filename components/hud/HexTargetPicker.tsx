@@ -158,6 +158,9 @@ export default function HexTargetPicker({
             const isFog = fogKeys?.has(key) ?? false;
             const isBlocked = !isUnit && !isEligible;
 
+            // Blocked fog hexes have no visual purpose or interaction — skip them.
+            if (isBlocked && isFog) return null;
+
             if (isUnit) {
               fill = '#e6394620';
               stroke = '#e63946';
@@ -202,7 +205,7 @@ export default function HexTargetPicker({
                     if (isEligible) (e.target as SVGPolygonElement).setAttribute('fill', fill);
                   }}
                 />
-                {isBlocked && !isFog && (
+                {isBlocked && (
                   <g opacity={0.5}>
                     <line x1={cx - xSize} y1={cy - xSize} x2={cx + xSize} y2={cy + xSize} stroke="#ff4060" strokeWidth={1.5} strokeLinecap="round" />
                     <line x1={cx + xSize} y1={cy - xSize} x2={cx - xSize} y2={cy + xSize} stroke="#ff4060" strokeWidth={1.5} strokeLinecap="round" />
