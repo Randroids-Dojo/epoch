@@ -163,12 +163,12 @@ export default function HexTargetPicker({
               stroke = '#e63946';
               opacity = 1;
             } else if (isEligible && isFog) {
-              // Fog-of-war target: dim blue-grey tint
-              fill = '#1a1a2e';
-              stroke = '#3a3a5c';
-              hoverFill = '#2a2a4e';
+              // Fog-of-war target: muted purple tint
+              fill = '#2d1b4e';
+              stroke = '#7c3aed80';
+              hoverFill = '#4c1d9550';
               cursor = 'pointer';
-              opacity = 0.7;
+              opacity = 0.85;
             } else if (isEligible && isImmediate) {
               fill = '#e6394610';
               stroke = '#e6394680';
@@ -202,7 +202,7 @@ export default function HexTargetPicker({
                     if (isEligible) (e.target as SVGPolygonElement).setAttribute('fill', fill);
                   }}
                 />
-                {isBlocked && (
+                {isBlocked && !isFog && (
                   <g opacity={0.5}>
                     <line x1={cx - xSize} y1={cy - xSize} x2={cx + xSize} y2={cy + xSize} stroke="#ff4060" strokeWidth={1.5} strokeLinecap="round" />
                     <line x1={cx + xSize} y1={cy - xSize} x2={cx - xSize} y2={cy + xSize} stroke="#ff4060" strokeWidth={1.5} strokeLinecap="round" />
