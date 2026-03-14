@@ -1253,6 +1253,16 @@ export default function GameView() {
   // Stable set of map hex keys for the HexTargetPicker (map never changes during gameplay).
   const mapKeys = useMemo(() => new Set(gameState.map.cells.keys()), [gameState.map]);
 
+  // Set of hex keys currently in fog (unexplored), updated each render for the picker.
+  const fogKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const [key, cell] of gameState.map.cells) {
+      if (cell.fog === 'unexplored') keys.add(key);
+    }
+    return keys;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fog changes each epoch as units explore
+  }, [gameState.map, gameState.epoch]);
+
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden">
       {/* Epoch stats comparison popup — shown after each epoch resolves */}
@@ -1504,6 +1514,7 @@ export default function GameView() {
             <HexTargetPicker
               unitHex={unitForPicker.hex}
               mapKeys={mapKeys}
+              fogKeys={fogKeys}
               eligibleKeys={mode.eligibleKeys}
               immediateKeys={mode.immediateKeys}
               header={mode.commandType === 'move' ? 'MOVE TARGET' : 'ATTACK TARGET'}
@@ -1521,6 +1532,7 @@ export default function GameView() {
             <HexTargetPicker
               unitHex={unitForPicker.hex}
               mapKeys={mapKeys}
+              fogKeys={fogKeys}
               eligibleKeys={mode.eligibleKeys}
               header="BUILD LOCATION"
               maxWidth={isMobile ? window.innerWidth - 8 : undefined}

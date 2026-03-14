@@ -29,6 +29,8 @@ interface HexTargetPickerProps {
   unitHex: Hex;
   /** Set of all hex keys on the map. */
   mapKeys: ReadonlySet<string>;
+  /** Set of hex keys currently in fog of war (unexplored). */
+  fogKeys?: ReadonlySet<string>;
   /** Set of hex keys that are valid targets (eligible & in range). */
   eligibleKeys: Set<string>;
   /** Subset of eligibleKeys reachable within a single epoch (move only). */
@@ -49,6 +51,7 @@ interface HexTargetPickerProps {
 export default function HexTargetPicker({
   unitHex,
   mapKeys,
+  fogKeys,
   eligibleKeys,
   immediateKeys,
   header,
@@ -152,12 +155,20 @@ export default function HexTargetPicker({
             let cursor = 'default';
             let opacity = 0.85;
             const isImmediate = !immediateKeys || immediateKeys.has(key);
+            const isFog = fogKeys?.has(key) ?? false;
             const isBlocked = !isUnit && !isEligible;
 
             if (isUnit) {
               fill = '#e6394620';
               stroke = '#e63946';
               opacity = 1;
+            } else if (isEligible && isFog) {
+              // Fog-of-war target: dim blue-grey tint
+              fill = '#1a1a2e';
+              stroke = '#3a3a5c';
+              hoverFill = '#2a2a4e';
+              cursor = 'pointer';
+              opacity = 0.7;
             } else if (isEligible && isImmediate) {
               fill = '#e6394610';
               stroke = '#e6394680';
