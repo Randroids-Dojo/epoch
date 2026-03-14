@@ -26,7 +26,7 @@ import {
 import { generateAICommands } from '@/engine/ai';
 import { isComplete, STRUCTURE_DEFS } from '@/engine/structures';
 import { PlayerId } from '@/engine/player';
-import { COLORS, DEAD_ZONE, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
+import { COLORS, DEAD_ZONE, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT, UNIT_PANEL_WIDTH } from '@/lib/constants';
 import { InteractionMode, TutorialStep } from '@/lib/types';
 import { Unit, UNIT_DEFS, effectiveAttack } from '@/engine/units';
 import { findUnitAt } from '@/engine/state';
@@ -1297,7 +1297,10 @@ export default function GameView() {
       )}
 
       {/* Canvas area fills remaining space */}
-      <div className="relative min-h-0 flex-1">
+      <div
+        className="relative min-h-0 flex-1"
+        style={isMobile && showPlanningHud ? { paddingLeft: UNIT_PANEL_WIDTH } : undefined}
+      >
         <GameCanvas
           gameState={gameState}
           mode={mode}

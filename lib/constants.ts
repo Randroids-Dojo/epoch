@@ -19,6 +19,9 @@ export const SLOT_LAYOUT = {
 
 export const MOBILE_BREAKPOINT_PX = 480
 
+/** Width of the unit action panel (left sidebar) in pixels. */
+export const UNIT_PANEL_WIDTH = 180
+
 /** Safe-area offsets to avoid hard-to-reach phone edges. */
 export const DEAD_ZONE = {
   TOP: 32,
