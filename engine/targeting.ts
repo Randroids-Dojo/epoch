@@ -129,9 +129,14 @@ export function computeEligibleBuildHexes(
   for (const structure of state.structures.values()) occupied.add(hexKey(structure.hex));
 
   for (const [key, cell] of state.map.cells) {
-    if (cell.fog === 'unexplored') continue;
-    if (!TERRAIN[cell.terrain].passable) continue;
     if (occupied.has(key)) continue;
+    // Allow unexplored hexes — the drone will move there and explore as it goes.
+    // If terrain turns out impassable, the build order will be cancelled during resolution.
+    if (cell.fog === 'unexplored') {
+      eligible.add(key);
+      continue;
+    }
+    if (!TERRAIN[cell.terrain].passable) continue;
     eligible.add(key);
   }
 

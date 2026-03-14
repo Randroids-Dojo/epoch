@@ -110,14 +110,16 @@ describe('computeEligibleHexes', () => {
 
 
 
-  it('build: returns passable explored/visible unoccupied hexes', () => {
+  it('build: returns passable or unexplored unoccupied hexes', () => {
     const state = createInitialState(1);
     const result = computeEligibleBuildHexes(state);
 
     for (const key of result) {
       const cell = state.map.cells.get(key)!;
-      expect(cell.fog).not.toBe('unexplored');
-      expect(TERRAIN[cell.terrain].passable).toBe(true);
+      // Unexplored hexes are valid build targets (drone will move there over multiple turns).
+      if (cell.fog !== 'unexplored') {
+        expect(TERRAIN[cell.terrain].passable).toBe(true);
+      }
 
       for (const unit of state.units.values()) {
         expect(hexKey(unit.hex)).not.toBe(key);
