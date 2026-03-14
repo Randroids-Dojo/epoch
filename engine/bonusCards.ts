@@ -242,6 +242,7 @@ export function applyBonusCard(
             bonusAttack: 0,
             attackTargetHex: null,
             moveTargetHex: null,
+            pendingBuild: null,
           });
           spawned++;
         }

@@ -669,19 +669,25 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
     const player = state.players[owner];
     const def    = STRUCTURE_DEFS[command.structureType];
 
+    // Helper: cancel pending build on validation failure so the drone stops retrying.
+    const failBuild = (reason: string) => {
+      log.push(`${owner} Build ${command.structureType} failed — ${reason}`);
+      drone.pendingBuild = null;
+    };
+
     // Tech tier check.
     if (def.techTierRequired > player.techTier) {
-      log.push(`${owner} Build ${command.structureType} failed — requires Tech Tier ${def.techTierRequired}`);
+      failBuild(`requires Tech Tier ${def.techTierRequired}`);
       continue;
     }
     // CC cost check.
     if (player.resources.cc < def.costCC) {
-      log.push(`${owner} Build ${command.structureType} failed — insufficient CC`);
+      failBuild('insufficient CC');
       continue;
     }
     // FX cost check.
     if (player.resources.fx < def.costFX) {
-      log.push(`${owner} Build ${command.structureType} failed — insufficient FX`);
+      failBuild('insufficient FX');
       continue;
     }
     // Hex must be empty (no unit, no structure).
@@ -689,19 +695,19 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
       findUnitAt(state, command.targetHex) !== undefined ||
       findStructureAt(state, command.targetHex) !== undefined;
     if (hexOccupied) {
-      log.push(`${owner} Build ${command.structureType} failed — hex occupied`);
+      failBuild('hex occupied');
       continue;
     }
     // Hex must be on the map and passable.
     const cell = state.map.cells.get(hexKey(command.targetHex));
     if (!cell || !TERRAIN[cell.terrain].passable) {
-      log.push(`${owner} Build ${command.structureType} failed — impassable hex`);
+      failBuild('impassable hex');
       continue;
     }
     // Crystal Extractor must be on a Crystal Node.
     if (command.structureType === 'crystal_extractor') {
       if (cell.terrain !== 'crystal_node') {
-        log.push(`${owner} Build crystal_extractor failed — must be on a Crystal Node`);
+        failBuild('must be on a Crystal Node');
         continue;
       }
     }
@@ -713,45 +719,30 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
         return nbCell?.terrain === 'flux_vent';
       });
       if (!onVent && !adjToVent) {
-        log.push(`${owner} Build flux_conduit failed — must be on or adjacent to a Flux Vent`);
+        failBuild('must be on or adjacent to a Flux Vent');
         continue;
       }
     }
     // All other structures may NOT be placed on harvesting terrain.
     if (command.structureType !== 'crystal_extractor' && command.structureType !== 'flux_conduit') {
       if (cell.terrain === 'crystal_node' || cell.terrain === 'flux_vent') {
-        log.push(`${owner} Build ${command.structureType} failed — cannot build on resource terrain`);
+        failBuild('cannot build on resource terrain');
         continue;
       }
     }
 
-    player.resources.cc -= def.costCC;
-    player.resources.fx -= def.costFX;
-
-    // Move the drone adjacent to the build site when building at range > 1.
+    // Drone must be adjacent (≤1 hex) to the build site. If too far,
+    // set a pending build order so the drone walks there over multiple epochs.
     const dist = hexDistance(drone.hex, command.targetHex);
     if (dist > 1) {
-      // Pick the neighbor of the target hex closest to the drone's current position.
-      const neighbors = hexNeighbors(command.targetHex);
-      let bestHex = drone.hex;
-      let bestDist = Infinity;
-      for (const nb of neighbors) {
-        const d = hexDistance(drone.hex, nb);
-        const nbKey = hexKey(nb);
-        const cell2 = state.map.cells.get(nbKey);
-        if (!cell2 || !TERRAIN[cell2.terrain].passable) continue;
-        if (findUnitAt(state, nb)) continue;
-        if (findStructureAt(state, nb)) continue;
-        if (d < bestDist) {
-          bestDist = d;
-          bestHex = nb;
-        }
-      }
-      if (!hexEqual(bestHex, drone.hex)) {
-        drone.hex = bestHex;
-        log.push(`${owner} Drone moved to (${bestHex.q},${bestHex.r}) for build`);
-      }
+      drone.pendingBuild = { targetHex: { ...command.targetHex }, structureType: command.structureType };
+      drone.moveTargetHex = { ...command.targetHex };
+      log.push(`${owner} Drone heading to (${command.targetHex.q},${command.targetHex.r}) for ${def.label}`);
+      continue;
     }
+
+    player.resources.cc -= def.costCC;
+    player.resources.fx -= def.costFX;
 
     const id = newId('s');
     state.structures.set(id, {
@@ -763,6 +754,7 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
       buildProgress: def.buildEpochs,
       assignedDroneId: null,
     });
+    drone.pendingBuild = null;
     log.push(`${owner} began building ${def.label}`);
   }
 }
@@ -955,6 +947,7 @@ function stepTrain(state: GameState, commands: CommandEntry[], log: string[]): v
       bonusAttack:         0,
       attackTargetHex:     null,
       moveTargetHex:       null,
+      pendingBuild:        null,
     });
     log.push(`${owner} trained ${unitDef.label}`);
   }
@@ -1111,6 +1104,26 @@ function stepPostResolution(state: GameState, commands: CommandEntry[]): void {
           p.defaultOrderUnitIds.add(unit.id);
           continue;
         }
+      }
+
+      // Build: drones with a pending build order walk to the site, then build.
+      if (unit.type === 'drone' && unit.pendingBuild) {
+        const buildDist = hexDistance(unit.hex, unit.pendingBuild.targetHex);
+        if (buildDist <= 1) {
+          // Arrived — queue the build command for next epoch.
+          p.unitOrders.set(unit.id, {
+            type: 'build',
+            unitId: unit.id,
+            targetHex: unit.pendingBuild.targetHex,
+            structureType: unit.pendingBuild.structureType,
+          });
+          p.defaultOrderUnitIds.add(unit.id);
+        } else {
+          // Still en route — keep walking.
+          p.unitOrders.set(unit.id, { type: 'move', unitId: unit.id, targetHex: unit.pendingBuild.targetHex });
+          p.defaultOrderUnitIds.add(unit.id);
+        }
+        continue;
       }
 
       // Attack: units with a persistent attack target (if enemy still exists there).

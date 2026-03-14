@@ -197,6 +197,7 @@ export function createInitialState(seed?: number, difficulty: AIDifficulty = 'ad
       bonusAttack:         0,
       attackTargetHex:     null,
       moveTargetHex:       null,
+      pendingBuild:        null,
     });
   }
 
