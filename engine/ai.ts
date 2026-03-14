@@ -284,7 +284,7 @@ function generateCandidates(
     (s) => isHarvestable(s) && isComplete(s) && !s.assignedDroneId,
   );
   const idleDrones = aiUnits.filter(
-    (u) => u.type === 'drone' && !u.assignedExtractorId,
+    (u) => u.type === 'drone' && !u.assignedExtractorId && !u.pendingBuild,
   );
   {
     const availableDrones = idleDrones.slice(reservedForBuilds);
@@ -730,6 +730,14 @@ export function generateAICommands(state: GameState): void {
     budgetTE -= cand.costTE;
     for (const id of cand.unitIds) assignedUnits.add(id);
     if (cand.buildHexKey) plannedBuildHexes.add(cand.buildHexKey);
+  }
+
+  // Preserve default orders (e.g. pending-build movement) for units the AI
+  // didn't explicitly assign this epoch.
+  for (const [uid, order] of ai.unitOrders) {
+    if (!unitOrders.has(uid)) {
+      unitOrders.set(uid, order);
+    }
   }
 
   state.players.ai.unitOrders = unitOrders;
