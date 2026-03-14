@@ -194,22 +194,23 @@ export function computeUnitPhaseSurgeTargets(
   return inRange;
 }
 
-/** Eligible build hexes near a drone (within its speed radius), filtered by structure-specific terrain rules. */
+/** Eligible build hexes anywhere on the map, filtered by structure-specific terrain rules.
+ *  The drone will move to the build location over multiple turns if needed. */
 export function computeUnitBuildTargets(
   state: GameState,
   unit: Unit,
   structureType?: StructureType,
 ): Set<string> {
-  const range = UNIT_DEFS[unit.type].speed;
   const allEligible = computeEligibleBuildHexes(state);
-  const inRange = new Set<string>();
-  for (const hex of hexesInRange(unit.hex, range)) {
-    const key = hexKey(hex);
-    if (!allEligible.has(key)) continue;
-    if (structureType && !isValidBuildTerrain(state, hex, structureType)) continue;
-    inRange.add(key);
+  if (!structureType) return allEligible;
+  const filtered = new Set<string>();
+  for (const key of allEligible) {
+    const cell = state.map.cells.get(key);
+    if (cell && isValidBuildTerrain(state, cell.hex, structureType)) {
+      filtered.add(key);
+    }
   }
-  return inRange;
+  return filtered;
 }
 
 /** Checks structure-specific terrain placement rules. */
