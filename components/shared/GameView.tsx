@@ -900,8 +900,8 @@ export default function GameView() {
       }
 
       if (type === 'move') {
-        const eligibleKeys = computeUnitMoveTargets(state, unit);
-        setMode({ kind: 'targeting', unitId, commandType: 'move', eligibleKeys });
+        const { allKeys, immediateKeys } = computeUnitMoveTargets(state, unit);
+        setMode({ kind: 'targeting', unitId, commandType: 'move', eligibleKeys: allKeys, immediateKeys });
         return;
       }
 
@@ -1502,10 +1502,11 @@ export default function GameView() {
             <HexTargetPicker
               unitHex={unitForPicker.hex}
               radius={mode.commandType === 'move'
-                ? UNIT_DEFS[unitForPicker.type].speed
+                ? UNIT_DEFS[unitForPicker.type].speed * 3
                 : UNIT_DEFS[unitForPicker.type].speed + UNIT_DEFS[unitForPicker.type].range
               }
               eligibleKeys={mode.eligibleKeys}
+              immediateKeys={mode.immediateKeys}
               header={mode.commandType === 'move' ? 'MOVE TARGET' : 'ATTACK TARGET'}
               onSelect={handleHexTargetSelect}
               onClose={() => setMode({ kind: 'idle' })}

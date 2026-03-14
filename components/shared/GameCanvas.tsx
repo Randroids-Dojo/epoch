@@ -239,7 +239,8 @@ export default function GameCanvas({
 
     // ── Targeting overlay ────────────────────────────────────────────────────
     if (m.kind === 'targeting' || m.kind === 'build_targeting') {
-      drawTargetingOverlay(ctx, map.cells, m.eligibleKeys, cam);
+      const immediateKeys = (m.kind === 'targeting' && m.immediateKeys) ? m.immediateKeys : undefined;
+      drawTargetingOverlay(ctx, map.cells, m.eligibleKeys, cam, immediateKeys);
 
       // Draw range borders on the real board matching the HexTargetPicker area.
       const targetUnit = gs.units.get(m.unitId);

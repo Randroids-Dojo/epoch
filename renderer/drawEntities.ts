@@ -957,7 +957,8 @@ export function drawStructures(
 
 /**
  * Draw hex targeting overlay.
- * Eligible hexes: crimson tint.
+ * Immediate-range eligible hexes: crimson tint.
+ * Multi-turn eligible hexes (move only): amber tint.
  * Non-eligible passable hexes: dark dimming overlay.
  */
 export function drawTargetingOverlay(
@@ -965,6 +966,7 @@ export function drawTargetingOverlay(
   cells: Map<string, HexCell>,
   eligibleKeys: Set<string>,
   cam: Camera,
+  immediateKeys?: Set<string>,
 ): void {
   const size = BASE_HEX_SIZE * cam.zoom;
 
@@ -982,7 +984,13 @@ export function drawTargetingOverlay(
 
     hexPath(ctx, sx, sy, size);
 
-    ctx.fillStyle = isEligible ? 'rgba(230,57,70,0.22)' : 'rgba(0,0,0,0.30)';
+    if (isEligible) {
+      const isImmediate = !immediateKeys || immediateKeys.has(key);
+      // Crimson for single-turn targets, amber for multi-turn
+      ctx.fillStyle = isImmediate ? 'rgba(230,57,70,0.22)' : 'rgba(245,158,11,0.15)';
+    } else {
+      ctx.fillStyle = 'rgba(0,0,0,0.30)';
+    }
     ctx.fill();
   }
 }

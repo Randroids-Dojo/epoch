@@ -140,19 +140,27 @@ export function computeEligibleBuildHexes(
 
 // ── Range-limited targeting for in-panel pickers ─────────────────────────────
 
-/** Eligible hexes within a unit's movement range (speed). */
+/** Result of computing move targets, split into immediate (this epoch) and extended (multi-turn). */
+export interface MoveTargetResult {
+  /** All eligible hexes (both immediate and multi-turn). */
+  allKeys: Set<string>;
+  /** Hexes reachable within a single epoch (within unit speed). */
+  immediateKeys: Set<string>;
+}
+
+/** Eligible hexes for movement, split into immediate and multi-turn targets. */
 export function computeUnitMoveTargets(
   state: GameState,
   unit: Unit,
-): Set<string> {
+): MoveTargetResult {
   const range = UNIT_DEFS[unit.type].speed;
   const allEligible = computeEligibleHexes(state, 'move');
-  const inRange = new Set<string>();
+  const immediateKeys = new Set<string>();
   for (const hex of hexesInRange(unit.hex, range)) {
     const key = hexKey(hex);
-    if (allEligible.has(key)) inRange.add(key);
+    if (allEligible.has(key)) immediateKeys.add(key);
   }
-  return inRange;
+  return { allKeys: allEligible, immediateKeys };
 }
 
 /** Eligible hexes within a unit's attack range from its current position. */

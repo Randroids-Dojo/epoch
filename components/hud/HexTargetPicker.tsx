@@ -31,6 +31,8 @@ interface HexTargetPickerProps {
   radius: number;
   /** Set of hex keys that are valid targets (eligible & in range). */
   eligibleKeys: Set<string>;
+  /** Subset of eligibleKeys reachable within a single epoch (move only). */
+  immediateKeys?: Set<string>;
   /** Header label shown at the top. */
   header: string;
   /** Called when the player picks a target hex. */
@@ -45,6 +47,7 @@ export default function HexTargetPicker({
   unitHex,
   radius,
   eligibleKeys,
+  immediateKeys,
   header,
   onSelect,
   onClose,
@@ -125,17 +128,26 @@ export default function HexTargetPicker({
 
             let fill = '#2a1520';
             let stroke = '#6b2030';
+            let hoverFill = '#e6394630';
             let cursor = 'default';
             let opacity = 0.85;
+            const isImmediate = !immediateKeys || immediateKeys.has(key);
             const isBlocked = !isCenter && !isEligible;
 
             if (isCenter) {
               fill = '#e6394620';
               stroke = '#e63946';
               opacity = 1;
-            } else if (isEligible) {
+            } else if (isEligible && isImmediate) {
               fill = '#e6394610';
               stroke = '#e6394680';
+              cursor = 'pointer';
+              opacity = 1;
+            } else if (isEligible && !isImmediate) {
+              // Multi-turn target: amber tint
+              fill = '#f59e0b10';
+              stroke = '#f59e0b60';
+              hoverFill = '#f59e0b30';
               cursor = 'pointer';
               opacity = 1;
             }
@@ -153,7 +165,7 @@ export default function HexTargetPicker({
                   style={{ cursor, transition: 'fill 0.1s ease' }}
                   onClick={isEligible ? () => onSelect(worldHex) : undefined}
                   onMouseEnter={(e) => {
-                    if (isEligible) (e.target as SVGPolygonElement).setAttribute('fill', '#e6394630');
+                    if (isEligible) (e.target as SVGPolygonElement).setAttribute('fill', hoverFill);
                   }}
                   onMouseLeave={(e) => {
                     if (isEligible) (e.target as SVGPolygonElement).setAttribute('fill', fill);
