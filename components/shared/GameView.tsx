@@ -1250,6 +1250,9 @@ export default function GameView() {
   // Cards now stack from the bottom, so pickers open from the bottom too.
   const unitPickerBottom = 84;
 
+  // Stable set of map hex keys for the HexTargetPicker (map never changes during gameplay).
+  const mapKeys = useMemo(() => new Set(gameState.map.cells.keys()), [gameState.map]);
+
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden">
       {/* Epoch stats comparison popup — shown after each epoch resolves */}
@@ -1500,10 +1503,7 @@ export default function GameView() {
           <div style={{ position: 'absolute', bottom: unitPickerBottom, left: isMobile ? 4 : 188, right: isMobile ? 4 : undefined, zIndex: 100 }}>
             <HexTargetPicker
               unitHex={unitForPicker.hex}
-              radius={mode.commandType === 'move'
-                ? UNIT_DEFS[unitForPicker.type].speed * 3
-                : UNIT_DEFS[unitForPicker.type].speed + UNIT_DEFS[unitForPicker.type].range
-              }
+              mapKeys={mapKeys}
               eligibleKeys={mode.eligibleKeys}
               immediateKeys={mode.immediateKeys}
               header={mode.commandType === 'move' ? 'MOVE TARGET' : 'ATTACK TARGET'}
@@ -1520,7 +1520,7 @@ export default function GameView() {
           <div style={{ position: 'absolute', bottom: unitPickerBottom, left: isMobile ? 4 : 188, right: isMobile ? 4 : undefined, zIndex: 100 }}>
             <HexTargetPicker
               unitHex={unitForPicker.hex}
-              radius={UNIT_DEFS[unitForPicker.type].speed}
+              mapKeys={mapKeys}
               eligibleKeys={mode.eligibleKeys}
               header="BUILD LOCATION"
               maxWidth={isMobile ? window.innerWidth - 8 : undefined}

@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { Hex, hexKey, hexesInRange } from '@/engine/hex';
+import { Hex, hexKey } from '@/engine/hex';
 
 // ── Mini hex layout constants ───────────────────────────────────────────────
 
-const MINI_HEX_SIZE = 14;
+const MINI_HEX_SIZE = 8;
 const SQRT3 = Math.sqrt(3);
 
 function miniHexToPixel(q: number, r: number, size: number): { x: number; y: number } {
@@ -27,8 +27,8 @@ function hexPoints(cx: number, cy: number, size: number): string {
 interface HexTargetPickerProps {
   /** The unit's current hex position. */
   unitHex: Hex;
-  /** Radius of hexes to display (typically unit speed). */
-  radius: number;
+  /** Set of all hex keys on the map. */
+  mapKeys: ReadonlySet<string>;
   /** Set of hex keys that are valid targets (eligible & in range). */
   eligibleKeys: Set<string>;
   /** Subset of eligibleKeys reachable within a single epoch (move only). */
@@ -48,7 +48,7 @@ interface HexTargetPickerProps {
 
 export default function HexTargetPicker({
   unitHex,
-  radius,
+  mapKeys,
   eligibleKeys,
   immediateKeys,
   header,
@@ -57,7 +57,15 @@ export default function HexTargetPicker({
   onSelect,
   onClose,
 }: HexTargetPickerProps) {
-  const hexes = useMemo(() => hexesInRange({ q: 0, r: 0 }, radius), [radius]);
+  // Parse mapKeys into Hex objects for rendering.
+  const hexes = useMemo(() => {
+    const result: Hex[] = [];
+    for (const key of mapKeys) {
+      const [q, r] = key.split(',').map(Number);
+      result.push({ q, r });
+    }
+    return result;
+  }, [mapKeys]);
 
   // Compute bounding box of the hex grid.
   const { width, height, offsetX, offsetY } = useMemo(() => {
@@ -76,6 +84,8 @@ export default function HexTargetPicker({
       offsetY: -minY + 2,
     };
   }, [hexes]);
+
+  const unitKey = hexKey(unitHex);
 
   return (
     <div
@@ -129,9 +139,8 @@ export default function HexTargetPicker({
           viewBox={`0 0 ${width} ${height}`}
         >
           {hexes.map((h) => {
-            const worldHex: Hex = { q: unitHex.q + h.q, r: unitHex.r + h.r };
-            const key = hexKey(worldHex);
-            const isCenter = h.q === 0 && h.r === 0;
+            const key = hexKey(h);
+            const isUnit = key === unitKey;
             const isEligible = eligibleKeys.has(key);
             const p = miniHexToPixel(h.q, h.r, MINI_HEX_SIZE);
             const cx = p.x + offsetX;
@@ -143,9 +152,9 @@ export default function HexTargetPicker({
             let cursor = 'default';
             let opacity = 0.85;
             const isImmediate = !immediateKeys || immediateKeys.has(key);
-            const isBlocked = !isCenter && !isEligible;
+            const isBlocked = !isUnit && !isEligible;
 
-            if (isCenter) {
+            if (isUnit) {
               fill = '#e6394620';
               stroke = '#e63946';
               opacity = 1;
@@ -166,7 +175,7 @@ export default function HexTargetPicker({
             const xSize = MINI_HEX_SIZE * 0.35;
 
             return (
-              <g key={`${h.q},${h.r}`}>
+              <g key={key}>
                 <polygon
                   points={hexPoints(cx, cy, MINI_HEX_SIZE - 1)}
                   fill={fill}
@@ -174,7 +183,7 @@ export default function HexTargetPicker({
                   strokeWidth={1}
                   opacity={opacity}
                   style={{ cursor, transition: 'fill 0.1s ease' }}
-                  onClick={isEligible ? () => onSelect(worldHex) : undefined}
+                  onClick={isEligible ? () => onSelect(h) : undefined}
                   onMouseEnter={(e) => {
                     if (isEligible) (e.target as SVGPolygonElement).setAttribute('fill', hoverFill);
                   }}
