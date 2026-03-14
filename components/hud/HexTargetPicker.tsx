@@ -35,6 +35,9 @@ interface HexTargetPickerProps {
   immediateKeys?: Set<string>;
   /** Header label shown at the top. */
   header: string;
+  /** Max width/height constraints for the picker body (enables scrolling). */
+  maxWidth?: number;
+  maxHeight?: number;
   /** Called when the player picks a target hex. */
   onSelect(hex: Hex): void;
   /** Called to dismiss the picker. */
@@ -49,6 +52,8 @@ export default function HexTargetPicker({
   eligibleKeys,
   immediateKeys,
   header,
+  maxWidth,
+  maxHeight,
   onSelect,
   onClose,
 }: HexTargetPickerProps) {
@@ -111,7 +116,13 @@ export default function HexTargetPicker({
           ✕
         </button>
       </div>
-      <div style={{ padding: 8 }}>
+      <div style={{
+        padding: 8,
+        overflowX: maxWidth ? 'auto' : undefined,
+        overflowY: maxHeight ? 'auto' : undefined,
+        maxWidth: maxWidth ? maxWidth - 2 : undefined,   // account for border
+        maxHeight: maxHeight ? maxHeight - 34 : undefined, // account for header + border
+      }}>
         <svg
           width={width}
           height={height}

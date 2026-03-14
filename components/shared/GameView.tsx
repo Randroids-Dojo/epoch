@@ -1497,7 +1497,7 @@ export default function GameView() {
 
         {/* Hex target picker for move/attack targeting */}
         {mode.kind === 'targeting' && !isExecuting && unitForPicker && (mode.commandType === 'move' || mode.commandType === 'attack') && (
-          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: 188, zIndex: 100 }}>
+          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: isMobile ? 4 : 188, right: isMobile ? 4 : undefined, zIndex: 100 }}>
             <HexTargetPicker
               unitHex={unitForPicker.hex}
               radius={mode.commandType === 'move'
@@ -1507,6 +1507,8 @@ export default function GameView() {
               eligibleKeys={mode.eligibleKeys}
               immediateKeys={mode.immediateKeys}
               header={mode.commandType === 'move' ? 'MOVE TARGET' : 'ATTACK TARGET'}
+              maxWidth={isMobile ? window.innerWidth - 8 : undefined}
+              maxHeight={isMobile ? window.innerHeight * 0.45 : undefined}
               onSelect={handleHexTargetSelect}
               onClose={() => setMode({ kind: 'idle' })}
             />
@@ -1515,12 +1517,14 @@ export default function GameView() {
 
         {/* Hex target picker for build placement */}
         {mode.kind === 'build_targeting' && !isExecuting && unitForPicker && (
-          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: 188, zIndex: 100 }}>
+          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: isMobile ? 4 : 188, right: isMobile ? 4 : undefined, zIndex: 100 }}>
             <HexTargetPicker
               unitHex={unitForPicker.hex}
               radius={UNIT_DEFS[unitForPicker.type].speed}
               eligibleKeys={mode.eligibleKeys}
               header="BUILD LOCATION"
+              maxWidth={isMobile ? window.innerWidth - 8 : undefined}
+              maxHeight={isMobile ? window.innerHeight * 0.45 : undefined}
               onSelect={handleHexTargetSelect}
               onClose={() => setMode({ kind: 'idle' })}
             />
@@ -1529,7 +1533,7 @@ export default function GameView() {
 
         {/* Gather target list picker */}
         {mode.kind === 'gather_picker' && !isExecuting && (
-          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: 188, zIndex: 100 }}>
+          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: isMobile ? 4 : 188, right: isMobile ? 4 : undefined, zIndex: 100 }}>
             <GatherTargetPicker
               targets={mode.targets}
               tutorialHighlight={tutorialStep === 'gather_select_target'}
@@ -1541,7 +1545,7 @@ export default function GameView() {
 
         {/* Merge target picker */}
         {mode.kind === 'merge_picker' && !isExecuting && (
-          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: 188, zIndex: 100 }}>
+          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: isMobile ? 4 : 188, right: isMobile ? 4 : undefined, zIndex: 100 }}>
             <MergeTargetPicker
               targets={mode.targets}
               onConfirm={handleMergeConfirm}
