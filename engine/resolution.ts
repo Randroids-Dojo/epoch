@@ -193,6 +193,12 @@ function stepDefend(state: GameState, commands: CommandEntry[], log: string[]): 
         unit.attackTargetHex = null;
       }
     }
+    if (unit.moveTargetHex) {
+      const order = state.players[unit.owner].unitOrders.get(unit.id);
+      if (order && order.type !== 'move') {
+        unit.moveTargetHex = null;
+      }
+    }
   }
 
   const defends = commands.filter(
@@ -466,6 +472,13 @@ function stepMove(state: GameState, commands: CommandEntry[], log: string[]): vo
       unit.hex = dest;
       blocked.add(hexKey(dest)); // Mark new position occupied for subsequent movers.
       log.push(`${owner} ${unit.type} → (${dest.q},${dest.r})`);
+
+      // Persist move target if unit hasn't arrived yet; clear if it has.
+      if (hexEqual(dest, command.targetHex)) {
+        unit.moveTargetHex = null;
+      } else {
+        unit.moveTargetHex = { ...command.targetHex };
+      }
     } else {
       blocked.add(ownKey); // Unit didn't move; restore its hex in the blocked set.
     }
@@ -554,6 +567,8 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
       : dmg;
 
     unit.hp -= shieldedDmg;
+    // Cancel continuous movement when a unit takes damage.
+    unit.moveTargetHex = null;
     if (unit.hp <= 0) {
       // Chrono Titan on-death: grant damageShield to all nearby friendly units.
       if (unit.type === 'chrono_titan') {
@@ -939,6 +954,7 @@ function stepTrain(state: GameState, commands: CommandEntry[], log: string[]): v
       bonusMaxHp:          0,
       bonusAttack:         0,
       attackTargetHex:     null,
+      moveTargetHex:       null,
     });
     log.push(`${owner} trained ${unitDef.label}`);
   }
@@ -1104,6 +1120,15 @@ function stepPostResolution(state: GameState, commands: CommandEntry[]): void {
       // Don't overwrite an existing order (e.g. a gather order set above).
       if (p.unitOrders.has(unit.id)) continue;
       p.unitOrders.set(unit.id, { type: 'attack', unitId: unit.id, targetHex: unit.attackTargetHex });
+      p.defaultOrderUnitIds.add(unit.id);
+    }
+
+    // Auto-populate move orders for units with a persistent move target.
+    for (const unit of state.units.values()) {
+      if (unit.owner !== pid || !unit.moveTargetHex) continue;
+      // Don't overwrite an existing order (e.g. gather or attack set above).
+      if (p.unitOrders.has(unit.id)) continue;
+      p.unitOrders.set(unit.id, { type: 'move', unitId: unit.id, targetHex: unit.moveTargetHex });
       p.defaultOrderUnitIds.add(unit.id);
     }
   }

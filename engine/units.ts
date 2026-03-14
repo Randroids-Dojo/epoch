@@ -102,6 +102,8 @@ export interface Unit {
   bonusAttack: number;
   /** Hex of the target this unit is continuously attacking, or null if none. */
   attackTargetHex: Hex | null;
+  /** Hex the unit is continuously moving toward across epochs, or null if none. */
+  moveTargetHex: Hex | null;
 }
 
 /** Returns the effective max HP for a unit (base + merge bonus). */

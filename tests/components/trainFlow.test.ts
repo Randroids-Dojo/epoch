@@ -104,7 +104,7 @@ describe('trainFlow helpers', () => {
         hp: 15,
         isDefending: false,
         assignedExtractorId: null,
-        damageShield: false, mergeCount: 0, bonusMaxHp: 0, bonusAttack: 0, attackTargetHex: null,
+        damageShield: false, mergeCount: 0, bonusMaxHp: 0, bonusAttack: 0, attackTargetHex: null, moveTargetHex: null,
       };
       state.units.set(blocker.id, blocker);
     }

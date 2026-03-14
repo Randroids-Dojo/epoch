@@ -241,6 +241,7 @@ export function applyBonusCard(
             bonusMaxHp: 0,
             bonusAttack: 0,
             attackTargetHex: null,
+            moveTargetHex: null,
           });
           spawned++;
         }
