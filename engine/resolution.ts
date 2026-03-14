@@ -183,8 +183,16 @@ function findClosestReachable(
 
 function stepDefend(state: GameState, commands: CommandEntry[], log: string[]): void {
   // Clear defending flags from previous epoch.
+  // Also clear attackTargetHex for units that have been given a non-attack order,
+  // so that manual command changes cancel continuous attacks.
   for (const unit of state.units.values()) {
     unit.isDefending = false;
+    if (unit.attackTargetHex) {
+      const order = state.players[unit.owner].unitOrders.get(unit.id);
+      if (order && order.type !== 'attack') {
+        unit.attackTargetHex = null;
+      }
+    }
   }
 
   const defends = commands.filter(
@@ -499,6 +507,9 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
 
     if (!targetUnit && !targetStruct) continue;
     if (hexDistance(attacker.hex, command.targetHex) > def.range) continue;
+
+    // Persist the attack target so the order auto-repopulates next epoch.
+    attacker.attackTargetHex = { ...command.targetHex };
 
     if (targetUnit) {
       const effAtk = effectiveAttack(attacker);
@@ -927,6 +938,7 @@ function stepTrain(state: GameState, commands: CommandEntry[], log: string[]): v
       mergeCount:          0,
       bonusMaxHp:          0,
       bonusAttack:         0,
+      attackTargetHex:     null,
     });
     log.push(`${owner} trained ${unitDef.label}`);
   }
@@ -1075,6 +1087,23 @@ function stepPostResolution(state: GameState, commands: CommandEntry[]): void {
       const extractor = state.structures.get(unit.assignedExtractorId);
       if (!extractor) continue;
       p.unitOrders.set(unit.id, { type: 'gather', unitId: unit.id, targetHex: extractor.hex });
+      p.defaultOrderUnitIds.add(unit.id);
+    }
+
+    // Auto-populate attack orders for units with a persistent attack target.
+    const foe = opponent(pid);
+    for (const unit of state.units.values()) {
+      if (unit.owner !== pid || !unit.attackTargetHex) continue;
+      // Only persist if an enemy unit or structure still exists at the target hex.
+      const enemyUnit   = findUnitAt(state, unit.attackTargetHex, foe);
+      const enemyStruct = enemyUnit ? undefined : findStructureAt(state, unit.attackTargetHex, foe);
+      if (!enemyUnit && !enemyStruct) {
+        unit.attackTargetHex = null;
+        continue;
+      }
+      // Don't overwrite an existing order (e.g. a gather order set above).
+      if (p.unitOrders.has(unit.id)) continue;
+      p.unitOrders.set(unit.id, { type: 'attack', unitId: unit.id, targetHex: unit.attackTargetHex });
       p.defaultOrderUnitIds.add(unit.id);
     }
   }

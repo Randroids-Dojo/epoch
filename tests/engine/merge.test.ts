@@ -19,6 +19,7 @@ function addUnit(state: GameState, partial: Partial<Unit> & Pick<Unit, 'owner' |
     mergeCount:          0,
     bonusMaxHp:          0,
     bonusAttack:         0,
+    attackTargetHex:     null,
     ...partial,
   };
   state.units.set(unit.id, unit);

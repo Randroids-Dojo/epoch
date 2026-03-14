@@ -240,6 +240,7 @@ export function applyBonusCard(
             mergeCount: 0,
             bonusMaxHp: 0,
             bonusAttack: 0,
+            attackTargetHex: null,
           });
           spawned++;
         }

@@ -100,6 +100,8 @@ export interface Unit {
   bonusMaxHp: number;
   /** Extra attack gained from merges. Effective attack = UNIT_DEFS[type].attack + bonusAttack. */
   bonusAttack: number;
+  /** Hex of the target this unit is continuously attacking, or null if none. */
+  attackTargetHex: Hex | null;
 }
 
 /** Returns the effective max HP for a unit (base + merge bonus). */
