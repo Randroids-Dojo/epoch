@@ -2,6 +2,7 @@ import { test, expect, Page } from '@playwright/test';
 import { hexToPixel, hexDistance } from '@/engine/hex';
 import { BASE_HEX_SIZE } from '@/renderer/drawHex';
 import { DEFAULT_ZOOM } from '@/renderer/camera';
+import { dismissPostEpochPopups } from './helpers';
 
 type Hex = { q: number; r: number };
 
@@ -254,6 +255,8 @@ async function fillEpoch(page: Page): Promise<void> {
 }
 
 async function waitForPlanningOrGameOver(page: Page): Promise<'planning' | 'over'> {
+  // Dismiss epoch stats / bonus card popups that appear between execution and planning
+  await dismissPostEpochPopups(page);
   await page.waitForSelector(
     '[data-testid="command-slot-0"],[data-testid="game-over-overlay"]',
     { timeout: 30_000 },

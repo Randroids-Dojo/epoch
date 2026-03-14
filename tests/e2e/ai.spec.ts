@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { skipSetup, waitForGameReady } from './helpers';
+import { skipSetup, waitForGameReady, dismissPostEpochPopups } from './helpers';
 
 test.beforeEach(async ({ page }) => { await skipSetup(page); });
 
@@ -17,10 +17,11 @@ async function lockInAndWaitForExecution(page: Page): Promise<void> {
   await expect(page.getByTestId('phase-label')).toBeVisible({ timeout: 10000 });
 }
 
-/** Run one full epoch: lock in → execution animation → skip → back to planning. */
+/** Run one full epoch: lock in → execution animation → skip → dismiss popups → back to planning. */
 async function runEpoch(page: Page): Promise<void> {
   await lockInAndWaitForExecution(page);
   await page.keyboard.press('Space');
+  await dismissPostEpochPopups(page);
   await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 5000 });
 }
 

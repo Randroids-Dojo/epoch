@@ -11,3 +11,17 @@ export async function skipSetup(page: Page): Promise<void> {
 export async function waitForGameReady(page: Page): Promise<void> {
   await expect(page.getByTestId('difficulty-picker')).not.toBeVisible({ timeout: 5000 });
 }
+
+/** Dismiss any post-epoch popups (stats summary, bonus card) to return to planning. */
+export async function dismissPostEpochPopups(page: Page): Promise<void> {
+  const statsPopup = page.getByTestId('epoch-stats-popup');
+  if (await statsPopup.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await statsPopup.click();
+    await expect(statsPopup).not.toBeVisible({ timeout: 3000 });
+  }
+  const bonusCard = page.getByTestId('bonus-card-overlay');
+  if (await bonusCard.isVisible({ timeout: 1000 }).catch(() => false)) {
+    await page.getByTestId('bonus-option-left').click();
+    await expect(bonusCard).not.toBeVisible({ timeout: 3000 });
+  }
+}
