@@ -144,4 +144,30 @@ describe('Continuous unit movement', () => {
     // No auto-populated order since it arrived.
     expect(s.players.player.unitOrders.has(unit.id)).toBe(false);
   });
+
+  it('continues moving even when path is partially blocked', () => {
+    const s = createInitialState(1);
+    // Chrono titan speed 1 heading to a distant target.
+    const unit = addUnit(s, {
+      owner: 'player', type: 'chrono_titan',
+      hex: { q: -8, r: 0 },
+    });
+    const target = { q: -5, r: 0 };
+
+    // Place a blocker one hex ahead on the direct path.
+    addUnit(s, {
+      owner: 'ai', type: 'drone',
+      hex: { q: -7, r: 0 }, hp: 100,
+    });
+
+    queueCommand(s, 'player', 0, { type: 'move', unitId: unit.id, targetHex: target });
+    resolveEpoch(s);
+
+    // Unit should have moved (possibly via an alternate route) or stayed.
+    // Either way, moveTargetHex should persist because it hasn't arrived.
+    expect(unit.moveTargetHex).toEqual(target);
+    const order = s.players.player.unitOrders.get(unit.id);
+    expect(order).toBeDefined();
+    expect(order!.type).toBe('move');
+  });
 });

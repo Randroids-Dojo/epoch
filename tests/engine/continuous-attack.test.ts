@@ -160,4 +160,22 @@ describe('Continuous unit attacks', () => {
       expect(order!.targetHex).toEqual(enemyStruct.hex);
     }
   });
+
+  it('clears attackTargetHex when target moves away from the hex', () => {
+    const s = createInitialState(1);
+    const attacker = addUnit(s, {
+      owner: 'player', type: 'arc_ranger',
+      hex: { q: -8, r: 0 },
+      // Pre-set persistent attack target at a hex that WAS occupied.
+      attackTargetHex: { q: -6, r: 0 },
+    });
+    // No enemy at that hex anymore — they moved away.
+
+    // Don't queue any command; the auto-populate logic should detect
+    // the target is gone and clear attackTargetHex.
+    resolveEpoch(s);
+
+    expect(attacker.attackTargetHex).toBeNull();
+    expect(s.players.player.unitOrders.has(attacker.id)).toBe(false);
+  });
 });

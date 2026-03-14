@@ -1097,39 +1097,39 @@ function stepPostResolution(state: GameState, commands: CommandEntry[]): void {
     p.lockedIn = false;
     p.defaultOrderUnitIds = new Set();
 
-    // Auto-populate gather orders for drones still assigned to extractors.
-    for (const unit of state.units.values()) {
-      if (unit.owner !== pid || unit.type !== 'drone' || !unit.assignedExtractorId) continue;
-      const extractor = state.structures.get(unit.assignedExtractorId);
-      if (!extractor) continue;
-      p.unitOrders.set(unit.id, { type: 'gather', unitId: unit.id, targetHex: extractor.hex });
-      p.defaultOrderUnitIds.add(unit.id);
-    }
-
-    // Auto-populate attack orders for units with a persistent attack target.
+    // Auto-populate default orders for persistent unit tasks.
+    // Priority: gather > attack > move (earlier wins, later won't overwrite).
     const foe = opponent(pid);
     for (const unit of state.units.values()) {
-      if (unit.owner !== pid || !unit.attackTargetHex) continue;
-      // Only persist if an enemy unit or structure still exists at the target hex.
-      const enemyUnit   = findUnitAt(state, unit.attackTargetHex, foe);
-      const enemyStruct = enemyUnit ? undefined : findStructureAt(state, unit.attackTargetHex, foe);
-      if (!enemyUnit && !enemyStruct) {
-        unit.attackTargetHex = null;
-        continue;
-      }
-      // Don't overwrite an existing order (e.g. a gather order set above).
-      if (p.unitOrders.has(unit.id)) continue;
-      p.unitOrders.set(unit.id, { type: 'attack', unitId: unit.id, targetHex: unit.attackTargetHex });
-      p.defaultOrderUnitIds.add(unit.id);
-    }
+      if (unit.owner !== pid) continue;
 
-    // Auto-populate move orders for units with a persistent move target.
-    for (const unit of state.units.values()) {
-      if (unit.owner !== pid || !unit.moveTargetHex) continue;
-      // Don't overwrite an existing order (e.g. gather or attack set above).
-      if (p.unitOrders.has(unit.id)) continue;
-      p.unitOrders.set(unit.id, { type: 'move', unitId: unit.id, targetHex: unit.moveTargetHex });
-      p.defaultOrderUnitIds.add(unit.id);
+      // Gather: drones assigned to extractors.
+      if (unit.type === 'drone' && unit.assignedExtractorId) {
+        const extractor = state.structures.get(unit.assignedExtractorId);
+        if (extractor) {
+          p.unitOrders.set(unit.id, { type: 'gather', unitId: unit.id, targetHex: extractor.hex });
+          p.defaultOrderUnitIds.add(unit.id);
+          continue;
+        }
+      }
+
+      // Attack: units with a persistent attack target (if enemy still exists there).
+      if (unit.attackTargetHex) {
+        const enemyUnit   = findUnitAt(state, unit.attackTargetHex, foe);
+        const enemyStruct = enemyUnit ? undefined : findStructureAt(state, unit.attackTargetHex, foe);
+        if (enemyUnit || enemyStruct) {
+          p.unitOrders.set(unit.id, { type: 'attack', unitId: unit.id, targetHex: unit.attackTargetHex });
+          p.defaultOrderUnitIds.add(unit.id);
+          continue;
+        }
+        unit.attackTargetHex = null;
+      }
+
+      // Move: units with a persistent move target.
+      if (unit.moveTargetHex) {
+        p.unitOrders.set(unit.id, { type: 'move', unitId: unit.id, targetHex: unit.moveTargetHex });
+        p.defaultOrderUnitIds.add(unit.id);
+      }
     }
   }
 
