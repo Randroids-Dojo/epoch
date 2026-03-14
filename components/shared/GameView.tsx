@@ -1681,7 +1681,7 @@ export default function GameView() {
 
         {/* Game-over overlay with victory/defeat animation */}
         {gameState.phase === 'over' && (
-          <div data-testid="game-over-overlay">
+          <div data-testid="game-over-overlay" style={{ position: 'fixed', inset: 0, zIndex: 100 }}>
             <VictoryAnimation
               winner={gameState.winner === 'player' ? 'player' : 'ai'}
               epoch={gameState.epoch}

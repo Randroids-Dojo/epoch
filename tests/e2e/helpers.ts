@@ -14,17 +14,17 @@ export async function waitForGameReady(page: Page): Promise<void> {
 
 /** Dismiss any post-epoch popups (stats summary, bonus card) to return to planning. */
 export async function dismissPostEpochPopups(page: Page): Promise<void> {
-  // Popups appear within a frame of execution ending; short timeout avoids dead waits.
+  // CI environments are slower; allow enough time for popups to mount after execution.
   const statsPopup = page.getByTestId('epoch-stats-popup');
-  const hadStats = await statsPopup.isVisible({ timeout: 500 }).catch(() => false);
+  const hadStats = await statsPopup.isVisible({ timeout: 2000 }).catch(() => false);
   if (hadStats) {
     await statsPopup.click();
-    await expect(statsPopup).not.toBeVisible({ timeout: 2000 });
+    await expect(statsPopup).not.toBeVisible({ timeout: 3000 });
   }
-  // Bonus card may mount after stats dismissal; only wait if stats were shown.
+  // Bonus card may mount after stats dismissal; wait longer if stats were shown.
   const bonusCard = page.getByTestId('bonus-card-overlay');
-  if (await bonusCard.isVisible({ timeout: hadStats ? 500 : 100 }).catch(() => false)) {
+  if (await bonusCard.isVisible({ timeout: hadStats ? 1000 : 500 }).catch(() => false)) {
     await page.getByTestId('bonus-option-left').click();
-    await expect(bonusCard).not.toBeVisible({ timeout: 2000 });
+    await expect(bonusCard).not.toBeVisible({ timeout: 3000 });
   }
 }
