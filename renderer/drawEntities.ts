@@ -1078,6 +1078,8 @@ export function drawCommandArrows(
   cam: Camera,
   /** When true, only draw persistent multi-turn paths (pendingBuild / moveTargetHex). */
   persistentOnly = false,
+  /** Animated world-space pixel positions for units (used during execution animation). */
+  animatedPositions?: Map<string, { x: number; y: number }>,
 ): void {
   const prevAlpha = ctx.globalAlpha;
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
@@ -1111,7 +1113,7 @@ export function drawCommandArrows(
     // Dim persistent multi-turn paths vs explicit orders.
     const lineAlpha = isDefault ? 0.4 : 0.7;
 
-    const fromWp = hexToPixel(unit.hex, BASE_HEX_SIZE);
+    const fromWp = animatedPositions?.get(unitId) ?? hexToPixel(unit.hex, BASE_HEX_SIZE);
     const toWp   = hexToPixel(effectiveTarget, BASE_HEX_SIZE);
     const fx = cam.x + fromWp.x * cam.zoom;
     const fy = cam.y + fromWp.y * cam.zoom;

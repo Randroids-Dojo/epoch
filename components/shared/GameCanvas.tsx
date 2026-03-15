@@ -11,7 +11,7 @@ import { BASE_HEX_SIZE, drawBackground, drawHexCell } from '@/renderer/drawHex';
 import { drawUnits, drawStructures, drawTargetingOverlay, drawRangeBorders, drawCommandArrows, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawMergeAnimations, drawEchoOverlay, drawTimelineForkOverlay, drawChronoScoutOverlay, drawParticles } from '@/renderer/drawEntities';
 import { TimelineForkResult, ChronoScoutResult } from '@/engine/simulation';
 import { InteractionMode } from '@/lib/types';
-import { ExecutionAnimation } from '@/renderer/animation';
+import { ExecutionAnimation, getAnimatedUnitPosition } from '@/renderer/animation';
 import { Command, PHASE_SURGE_SPEED_BONUS } from '@/engine/commands';
 import { UNIT_DEFS } from '@/engine/units';
 
@@ -286,8 +286,14 @@ export default function GameCanvas({
     {
       const player = gs.players.player;
       if (anim) {
-        // During animation, only show persistent multi-turn paths.
-        drawCommandArrows(ctx, gs.units, player.unitOrders, player.defaultOrderUnitIds, cam, true);
+        // Build animated positions so path lines start from the unit's current
+        // interpolated position, not its static hex.
+        const elapsed = (performance.now() - anim.startedAt) / 1000;
+        const animPositions = new Map<string, { x: number; y: number }>();
+        for (const [uid, ua] of anim.units) {
+          animPositions.set(uid, getAnimatedUnitPosition(ua, elapsed));
+        }
+        drawCommandArrows(ctx, gs.units, player.unitOrders, player.defaultOrderUnitIds, cam, true, animPositions);
       } else {
         drawCommandArrows(ctx, gs.units, player.unitOrders, player.defaultOrderUnitIds, cam);
       }
