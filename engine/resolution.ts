@@ -424,6 +424,18 @@ function stepMove(state: GameState, commands: CommandEntry[], log: string[]): vo
       return ha && hb ? mapOrder(ha, hb) : 0;
     });
 
+  // Drones with distant build commands also move toward the build site this epoch.
+  for (const e of commands) {
+    if (e.command.type !== 'build') continue;
+    const drone = state.units.get(e.command.unitId);
+    if (!drone || drone.type !== 'drone') continue;
+    if (hexDistance(drone.hex, e.command.targetHex) <= 1) continue;
+    allMoves.push({
+      owner: e.owner,
+      command: { type: 'move', unitId: e.command.unitId, targetHex: e.command.targetHex },
+    });
+  }
+
   // Build blocked set once; update it as units move so later movers see vacated hexes.
   const blocked = new Set<string>();
   for (const u of state.units.values()) blocked.add(hexKey(u.hex));
