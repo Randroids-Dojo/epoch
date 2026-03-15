@@ -63,11 +63,12 @@ describe('Continuous unit attacks', () => {
     expect(s.players.player.defaultOrderUnitIds.has(attacker.id)).toBe(true);
   });
 
-  it('does not auto-populate if the target was destroyed', () => {
+  it('does not auto-populate if target destroyed and unit is at target hex', () => {
     const s = createInitialState(1);
+    // Place attacker adjacent to enemy so it's in range and already at/near the target.
     const attacker = addUnit(s, {
-      owner: 'player', type: 'arc_ranger',
-      hex: { q: -8, r: 0 },
+      owner: 'player', type: 'pulse_sentry', // range 1
+      hex: { q: -7, r: 0 },
     });
     // Enemy with very low HP — should die from the attack.
     const enemy = addUnit(s, {
@@ -81,9 +82,29 @@ describe('Continuous unit attacks', () => {
     // Enemy should be dead.
     expect(s.units.has(enemy.id)).toBe(false);
 
-    // No auto-populated attack order.
-    expect(s.players.player.unitOrders.has(attacker.id)).toBe(false);
+    // Attacker moved to the target hex and no enemies around — should clear.
     expect(attacker.attackTargetHex).toBeNull();
+  });
+
+  it('keeps attack-moving toward distant target when enemy destroyed', () => {
+    const s = createInitialState(1);
+    // Use pulse_sentry (range 1, speed 3) far from target so it's out of range.
+    const attacker = addUnit(s, {
+      owner: 'player', type: 'pulse_sentry', // range 1, speed 3
+      hex: { q: -8, r: 0 },
+    });
+    // Enemy far away — place another enemy in range for the attack to resolve,
+    // but keep the target hex distant.
+    const farTargetHex = { q: -3, r: 0 };
+    // Manually set an attack command targeting a distant hex.
+    queueCommand(s, 'player', 0, { type: 'attack', unitId: attacker.id, targetHex: farTargetHex });
+    resolveEpoch(s);
+
+    // Attacker still has the target because it hasn't arrived yet (distance > range).
+    expect(attacker.attackTargetHex).toEqual(farTargetHex);
+    const order = s.players.player.unitOrders.get(attacker.id);
+    expect(order).toBeDefined();
+    expect(order!.type).toBe('attack');
   });
 
   it('clears attackTargetHex when unit is given a non-attack order', () => {
@@ -161,21 +182,41 @@ describe('Continuous unit attacks', () => {
     }
   });
 
-  it('clears attackTargetHex when target moves away from the hex', () => {
+  it('clears attackTargetHex when unit arrives at target and no enemies around', () => {
     const s = createInitialState(1);
     const attacker = addUnit(s, {
       owner: 'player', type: 'arc_ranger',
-      hex: { q: -8, r: 0 },
-      // Pre-set persistent attack target at a hex that WAS occupied.
+      // Place at the target hex already — enemy moved away.
+      hex: { q: -6, r: 0 },
       attackTargetHex: { q: -6, r: 0 },
     });
-    // No enemy at that hex anymore — they moved away.
+    // No enemy at that hex anymore — they moved away, and no enemies in range.
 
     // Don't queue any command; the auto-populate logic should detect
-    // the target is gone and clear attackTargetHex.
+    // arrival + no enemies and clear attackTargetHex.
     resolveEpoch(s);
 
     expect(attacker.attackTargetHex).toBeNull();
     expect(s.players.player.unitOrders.has(attacker.id)).toBe(false);
+  });
+
+  it('keeps attack-moving when target moves away but unit is far from target', () => {
+    const s = createInitialState(1);
+    // Use pulse_sentry (range 1) far from target so distance > range.
+    const attacker = addUnit(s, {
+      owner: 'player', type: 'pulse_sentry', // range 1
+      hex: { q: -8, r: 0 },
+      attackTargetHex: { q: -3, r: 0 },
+    });
+    // No enemy at the target hex — they moved away.
+    // But the unit is far from the target (distance 5 > range 1), so it should keep moving.
+
+    resolveEpoch(s);
+
+    // Unit should still have attack target and auto-populated attack order.
+    expect(attacker.attackTargetHex).toEqual({ q: -3, r: 0 });
+    const order = s.players.player.unitOrders.get(attacker.id);
+    expect(order).toBeDefined();
+    expect(order!.type).toBe('attack');
   });
 });

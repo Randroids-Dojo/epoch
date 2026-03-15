@@ -248,8 +248,8 @@ export default function GameCanvas({
         let radius: number;
         if (m.kind === 'targeting') {
           if (m.commandType === 'attack') {
-            const def = UNIT_DEFS[targetUnit.type];
-            radius = def.speed + def.range;
+            // Attack-move: no range border — the unit can target any hex.
+            radius = 0;
           } else if (m.commandType === 'phase_surge') {
             radius = UNIT_DEFS[targetUnit.type].speed + PHASE_SURGE_SPEED_BONUS;
           } else {

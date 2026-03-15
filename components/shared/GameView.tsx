@@ -906,8 +906,8 @@ export default function GameView() {
       }
 
       if (type === 'attack') {
-        const eligibleKeys = computeUnitAttackTargets(state, unit);
-        setMode({ kind: 'targeting', unitId, commandType: 'attack', eligibleKeys });
+        const { allKeys, immediateKeys } = computeUnitAttackTargets(state, unit);
+        setMode({ kind: 'targeting', unitId, commandType: 'attack', eligibleKeys: allKeys, immediateKeys });
         return;
       }
 

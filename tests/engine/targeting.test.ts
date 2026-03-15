@@ -71,13 +71,14 @@ describe('computeEligibleHexes', () => {
     expect(hasUnexplored).toBe(true);
   });
 
-  it('attack: returns only visible hexes with enemy unit or structure', () => {
+  it('attack: returns traversable non-friendly hexes and unexplored hexes', () => {
     const state = createInitialState(1);
     const result = computeEligibleHexes(state, 'attack');
-    // All returned hexes must be visible
+    // All returned hexes must be: unexplored, or passable + not player-owned
     for (const key of result) {
       const cell = state.map.cells.get(key)!;
-      expect(cell.fog).toBe('visible');
+      if (cell.fog === 'unexplored') continue; // unexplored are valid attack-move targets
+      expect(TERRAIN[cell.terrain].passable).toBe(true);
     }
     // AI units/structures that are visible should be included
     const aiKeys = new Set<string>();
@@ -95,6 +96,12 @@ describe('computeEligibleHexes', () => {
     }
     for (const key of aiKeys) {
       expect(result.has(key)).toBe(true);
+    }
+    // Player-owned unit hexes must NOT be included
+    for (const unit of state.units.values()) {
+      if (unit.owner === 'player') {
+        expect(result.has(hexKey(unit.hex))).toBe(false);
+      }
     }
   });
 

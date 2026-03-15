@@ -99,11 +99,17 @@ export function computeEligibleHexes(
         break;
 
       case 'attack':
-        // All visible hexes with enemy unit or structure.
-        if (cell.fog !== 'visible') continue;
-        if (unitOwnerByHex.get(key) === 'ai' || structOwnerByHex.get(key) === 'ai') {
+        // Unexplored hexes are valid attack-move targets — the unit will
+        // walk there and engage any enemy it encounters along the way.
+        if (cell.fog === 'unexplored') {
           eligible.add(key);
+          break;
         }
+        // Visible/explored: exclude impassable terrain and friendly-occupied hexes.
+        if (!TERRAIN[cell.terrain].passable) continue;
+        if (unitOwnerByHex.get(key) === 'player') continue;
+        if (structOwnerByHex.get(key) === 'player') continue;
+        eligible.add(key);
         break;
 
       case 'gather':
@@ -168,20 +174,27 @@ export function computeUnitMoveTargets(
   return { allKeys: allEligible, immediateKeys };
 }
 
-/** Eligible hexes within a unit's attack range from its current position. */
+/** Result of computing attack targets, split into immediate (in range) and extended (multi-turn move-to-attack). */
+export interface AttackTargetResult {
+  /** All eligible hexes (both immediate and multi-turn). */
+  allKeys: Set<string>;
+  /** Hexes within attack range this epoch (unit can attack immediately). */
+  immediateKeys: Set<string>;
+}
+
+/** Eligible hexes for attack-move, split into immediate and multi-turn targets. */
 export function computeUnitAttackTargets(
   state: GameState,
   unit: Unit,
-): Set<string> {
+): AttackTargetResult {
   const def = UNIT_DEFS[unit.type];
-  const reach = def.range;
   const allEligible = computeEligibleHexes(state, 'attack');
-  const inRange = new Set<string>();
-  for (const hex of hexesInRange(unit.hex, reach)) {
+  const immediateKeys = new Set<string>();
+  for (const hex of hexesInRange(unit.hex, def.range)) {
     const key = hexKey(hex);
-    if (allEligible.has(key)) inRange.add(key);
+    if (allEligible.has(key)) immediateKeys.add(key);
   }
-  return inRange;
+  return { allKeys: allEligible, immediateKeys };
 }
 
 /** Eligible hexes within a unit's phase surge range (speed + bonus). */

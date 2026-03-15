@@ -436,6 +436,24 @@ function stepMove(state: GameState, commands: CommandEntry[], log: string[]): vo
     });
   }
 
+  // Attack-move: units with attack commands targeting out-of-range hexes walk
+  // toward the target.  Track these so we can stop them early if an enemy
+  // enters attack range during movement.
+  const attackMoveUnits = new Set<string>();
+  for (const e of commands) {
+    if (e.command.type !== 'attack') continue;
+    const unit = state.units.get(e.command.unitId);
+    if (!unit) continue;
+    const def = UNIT_DEFS[unit.type];
+    if (def.range === 0) continue; // drones / flux weavers can't attack
+    if (hexDistance(unit.hex, e.command.targetHex) <= def.range) continue; // already in range
+    attackMoveUnits.add(e.command.unitId);
+    allMoves.push({
+      owner: e.owner,
+      command: { type: 'move', unitId: e.command.unitId, targetHex: e.command.targetHex },
+    });
+  }
+
   // Build blocked set once; update it as units move so later movers see vacated hexes.
   const blocked = new Set<string>();
   for (const u of state.units.values()) blocked.add(hexKey(u.hex));
@@ -478,23 +496,76 @@ function stepMove(state: GameState, commands: CommandEntry[], log: string[]): vo
       }
     }
 
-    const steps = path.slice(0, effectiveSpeed);
+    const isAttackMove = attackMoveUnits.has(command.unitId);
+    let steps = path.slice(0, effectiveSpeed);
+
+    // Attack-move intercept: stop early if the unit reaches attack range of
+    // any enemy unit or structure during movement.
+    if (isAttackMove && steps.length > 0) {
+      const foe = opponent(owner);
+      for (let i = 0; i < steps.length; i++) {
+        const hex = steps[i];
+        if (hasEnemyInRange(state, hex, def.range, foe)) {
+          steps = steps.slice(0, i + 1);
+          break;
+        }
+      }
+    }
+
     if (steps.length > 0) {
       const dest = steps[steps.length - 1];
       unit.hex = dest;
       blocked.add(hexKey(dest)); // Mark new position occupied for subsequent movers.
       log.push(`${owner} ${unit.type} → (${dest.q},${dest.r})`);
 
-      // Persist move target if unit hasn't arrived yet; clear if it has.
-      if (hexEqual(dest, command.targetHex)) {
-        unit.moveTargetHex = null;
+      if (isAttackMove) {
+        // For attack-move, persist the attack target — not a move target.
+        unit.attackTargetHex = { ...command.targetHex };
       } else {
-        unit.moveTargetHex = { ...command.targetHex };
+        // Persist move target if unit hasn't arrived yet; clear if it has.
+        if (hexEqual(dest, command.targetHex)) {
+          unit.moveTargetHex = null;
+        } else {
+          unit.moveTargetHex = { ...command.targetHex };
+        }
       }
     } else {
       blocked.add(ownKey); // Unit didn't move; restore its hex in the blocked set.
     }
   }
+}
+
+/** Returns true if any enemy unit or structure is within `range` hexes of `hex`. */
+function hasEnemyInRange(state: GameState, hex: Hex, range: number, foe: PlayerId): boolean {
+  for (const u of state.units.values()) {
+    if (u.owner === foe && hexDistance(hex, u.hex) <= range) return true;
+  }
+  for (const s of state.structures.values()) {
+    if (s.owner === foe && hexDistance(hex, s.hex) <= range) return true;
+  }
+  return false;
+}
+
+/** Finds the closest enemy unit or structure within `range` of `hex`. */
+function findClosestEnemyInRange(
+  state: GameState, hex: Hex, range: number, foe: PlayerId,
+): { hex: Hex; kind: 'unit' | 'structure' } | null {
+  let best: { hex: Hex; kind: 'unit' | 'structure'; dist: number } | null = null;
+  for (const u of state.units.values()) {
+    if (u.owner !== foe) continue;
+    const d = hexDistance(hex, u.hex);
+    if (d <= range && (!best || d < best.dist)) {
+      best = { hex: u.hex, kind: 'unit', dist: d };
+    }
+  }
+  for (const s of state.structures.values()) {
+    if (s.owner !== foe) continue;
+    const d = hexDistance(hex, s.hex);
+    if (d <= range && (!best || d < best.dist)) {
+      best = { hex: s.hex, kind: 'structure', dist: d };
+    }
+  }
+  return best;
 }
 
 // ── Step 4: Attack ────────────────────────────────────────────────────────────
@@ -527,11 +598,26 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
     const foe = opponent(owner);
 
     // Find enemy unit at target hex first; else enemy structure.
-    const targetUnit   = findUnitAt(state, command.targetHex, foe);
-    const targetStruct = targetUnit ? undefined : findStructureAt(state, command.targetHex, foe);
+    let targetUnit   = findUnitAt(state, command.targetHex, foe);
+    let targetStruct = targetUnit ? undefined : findStructureAt(state, command.targetHex, foe);
+    let actualTargetHex = command.targetHex;
+
+    // Attack-move: if no enemy at the designated hex, scan for the closest
+    // enemy within attack range of the attacker's current position.
+    if (!targetUnit && !targetStruct) {
+      const nearby = findClosestEnemyInRange(state, attacker.hex, def.range, foe);
+      if (nearby) {
+        actualTargetHex = nearby.hex;
+        if (nearby.kind === 'unit') {
+          targetUnit = findUnitAt(state, nearby.hex, foe);
+        } else {
+          targetStruct = findStructureAt(state, nearby.hex, foe);
+        }
+      }
+    }
 
     if (!targetUnit && !targetStruct) continue;
-    if (hexDistance(attacker.hex, command.targetHex) > def.range) continue;
+    if (hexDistance(attacker.hex, actualTargetHex) > def.range) continue;
 
     // Persist the attack target so the order auto-repopulates next epoch.
     attacker.attackTargetHex = { ...command.targetHex };
@@ -548,7 +634,7 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
       // Void Striker splash: 50% damage to all adjacent hexes.
       if (attacker.type === 'void_striker') {
         const splashDmg = Math.max(1, Math.ceil(effAtk * 0.5 * attackMult));
-        for (const adjHex of hexNeighbors(command.targetHex)) {
+        for (const adjHex of hexNeighbors(actualTargetHex)) {
           const splashUnit = findUnitAt(state, adjHex, foe);
           if (splashUnit && splashUnit.id !== targetUnit.id) {
             unitDamage.set(splashUnit.id, (unitDamage.get(splashUnit.id) ?? 0) + splashDmg);
@@ -1161,15 +1247,23 @@ function stepPostResolution(state: GameState, commands: CommandEntry[]): void {
         continue;
       }
 
-      // Attack: units with a persistent attack target (if enemy still exists there).
+      // Attack: units with a persistent attack target.
+      // The unit keeps its attack order whether it's still walking toward the
+      // target or actively fighting an enemy in range.
       if (unit.attackTargetHex) {
+        const def = UNIT_DEFS[unit.type];
         const enemyUnit   = findUnitAt(state, unit.attackTargetHex, foe);
         const enemyStruct = enemyUnit ? undefined : findStructureAt(state, unit.attackTargetHex, foe);
-        if (enemyUnit || enemyStruct) {
+        const inRange = hasEnemyInRange(state, unit.hex, def.range, foe);
+        const arrived = hexEqual(unit.hex, unit.attackTargetHex)
+                     || hexDistance(unit.hex, unit.attackTargetHex) <= def.range;
+        if (enemyUnit || enemyStruct || inRange || !arrived) {
+          // Still has a reason to persist: enemy at target, enemy nearby, or not yet arrived.
           p.unitOrders.set(unit.id, { type: 'attack', unitId: unit.id, targetHex: unit.attackTargetHex });
           p.defaultOrderUnitIds.add(unit.id);
           continue;
         }
+        // Arrived at/near target and no enemies around — clear.
         unit.attackTargetHex = null;
       }
 
