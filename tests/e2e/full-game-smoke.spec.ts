@@ -287,17 +287,31 @@ test('smoke: player can play full match from planning to game-over @smoke', asyn
 
     await fillEpoch(page);
 
-    await page.getByTestId('lock-in-btn').click({ force: true });
+    // If the planning timer auto-resolved during fillEpoch, the game may
+    // already be in execution or have returned to planning for the next epoch.
+    // Check the current state before attempting lock-in.
+    const preSnap = await getSnapshot(page);
+    if (preSnap.phase === 'over') break;
+
+    // Only click lock-in if we're still in the planning phase and the button exists.
+    const lockBtn = page.getByTestId('lock-in-btn');
+    if (preSnap.phase === 'planning' && await lockBtn.isVisible().catch(() => false)) {
+      await lockBtn.click({ force: true });
+    }
 
     // Wait for either execution overlay (phase-label) or immediate game-over.
     // When the game ends during resolution, execution animation is skipped and
-    // game-over-overlay appears directly.
+    // game-over-overlay appears directly. Use a generous timeout for CI.
     await page.waitForSelector(
-      '[data-testid="phase-label"],[data-testid="game-over-overlay"]',
-      { timeout: 10_000 },
+      '[data-testid="phase-label"],[data-testid="game-over-overlay"],[data-testid="command-slot-0"]',
+      { timeout: 30_000 },
     );
     const immediateGameOver = await page.getByTestId('game-over-overlay').isVisible().catch(() => false);
     if (immediateGameOver) break;
+
+    // If we landed back on planning (e.g. timer auto-resolved), skip to next epoch.
+    const alreadyPlanning = await page.getByTestId('command-slot-0').isVisible().catch(() => false);
+    if (alreadyPlanning) continue;
 
     const result = await waitForPlanningOrGameOver(page);
 
