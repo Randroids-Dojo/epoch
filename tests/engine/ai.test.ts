@@ -156,14 +156,14 @@ describe('generateAICommands — military', () => {
     const rangerHex = { q: nexus.hex.q - 2, r: nexus.hex.r };
     state.units.set(rangerId, {
       id: rangerId, owner: 'ai', type: 'arc_ranger', hex: rangerHex,
-      hp: UNIT_DEFS.arc_ranger.maxHp, isDefending: false, assignedExtractorId: null, damageShield: false, mergeCount: 0, bonusMaxHp: 0, bonusAttack: 0,
+      hp: UNIT_DEFS.arc_ranger.maxHp, isDefending: false, assignedExtractorId: null, damageShield: false, mergeCount: 0, bonusMaxHp: 0, bonusAttack: 0, attackTargetHex: null, moveTargetHex: null, pendingBuild: null,
     });
 
     const pId = newId('u');
     const playerHex = { q: rangerHex.q - 2, r: rangerHex.r };
     state.units.set(pId, {
       id: pId, owner: 'player', type: 'drone', hex: playerHex,
-      hp: UNIT_DEFS.drone.maxHp, isDefending: false, assignedExtractorId: null, damageShield: false, mergeCount: 0, bonusMaxHp: 0, bonusAttack: 0,
+      hp: UNIT_DEFS.drone.maxHp, isDefending: false, assignedExtractorId: null, damageShield: false, mergeCount: 0, bonusMaxHp: 0, bonusAttack: 0, attackTargetHex: null, moveTargetHex: null, pendingBuild: null,
     });
 
     generateAICommands(state);
@@ -183,7 +183,7 @@ describe('generateAICommands — military', () => {
     state.units.set(sentryId, {
       id: sentryId, owner: 'ai', type: 'pulse_sentry',
       hex: { q: nexus.hex.q, r: nexus.hex.r + 1 },
-      hp: UNIT_DEFS.pulse_sentry.maxHp, isDefending: false, assignedExtractorId: null, damageShield: false, mergeCount: 0, bonusMaxHp: 0, bonusAttack: 0,
+      hp: UNIT_DEFS.pulse_sentry.maxHp, isDefending: false, assignedExtractorId: null, damageShield: false, mergeCount: 0, bonusMaxHp: 0, bonusAttack: 0, attackTargetHex: null, moveTargetHex: null, pendingBuild: null,
     });
 
     generateAICommands(state);
@@ -206,7 +206,7 @@ describe('generateAICommands — constraints', () => {
       state.units.set(id, {
         id, owner: 'ai', type: 'drone',
         hex: { q: 9 - i, r: i % 3 },
-        hp: UNIT_DEFS.drone.maxHp, isDefending: false, assignedExtractorId: null, damageShield: false, mergeCount: 0, bonusMaxHp: 0, bonusAttack: 0,
+        hp: UNIT_DEFS.drone.maxHp, isDefending: false, assignedExtractorId: null, damageShield: false, mergeCount: 0, bonusMaxHp: 0, bonusAttack: 0, attackTargetHex: null, moveTargetHex: null, pendingBuild: null,
       });
     }
 
@@ -300,7 +300,7 @@ describe('generateAICommands — archetypes', () => {
     state.units.set(sentryId, {
       id: sentryId, owner: 'ai', type: 'pulse_sentry',
       hex: { q: nexus.hex.q + 1, r: nexus.hex.r },
-      hp: UNIT_DEFS.pulse_sentry.maxHp, isDefending: false, assignedExtractorId: null, damageShield: false, mergeCount: 0, bonusMaxHp: 0, bonusAttack: 0,
+      hp: UNIT_DEFS.pulse_sentry.maxHp, isDefending: false, assignedExtractorId: null, damageShield: false, mergeCount: 0, bonusMaxHp: 0, bonusAttack: 0, attackTargetHex: null, moveTargetHex: null, pendingBuild: null,
     });
 
     generateAICommands(state);

@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { Hex, hexKey, hexesInRange } from '@/engine/hex';
+import { Hex, hexKey } from '@/engine/hex';
 
 // ── Mini hex layout constants ───────────────────────────────────────────────
 
-const MINI_HEX_SIZE = 14;
+const MINI_HEX_SIZE = 8;
 const SQRT3 = Math.sqrt(3);
 
 function miniHexToPixel(q: number, r: number, size: number): { x: number; y: number } {
@@ -27,12 +27,19 @@ function hexPoints(cx: number, cy: number, size: number): string {
 interface HexTargetPickerProps {
   /** The unit's current hex position. */
   unitHex: Hex;
-  /** Radius of hexes to display (typically unit speed). */
-  radius: number;
+  /** Set of all hex keys on the map. */
+  mapKeys: ReadonlySet<string>;
+  /** Set of hex keys currently in fog of war (unexplored). */
+  fogKeys?: ReadonlySet<string>;
   /** Set of hex keys that are valid targets (eligible & in range). */
   eligibleKeys: Set<string>;
+  /** Subset of eligibleKeys reachable within a single epoch (move only). */
+  immediateKeys?: Set<string>;
   /** Header label shown at the top. */
   header: string;
+  /** Max width/height constraints for the picker body (enables scrolling). */
+  maxWidth?: number;
+  maxHeight?: number;
   /** Called when the player picks a target hex. */
   onSelect(hex: Hex): void;
   /** Called to dismiss the picker. */
@@ -43,13 +50,25 @@ interface HexTargetPickerProps {
 
 export default function HexTargetPicker({
   unitHex,
-  radius,
+  mapKeys,
+  fogKeys,
   eligibleKeys,
+  immediateKeys,
   header,
+  maxWidth,
+  maxHeight,
   onSelect,
   onClose,
 }: HexTargetPickerProps) {
-  const hexes = useMemo(() => hexesInRange({ q: 0, r: 0 }, radius), [radius]);
+  // Parse mapKeys into Hex objects for rendering.
+  const hexes = useMemo(() => {
+    const result: Hex[] = [];
+    for (const key of mapKeys) {
+      const [q, r] = key.split(',').map(Number);
+      result.push({ q, r });
+    }
+    return result;
+  }, [mapKeys]);
 
   // Compute bounding box of the hex grid.
   const { width, height, offsetX, offsetY } = useMemo(() => {
@@ -68,6 +87,8 @@ export default function HexTargetPicker({
       offsetY: -minY + 2,
     };
   }, [hexes]);
+
+  const unitKey = hexKey(unitHex);
 
   return (
     <div
@@ -108,16 +129,21 @@ export default function HexTargetPicker({
           ✕
         </button>
       </div>
-      <div style={{ padding: 8 }}>
+      <div style={{
+        padding: 8,
+        overflowX: maxWidth ? 'auto' : undefined,
+        overflowY: maxHeight ? 'auto' : undefined,
+        maxWidth: maxWidth ? maxWidth - 2 : undefined,   // account for border
+        maxHeight: maxHeight ? maxHeight - 34 : undefined, // account for header + border
+      }}>
         <svg
           width={width}
           height={height}
           viewBox={`0 0 ${width} ${height}`}
         >
           {hexes.map((h) => {
-            const worldHex: Hex = { q: unitHex.q + h.q, r: unitHex.r + h.r };
-            const key = hexKey(worldHex);
-            const isCenter = h.q === 0 && h.r === 0;
+            const key = hexKey(h);
+            const isUnit = key === unitKey;
             const isEligible = eligibleKeys.has(key);
             const p = miniHexToPixel(h.q, h.r, MINI_HEX_SIZE);
             const cx = p.x + offsetX;
@@ -125,17 +151,36 @@ export default function HexTargetPicker({
 
             let fill = '#2a1520';
             let stroke = '#6b2030';
+            let hoverFill = '#e6394630';
             let cursor = 'default';
             let opacity = 0.85;
-            const isBlocked = !isCenter && !isEligible;
+            const isImmediate = !immediateKeys || immediateKeys.has(key);
+            const isFog = fogKeys?.has(key) ?? false;
+            const isBlocked = !isUnit && !isEligible;
 
-            if (isCenter) {
+            if (isUnit) {
               fill = '#e6394620';
               stroke = '#e63946';
               opacity = 1;
-            } else if (isEligible) {
+            } else if (isFog) {
+              // All fog hexes look identical — uniform purple tint.
+              fill = '#2d1b4e';
+              stroke = '#7c3aed80';
+              opacity = 0.85;
+              if (isEligible) {
+                hoverFill = '#4c1d9550';
+                cursor = 'pointer';
+              }
+            } else if (isEligible && isImmediate) {
               fill = '#e6394610';
               stroke = '#e6394680';
+              cursor = 'pointer';
+              opacity = 1;
+            } else if (isEligible && !isImmediate) {
+              // Multi-turn target: amber tint
+              fill = '#f59e0b10';
+              stroke = '#f59e0b60';
+              hoverFill = '#f59e0b30';
               cursor = 'pointer';
               opacity = 1;
             }
@@ -143,7 +188,7 @@ export default function HexTargetPicker({
             const xSize = MINI_HEX_SIZE * 0.35;
 
             return (
-              <g key={`${h.q},${h.r}`}>
+              <g key={key}>
                 <polygon
                   points={hexPoints(cx, cy, MINI_HEX_SIZE - 1)}
                   fill={fill}
@@ -151,15 +196,15 @@ export default function HexTargetPicker({
                   strokeWidth={1}
                   opacity={opacity}
                   style={{ cursor, transition: 'fill 0.1s ease' }}
-                  onClick={isEligible ? () => onSelect(worldHex) : undefined}
+                  onClick={isEligible ? () => onSelect(h) : undefined}
                   onMouseEnter={(e) => {
-                    if (isEligible) (e.target as SVGPolygonElement).setAttribute('fill', '#e6394630');
+                    if (isEligible) (e.target as SVGPolygonElement).setAttribute('fill', hoverFill);
                   }}
                   onMouseLeave={(e) => {
                     if (isEligible) (e.target as SVGPolygonElement).setAttribute('fill', fill);
                   }}
                 />
-                {isBlocked && (
+                {isBlocked && !isFog && (
                   <g opacity={0.5}>
                     <line x1={cx - xSize} y1={cy - xSize} x2={cx + xSize} y2={cy + xSize} stroke="#ff4060" strokeWidth={1.5} strokeLinecap="round" />
                     <line x1={cx + xSize} y1={cy - xSize} x2={cx - xSize} y2={cy + xSize} stroke="#ff4060" strokeWidth={1.5} strokeLinecap="round" />

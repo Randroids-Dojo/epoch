@@ -18,6 +18,8 @@ export type InteractionMode =
       unitId: string;
       commandType: TargetingCommandType;
       eligibleKeys: Set<string>;
+      /** Subset of eligibleKeys reachable within a single epoch (move only). */
+      immediateKeys?: Set<string>;
     }
 
   /** Drone selected; waiting for player to choose which structure to build. */

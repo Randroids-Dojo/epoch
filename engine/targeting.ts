@@ -99,11 +99,17 @@ export function computeEligibleHexes(
         break;
 
       case 'attack':
-        // All visible hexes with enemy unit or structure.
-        if (cell.fog !== 'visible') continue;
-        if (unitOwnerByHex.get(key) === 'ai' || structOwnerByHex.get(key) === 'ai') {
+        // Unexplored hexes are valid attack-move targets — the unit will
+        // walk there and engage any enemy it encounters along the way.
+        if (cell.fog === 'unexplored') {
           eligible.add(key);
+          break;
         }
+        // Visible/explored: exclude impassable terrain and friendly-occupied hexes.
+        if (!TERRAIN[cell.terrain].passable) continue;
+        if (unitOwnerByHex.get(key) === 'player') continue;
+        if (structOwnerByHex.get(key) === 'player') continue;
+        eligible.add(key);
         break;
 
       case 'gather':
@@ -129,9 +135,14 @@ export function computeEligibleBuildHexes(
   for (const structure of state.structures.values()) occupied.add(hexKey(structure.hex));
 
   for (const [key, cell] of state.map.cells) {
-    if (cell.fog === 'unexplored') continue;
-    if (!TERRAIN[cell.terrain].passable) continue;
     if (occupied.has(key)) continue;
+    // Allow unexplored hexes — the drone will move there and explore as it goes.
+    // If terrain turns out impassable, the build order will be cancelled during resolution.
+    if (cell.fog === 'unexplored') {
+      eligible.add(key);
+      continue;
+    }
+    if (!TERRAIN[cell.terrain].passable) continue;
     eligible.add(key);
   }
 
@@ -140,35 +151,50 @@ export function computeEligibleBuildHexes(
 
 // ── Range-limited targeting for in-panel pickers ─────────────────────────────
 
-/** Eligible hexes within a unit's movement range (speed). */
+/** Result of computing move targets, split into immediate (this epoch) and extended (multi-turn). */
+export interface MoveTargetResult {
+  /** All eligible hexes (both immediate and multi-turn). */
+  allKeys: Set<string>;
+  /** Hexes reachable within a single epoch (within unit speed). */
+  immediateKeys: Set<string>;
+}
+
+/** Eligible hexes for movement, split into immediate and multi-turn targets. */
 export function computeUnitMoveTargets(
   state: GameState,
   unit: Unit,
-): Set<string> {
+): MoveTargetResult {
   const range = UNIT_DEFS[unit.type].speed;
   const allEligible = computeEligibleHexes(state, 'move');
-  const inRange = new Set<string>();
+  const immediateKeys = new Set<string>();
   for (const hex of hexesInRange(unit.hex, range)) {
     const key = hexKey(hex);
-    if (allEligible.has(key)) inRange.add(key);
+    if (allEligible.has(key)) immediateKeys.add(key);
   }
-  return inRange;
+  return { allKeys: allEligible, immediateKeys };
 }
 
-/** Eligible hexes within a unit's attack range from its current position. */
+/** Result of computing attack targets, split into immediate (in range) and extended (multi-turn move-to-attack). */
+export interface AttackTargetResult {
+  /** All eligible hexes (both immediate and multi-turn). */
+  allKeys: Set<string>;
+  /** Hexes within attack range this epoch (unit can attack immediately). */
+  immediateKeys: Set<string>;
+}
+
+/** Eligible hexes for attack-move, split into immediate and multi-turn targets. */
 export function computeUnitAttackTargets(
   state: GameState,
   unit: Unit,
-): Set<string> {
+): AttackTargetResult {
   const def = UNIT_DEFS[unit.type];
-  const reach = def.range;
   const allEligible = computeEligibleHexes(state, 'attack');
-  const inRange = new Set<string>();
-  for (const hex of hexesInRange(unit.hex, reach)) {
+  const immediateKeys = new Set<string>();
+  for (const hex of hexesInRange(unit.hex, def.range)) {
     const key = hexKey(hex);
-    if (allEligible.has(key)) inRange.add(key);
+    if (allEligible.has(key)) immediateKeys.add(key);
   }
-  return inRange;
+  return { allKeys: allEligible, immediateKeys };
 }
 
 /** Eligible hexes within a unit's phase surge range (speed + bonus). */
@@ -186,22 +212,23 @@ export function computeUnitPhaseSurgeTargets(
   return inRange;
 }
 
-/** Eligible build hexes near a drone (within its speed radius), filtered by structure-specific terrain rules. */
+/** Eligible build hexes anywhere on the map, filtered by structure-specific terrain rules.
+ *  The drone will move to the build location over multiple turns if needed. */
 export function computeUnitBuildTargets(
   state: GameState,
   unit: Unit,
   structureType?: StructureType,
 ): Set<string> {
-  const range = UNIT_DEFS[unit.type].speed;
   const allEligible = computeEligibleBuildHexes(state);
-  const inRange = new Set<string>();
-  for (const hex of hexesInRange(unit.hex, range)) {
-    const key = hexKey(hex);
-    if (!allEligible.has(key)) continue;
-    if (structureType && !isValidBuildTerrain(state, hex, structureType)) continue;
-    inRange.add(key);
+  if (!structureType) return allEligible;
+  const filtered = new Set<string>();
+  for (const key of allEligible) {
+    const cell = state.map.cells.get(key);
+    if (cell && isValidBuildTerrain(state, cell.hex, structureType)) {
+      filtered.add(key);
+    }
   }
-  return inRange;
+  return filtered;
 }
 
 /** Checks structure-specific terrain placement rules. */

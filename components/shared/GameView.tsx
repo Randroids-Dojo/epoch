@@ -26,7 +26,7 @@ import {
 import { generateAICommands } from '@/engine/ai';
 import { isComplete, STRUCTURE_DEFS } from '@/engine/structures';
 import { PlayerId } from '@/engine/player';
-import { COLORS, DEAD_ZONE, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT, UNIT_PANEL_WIDTH } from '@/lib/constants';
+import { COLORS, DEAD_ZONE, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
 import { InteractionMode, TutorialStep } from '@/lib/types';
 import { Unit, UNIT_DEFS, effectiveAttack } from '@/engine/units';
 import { findUnitAt } from '@/engine/state';
@@ -642,6 +642,18 @@ export default function GameView() {
 
     resolveEpoch(state);
 
+    // When the game ends, skip the execution animation and show the result
+    // immediately. Otherwise the victory/defeat overlay stacks on top of
+    // the execution overlay, blocking the SKIP button and leaving the player
+    // unable to interact for several seconds.
+    // Note: resolveEpoch mutates state.phase; cast to avoid TS narrowing issue.
+    if ((state.phase as string) === 'over') {
+      animationRef.current = null;
+      setMode({ kind: 'idle' });
+      setGameState({ ...state });
+      return;
+    }
+
     const anim = buildAnimationTimeline(unitSnaps, structSnaps, state);
     animationRef.current = anim;
     setActionBeats(buildActionSequence(anim, state.map));
@@ -900,14 +912,14 @@ export default function GameView() {
       }
 
       if (type === 'move') {
-        const eligibleKeys = computeUnitMoveTargets(state, unit);
-        setMode({ kind: 'targeting', unitId, commandType: 'move', eligibleKeys });
+        const { allKeys, immediateKeys } = computeUnitMoveTargets(state, unit);
+        setMode({ kind: 'targeting', unitId, commandType: 'move', eligibleKeys: allKeys, immediateKeys });
         return;
       }
 
       if (type === 'attack') {
-        const eligibleKeys = computeUnitAttackTargets(state, unit);
-        setMode({ kind: 'targeting', unitId, commandType: 'attack', eligibleKeys });
+        const { allKeys, immediateKeys } = computeUnitAttackTargets(state, unit);
+        setMode({ kind: 'targeting', unitId, commandType: 'attack', eligibleKeys: allKeys, immediateKeys });
         return;
       }
 
@@ -1250,6 +1262,19 @@ export default function GameView() {
   // Cards now stack from the bottom, so pickers open from the bottom too.
   const unitPickerBottom = 84;
 
+  // Stable set of map hex keys for the HexTargetPicker (map never changes during gameplay).
+  const mapKeys = useMemo(() => new Set(gameState.map.cells.keys()), [gameState.map]);
+
+  // Set of hex keys currently in fog (unexplored), updated each render for the picker.
+  const fogKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const [key, cell] of gameState.map.cells) {
+      if (cell.fog === 'unexplored') keys.add(key);
+    }
+    return keys;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fog changes each epoch as units explore
+  }, [gameState.map, gameState.epoch]);
+
   return (
     <div className="relative flex h-full w-full flex-col overflow-hidden">
       {/* Epoch stats comparison popup — shown after each epoch resolves */}
@@ -1299,7 +1324,6 @@ export default function GameView() {
       {/* Canvas area fills remaining space */}
       <div
         className="relative min-h-0 flex-1"
-        style={isMobile && showPlanningHud ? { paddingLeft: UNIT_PANEL_WIDTH } : undefined}
       >
         <GameCanvas
           gameState={gameState}
@@ -1498,15 +1522,16 @@ export default function GameView() {
 
         {/* Hex target picker for move/attack targeting */}
         {mode.kind === 'targeting' && !isExecuting && unitForPicker && (mode.commandType === 'move' || mode.commandType === 'attack') && (
-          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: 188, zIndex: 100 }}>
+          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: isMobile ? 4 : 188, right: isMobile ? 4 : undefined, zIndex: 100 }}>
             <HexTargetPicker
               unitHex={unitForPicker.hex}
-              radius={mode.commandType === 'move'
-                ? UNIT_DEFS[unitForPicker.type].speed
-                : UNIT_DEFS[unitForPicker.type].speed + UNIT_DEFS[unitForPicker.type].range
-              }
+              mapKeys={mapKeys}
+              fogKeys={fogKeys}
               eligibleKeys={mode.eligibleKeys}
+              immediateKeys={mode.immediateKeys}
               header={mode.commandType === 'move' ? 'MOVE TARGET' : 'ATTACK TARGET'}
+              maxWidth={isMobile ? window.innerWidth - 8 : undefined}
+              maxHeight={isMobile ? window.innerHeight * 0.45 : undefined}
               onSelect={handleHexTargetSelect}
               onClose={() => setMode({ kind: 'idle' })}
             />
@@ -1515,12 +1540,15 @@ export default function GameView() {
 
         {/* Hex target picker for build placement */}
         {mode.kind === 'build_targeting' && !isExecuting && unitForPicker && (
-          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: 188, zIndex: 100 }}>
+          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: isMobile ? 4 : 188, right: isMobile ? 4 : undefined, zIndex: 100 }}>
             <HexTargetPicker
               unitHex={unitForPicker.hex}
-              radius={UNIT_DEFS[unitForPicker.type].speed}
+              mapKeys={mapKeys}
+              fogKeys={fogKeys}
               eligibleKeys={mode.eligibleKeys}
               header="BUILD LOCATION"
+              maxWidth={isMobile ? window.innerWidth - 8 : undefined}
+              maxHeight={isMobile ? window.innerHeight * 0.45 : undefined}
               onSelect={handleHexTargetSelect}
               onClose={() => setMode({ kind: 'idle' })}
             />
@@ -1529,7 +1557,7 @@ export default function GameView() {
 
         {/* Gather target list picker */}
         {mode.kind === 'gather_picker' && !isExecuting && (
-          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: 188, zIndex: 100 }}>
+          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: isMobile ? 4 : 188, right: isMobile ? 4 : undefined, zIndex: 100 }}>
             <GatherTargetPicker
               targets={mode.targets}
               tutorialHighlight={tutorialStep === 'gather_select_target'}
@@ -1541,7 +1569,7 @@ export default function GameView() {
 
         {/* Merge target picker */}
         {mode.kind === 'merge_picker' && !isExecuting && (
-          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: 188, zIndex: 100 }}>
+          <div style={{ position: 'absolute', bottom: unitPickerBottom, left: isMobile ? 4 : 188, right: isMobile ? 4 : undefined, zIndex: 100 }}>
             <MergeTargetPicker
               targets={mode.targets}
               onConfirm={handleMergeConfirm}
@@ -1665,7 +1693,7 @@ export default function GameView() {
 
         {/* Game-over overlay with victory/defeat animation */}
         {gameState.phase === 'over' && (
-          <div data-testid="game-over-overlay">
+          <div data-testid="game-over-overlay" style={{ position: 'fixed', inset: 0, zIndex: 100 }}>
             <VictoryAnimation
               winner={gameState.winner === 'player' ? 'player' : 'ai'}
               epoch={gameState.epoch}

@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { skipSetup, waitForGameReady } from './helpers';
+import { skipSetup, waitForGameReady, dismissPostEpochPopups } from './helpers';
 
 test.beforeEach(async ({ page }) => { await skipSetup(page); });
 
@@ -24,6 +24,7 @@ test('skipping execution returns to planning', async ({ page }) => {
   await page.goto('/');
   await enterExecution(page);
   await page.keyboard.press('Space');
+  await dismissPostEpochPopups(page);
   await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 5000 });
   await expect(page.getByTestId('phase-label')).not.toBeVisible();
 });
@@ -39,5 +40,6 @@ test('keyboard shortcut skips execution', async ({ page }) => {
   await page.goto('/');
   await enterExecution(page);
   await page.keyboard.press('Space');
+  await dismissPostEpochPopups(page);
   await expect(page.getByTestId('command-slot-0')).toBeVisible({ timeout: 3000 });
 });

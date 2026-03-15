@@ -34,6 +34,8 @@ export default function VictoryAnimation({ winner, epoch, onComplete }: VictoryA
   return (
     <div
       data-testid="victory-animation"
+      onClick={onComplete}
+      onTouchEnd={onComplete}
       style={{
         position: 'absolute',
         inset: 0,
@@ -44,6 +46,7 @@ export default function VictoryAnimation({ winner, epoch, onComplete }: VictoryA
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
+        cursor: 'pointer',
       }}
     >
       {/* Initial white flash */}
@@ -208,7 +211,7 @@ export default function VictoryAnimation({ winner, epoch, onComplete }: VictoryA
           position: 'relative',
           zIndex: 2,
         }}
-        onClick={phase === 'idle' ? onComplete : undefined}
+        onClick={onComplete}
         onMouseEnter={(e) => {
           if (phase === 'idle') {
             e.currentTarget.style.borderColor = accentColor;

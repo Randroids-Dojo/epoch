@@ -284,7 +284,7 @@ function generateCandidates(
     (s) => isHarvestable(s) && isComplete(s) && !s.assignedDroneId,
   );
   const idleDrones = aiUnits.filter(
-    (u) => u.type === 'drone' && !u.assignedExtractorId,
+    (u) => u.type === 'drone' && !u.assignedExtractorId && !u.pendingBuild,
   );
   {
     const availableDrones = idleDrones.slice(reservedForBuilds);
@@ -559,8 +559,17 @@ function generateCandidates(
   }
 
   // ── Move — Expand (toward crystal nodes) ──────────────────────────────────
+  // Skip drones busy building or reserved for critical production structures.
+  const dronesNeededForBuilds = CRITICAL_PRODUCTION.filter((type) => {
+    if (aiStructures.some((s) => s.type === type)) return false;
+    return ai.resources.cc >= STRUCTURE_DEFS[type].costCC;
+  }).length;
+  let expandSkips = dronesNeededForBuilds;
   for (const unit of aiUnits) {
     if (unit.type !== 'drone') continue;
+    if (unit.pendingBuild) continue; // Don't redirect drones already heading to a build site
+    if (unit.assignedExtractorId) continue;
+    if (expandSkips > 0) { expandSkips--; continue; } // Reserve drone for critical build
     const target = findNearestCrystalNode(state, unit.hex);
     if (target && !hexEqual(unit.hex, target)) {
       candidates.push({
@@ -581,6 +590,7 @@ function generateCandidates(
     });
     if (threatNearby) {
       for (const unit of aiUnits) {
+        if (unit.type === 'drone' && (unit.pendingBuild || unit.assignedExtractorId)) continue;
         if (hexDistance(unit.hex, nexus.hex) <= 3) {
           candidates.push({
             command: { type: 'defend', unitId: unit.id },
@@ -594,6 +604,7 @@ function generateCandidates(
     } else {
       // Fortress archetype: add baseline defend candidates even without threat
       for (const unit of aiUnits) {
+        if (unit.type === 'drone' && (unit.pendingBuild || unit.assignedExtractorId)) continue;
         if (hexDistance(unit.hex, nexus.hex) <= 2) {
           candidates.push({
             command: { type: 'defend', unitId: unit.id },
@@ -730,6 +741,14 @@ export function generateAICommands(state: GameState): void {
     budgetTE -= cand.costTE;
     for (const id of cand.unitIds) assignedUnits.add(id);
     if (cand.buildHexKey) plannedBuildHexes.add(cand.buildHexKey);
+  }
+
+  // Preserve default orders (e.g. pending-build movement) for units the AI
+  // didn't explicitly assign this epoch.
+  for (const [uid, order] of ai.unitOrders) {
+    if (!unitOrders.has(uid)) {
+      unitOrders.set(uid, order);
+    }
   }
 
   state.players.ai.unitOrders = unitOrders;

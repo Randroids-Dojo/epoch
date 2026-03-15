@@ -3,6 +3,7 @@ import { hexToPixel, hexDistance } from '@/engine/hex';
 import { BASE_HEX_SIZE } from '@/renderer/drawHex';
 import { DEFAULT_ZOOM } from '@/renderer/camera';
 
+
 type Hex = { q: number; r: number };
 
 type PlayerSnap = {
@@ -253,13 +254,43 @@ async function fillEpoch(page: Page): Promise<void> {
   }
 }
 
-async function waitForPlanningOrGameOver(page: Page): Promise<'planning' | 'over'> {
-  await page.waitForSelector(
-    '[data-testid="command-slot-0"],[data-testid="game-over-overlay"]',
-    { timeout: 30_000 },
+/**
+ * After execution ends (SKIP clicked or animation finishes), repeatedly dismiss
+ * epoch-stats and bonus-card popups until planning (command-slot-0) or game-over
+ * appears. Returns 'planning' or 'over'.
+ */
+async function resolvePostExecution(page: Page): Promise<'planning' | 'over'> {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    // Check for terminal states first.
+    if (await page.getByTestId('game-over-overlay').isVisible().catch(() => false)) return 'over';
+    if (await page.getByTestId('command-slot-0').isVisible().catch(() => false)) return 'planning';
+
+    // Dismiss epoch stats popup if present.
+    const stats = page.getByTestId('epoch-stats-popup');
+    if (await stats.isVisible().catch(() => false)) {
+      await stats.click();
+      await expect(stats).not.toBeVisible({ timeout: 3_000 }).catch(() => {});
+      continue;
+    }
+
+    // Dismiss bonus card popup if present.
+    const bonus = page.getByTestId('bonus-card-overlay');
+    if (await bonus.isVisible().catch(() => false)) {
+      await page.getByTestId('bonus-option-left').click().catch(() => {});
+      await expect(bonus).not.toBeVisible({ timeout: 3_000 }).catch(() => {});
+      continue;
+    }
+
+    // Nothing visible yet — wait briefly and retry.
+    await page.waitForTimeout(500);
+  }
+  // Timeout fallback — dump state for debugging.
+  const debugSnap = await page.evaluate(() =>
+    (window as Window & { __getGameSnapshot?: () => unknown }).__getGameSnapshot?.() ?? null,
   );
-  const isOver = await page.getByTestId('game-over-overlay').isVisible().catch(() => false);
-  return isOver ? 'over' : 'planning';
+  console.error('[resolvePostExecution] timeout — game state:', JSON.stringify(debugSnap));
+  throw new Error('resolvePostExecution timed out waiting for planning or game-over');
 }
 
 test('smoke: player can play full match from planning to game-over @smoke', async ({ page }) => {
@@ -284,10 +315,42 @@ test('smoke: player can play full match from planning to game-over @smoke', asyn
 
     await fillEpoch(page);
 
-    await page.getByTestId('lock-in-btn').click({ force: true });
-    await expect(page.getByTestId('phase-label')).toBeVisible({ timeout: 10_000 });
+    // If the planning timer auto-resolved during fillEpoch, the game may
+    // already be in execution or have returned to planning for the next epoch.
+    const preSnap = await getSnapshot(page);
+    if (preSnap.phase === 'over') break;
 
-    const result = await waitForPlanningOrGameOver(page);
+    // Only click lock-in if we're still in the planning phase and the button exists.
+    const lockBtn = page.getByTestId('lock-in-btn');
+    if (preSnap.phase === 'planning' && await lockBtn.isVisible().catch(() => false)) {
+      await lockBtn.click({ force: true });
+    }
+
+    // Wait for the game to enter some post-lock-in state.
+    await page.waitForSelector(
+      '[data-testid="phase-label"],[data-testid="game-over-overlay"],[data-testid="command-slot-0"]',
+      { timeout: 30_000 },
+    );
+
+    // If game ended, break.
+    if (await page.getByTestId('game-over-overlay').isVisible().catch(() => false)) break;
+
+    // If already back in planning (timer auto-resolved or fast execution), skip to next epoch.
+    if (await page.getByTestId('command-slot-0').isVisible().catch(() => false)) {
+      console.log(`[epoch ${snap.epoch}] already in planning, skipping`);
+      continue;
+    }
+
+    // Execution is in progress (phase-label visible). Click SKIP to fast-forward.
+    const skipBtn = page.getByTestId('skip-btn');
+    if (await skipBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await skipBtn.click();
+    }
+
+    // After SKIP, the execution overlay disappears and epoch-stats / bonus-card
+    // popups may appear before planning resumes.  Dismiss them in a loop until
+    // command-slot-0 or game-over-overlay becomes visible.
+    const endState = await resolvePostExecution(page);
 
     // Dump full game state after each epoch for analysis
     const detail = await page.evaluate(() => {
@@ -301,7 +364,7 @@ test('smoke: player can play full match from planning to game-over @smoke', asyn
     console.log(`\n=== EPOCH ${snap.epoch} RESOLUTION ===`);
     console.log(JSON.stringify({ ...detail, eventLog }, null, 2));
 
-    if (result === 'over') break;
+    if (endState === 'over') break;
   }
 
   // Force game-over if the match hasn't ended naturally within 20 epochs

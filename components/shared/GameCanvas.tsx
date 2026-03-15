@@ -11,7 +11,7 @@ import { BASE_HEX_SIZE, drawBackground, drawHexCell } from '@/renderer/drawHex';
 import { drawUnits, drawStructures, drawTargetingOverlay, drawRangeBorders, drawCommandArrows, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawMergeAnimations, drawEchoOverlay, drawTimelineForkOverlay, drawChronoScoutOverlay, drawParticles } from '@/renderer/drawEntities';
 import { TimelineForkResult, ChronoScoutResult } from '@/engine/simulation';
 import { InteractionMode } from '@/lib/types';
-import { ExecutionAnimation } from '@/renderer/animation';
+import { ExecutionAnimation, getAnimatedUnitPosition } from '@/renderer/animation';
 import { Command, PHASE_SURGE_SPEED_BONUS } from '@/engine/commands';
 import { UNIT_DEFS } from '@/engine/units';
 
@@ -239,7 +239,8 @@ export default function GameCanvas({
 
     // ── Targeting overlay ────────────────────────────────────────────────────
     if (m.kind === 'targeting' || m.kind === 'build_targeting') {
-      drawTargetingOverlay(ctx, map.cells, m.eligibleKeys, cam);
+      const immediateKeys = (m.kind === 'targeting' && m.immediateKeys) ? m.immediateKeys : undefined;
+      drawTargetingOverlay(ctx, map.cells, m.eligibleKeys, cam, immediateKeys);
 
       // Draw range borders on the real board matching the HexTargetPicker area.
       const targetUnit = gs.units.get(m.unitId);
@@ -247,8 +248,8 @@ export default function GameCanvas({
         let radius: number;
         if (m.kind === 'targeting') {
           if (m.commandType === 'attack') {
-            const def = UNIT_DEFS[targetUnit.type];
-            radius = def.speed + def.range;
+            // Attack-move: no range border — the unit can target any hex.
+            radius = 0;
           } else if (m.commandType === 'phase_surge') {
             radius = UNIT_DEFS[targetUnit.type].speed + PHASE_SURGE_SPEED_BONUS;
           } else {
@@ -281,10 +282,21 @@ export default function GameCanvas({
     lastFrameTimeRef.current = now;
     drawParticles(ctx, dt);
 
-    // ── Command arrows (planning phase only) ──────────────────────────────────
-    if (!anim) {
+    // ── Command arrows ────────────────────────────────────────────────────────
+    {
       const player = gs.players.player;
-      drawCommandArrows(ctx, gs.units, player.unitOrders, player.defaultOrderUnitIds, cam);
+      if (anim) {
+        // Build animated positions so path lines start from the unit's current
+        // interpolated position, not its static hex.
+        const elapsed = (performance.now() - anim.startedAt) / 1000;
+        const animPositions = new Map<string, { x: number; y: number }>();
+        for (const [uid, ua] of anim.units) {
+          animPositions.set(uid, getAnimatedUnitPosition(ua, elapsed));
+        }
+        drawCommandArrows(ctx, gs.units, player.unitOrders, player.defaultOrderUnitIds, cam, true, animPositions);
+      } else {
+        drawCommandArrows(ctx, gs.units, player.unitOrders, player.defaultOrderUnitIds, cam);
+      }
     }
 
     // ── Temporal Echo overlay (planning phase only) ───────────────────────────

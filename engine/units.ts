@@ -1,5 +1,6 @@
 import { Hex } from './hex';
 import { PlayerId } from './player';
+import { StructureType } from './structures';
 
 export type UnitType =
   | 'drone'
@@ -100,6 +101,12 @@ export interface Unit {
   bonusMaxHp: number;
   /** Extra attack gained from merges. Effective attack = UNIT_DEFS[type].attack + bonusAttack. */
   bonusAttack: number;
+  /** Hex of the target this unit is continuously attacking, or null if none. */
+  attackTargetHex: Hex | null;
+  /** Hex the unit is continuously moving toward across epochs, or null if none. */
+  moveTargetHex: Hex | null;
+  /** Pending build order for drones: the drone walks to the target and builds on arrival. */
+  pendingBuild: { targetHex: Hex; structureType: StructureType } | null;
 }
 
 /** Returns the effective max HP for a unit (base + merge bonus). */

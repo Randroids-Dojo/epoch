@@ -957,7 +957,8 @@ export function drawStructures(
 
 /**
  * Draw hex targeting overlay.
- * Eligible hexes: crimson tint.
+ * Immediate-range eligible hexes: crimson tint.
+ * Multi-turn eligible hexes (move only): amber tint.
  * Non-eligible passable hexes: dark dimming overlay.
  */
 export function drawTargetingOverlay(
@@ -965,6 +966,7 @@ export function drawTargetingOverlay(
   cells: Map<string, HexCell>,
   eligibleKeys: Set<string>,
   cam: Camera,
+  immediateKeys?: Set<string>,
 ): void {
   const size = BASE_HEX_SIZE * cam.zoom;
 
@@ -982,7 +984,13 @@ export function drawTargetingOverlay(
 
     hexPath(ctx, sx, sy, size);
 
-    ctx.fillStyle = isEligible ? 'rgba(230,57,70,0.22)' : 'rgba(0,0,0,0.30)';
+    if (isEligible) {
+      const isImmediate = !immediateKeys || immediateKeys.has(key);
+      // Crimson for single-turn targets, amber for multi-turn
+      ctx.fillStyle = isImmediate ? 'rgba(230,57,70,0.22)' : 'rgba(245,158,11,0.15)';
+    } else {
+      ctx.fillStyle = 'rgba(0,0,0,0.30)';
+    }
     ctx.fill();
   }
 }
@@ -1068,26 +1076,43 @@ export function drawCommandArrows(
   unitOrders: Map<string, UnitCommand>,
   defaultOrderUnitIds: Set<string>,
   cam: Camera,
+  /** When true, only draw persistent multi-turn paths (pendingBuild / moveTargetHex). */
+  persistentOnly = false,
+  /** Animated world-space pixel positions for units (used during execution animation). */
+  animatedPositions?: Map<string, { x: number; y: number }>,
 ): void {
   const prevAlpha = ctx.globalAlpha;
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
 
   for (const [unitId, cmd] of unitOrders) {
-    // Skip default (auto-populated) orders — keep the display clean.
-    if (defaultOrderUnitIds.has(unitId)) continue;
-
     // Only commands with a targetHex get arrows.
     if (!('targetHex' in cmd)) continue;
 
     const unit = units.get(unitId);
     if (!unit || unit.owner !== 'player') continue;
-    if (hexEqual(unit.hex, cmd.targetHex)) continue;
 
-    const style = ARROW_STYLES[cmd.type];
+    // Skip default (auto-populated) orders — keep the display clean.
+    // Exception: show persistent multi-turn paths (moveTargetHex / pendingBuild).
+    const isDefault = defaultOrderUnitIds.has(unitId);
+    const isPersistent = !!(unit.moveTargetHex || unit.pendingBuild);
+    if (isDefault && !isPersistent) continue;
+    if (persistentOnly && !isPersistent) continue;
+
+    // When a drone has a pending build, show a yellow build-style arrow to the
+    // build target instead of a red move arrow — the move is just the means.
+    const hasPendingBuild = unit.pendingBuild && isDefault;
+    const effectiveType = hasPendingBuild ? 'build' : cmd.type;
+    const effectiveTarget = hasPendingBuild ? unit.pendingBuild!.targetHex : cmd.targetHex;
+
+    if (hexEqual(unit.hex, effectiveTarget)) continue;
+
+    const style = ARROW_STYLES[effectiveType];
     if (!style) continue;
+    // Dim persistent multi-turn paths vs explicit orders.
+    const lineAlpha = isDefault ? 0.4 : 0.7;
 
-    const fromWp = hexToPixel(unit.hex, BASE_HEX_SIZE);
-    const toWp   = hexToPixel(cmd.targetHex, BASE_HEX_SIZE);
+    const fromWp = animatedPositions?.get(unitId) ?? hexToPixel(unit.hex, BASE_HEX_SIZE);
+    const toWp   = hexToPixel(effectiveTarget, BASE_HEX_SIZE);
     const fx = cam.x + fromWp.x * cam.zoom;
     const fy = cam.y + fromWp.y * cam.zoom;
     const tx = cam.x + toWp.x * cam.zoom;
@@ -1107,7 +1132,7 @@ export function drawCommandArrows(
     const ey = ty - uy * inset;
 
     // Draw line.
-    ctx.globalAlpha = 0.7;
+    ctx.globalAlpha = lineAlpha;
     ctx.strokeStyle = style.color;
     ctx.lineWidth = 2;
     ctx.setLineDash(style.dash);
@@ -1122,9 +1147,12 @@ export function drawCommandArrows(
     drawArrowhead(ctx, asx, asy, ex, ey, 7 * cam.zoom);
 
     // Build orders: draw a ghost of the planned structure at the target.
-    if (cmd.type === 'build') {
-      ctx.globalAlpha = 0.3;
-      paintStructure(ctx, tx, ty, r, cmd.structureType, style.color);
+    const buildStructureType: StructureType | null = hasPendingBuild
+      ? unit.pendingBuild!.structureType
+      : cmd.type === 'build' ? (cmd as { structureType: StructureType }).structureType : null;
+    if (effectiveType === 'build' && buildStructureType) {
+      ctx.globalAlpha = isDefault ? 0.2 : 0.3;
+      paintStructure(ctx, tx, ty, r, buildStructureType, style.color);
       // Dashed ring around the ghost.
       ctx.globalAlpha = 0.5;
       ctx.strokeStyle = style.color;

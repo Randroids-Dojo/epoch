@@ -183,8 +183,22 @@ function findClosestReachable(
 
 function stepDefend(state: GameState, commands: CommandEntry[], log: string[]): void {
   // Clear defending flags from previous epoch.
+  // Also clear attackTargetHex for units that have been given a non-attack order,
+  // so that manual command changes cancel continuous attacks.
   for (const unit of state.units.values()) {
     unit.isDefending = false;
+    if (unit.attackTargetHex) {
+      const order = state.players[unit.owner].unitOrders.get(unit.id);
+      if (order && order.type !== 'attack') {
+        unit.attackTargetHex = null;
+      }
+    }
+    if (unit.moveTargetHex) {
+      const order = state.players[unit.owner].unitOrders.get(unit.id);
+      if (order && order.type !== 'move') {
+        unit.moveTargetHex = null;
+      }
+    }
   }
 
   const defends = commands.filter(
@@ -410,6 +424,36 @@ function stepMove(state: GameState, commands: CommandEntry[], log: string[]): vo
       return ha && hb ? mapOrder(ha, hb) : 0;
     });
 
+  // Drones with distant build commands also move toward the build site this epoch.
+  for (const e of commands) {
+    if (e.command.type !== 'build') continue;
+    const drone = state.units.get(e.command.unitId);
+    if (!drone || drone.type !== 'drone') continue;
+    if (hexDistance(drone.hex, e.command.targetHex) <= 1) continue;
+    allMoves.push({
+      owner: e.owner,
+      command: { type: 'move', unitId: e.command.unitId, targetHex: e.command.targetHex },
+    });
+  }
+
+  // Attack-move: units with attack commands targeting out-of-range hexes walk
+  // toward the target.  Track these so we can stop them early if an enemy
+  // enters attack range during movement.
+  const attackMoveUnits = new Set<string>();
+  for (const e of commands) {
+    if (e.command.type !== 'attack') continue;
+    const unit = state.units.get(e.command.unitId);
+    if (!unit) continue;
+    const def = UNIT_DEFS[unit.type];
+    if (def.range === 0) continue; // drones / flux weavers can't attack
+    if (hexDistance(unit.hex, e.command.targetHex) <= def.range) continue; // already in range
+    attackMoveUnits.add(e.command.unitId);
+    allMoves.push({
+      owner: e.owner,
+      command: { type: 'move', unitId: e.command.unitId, targetHex: e.command.targetHex },
+    });
+  }
+
   // Build blocked set once; update it as units move so later movers see vacated hexes.
   const blocked = new Set<string>();
   for (const u of state.units.values()) blocked.add(hexKey(u.hex));
@@ -452,16 +496,76 @@ function stepMove(state: GameState, commands: CommandEntry[], log: string[]): vo
       }
     }
 
-    const steps = path.slice(0, effectiveSpeed);
+    const isAttackMove = attackMoveUnits.has(command.unitId);
+    let steps = path.slice(0, effectiveSpeed);
+
+    // Attack-move intercept: stop early if the unit reaches attack range of
+    // any enemy unit or structure during movement.
+    if (isAttackMove && steps.length > 0) {
+      const foe = opponent(owner);
+      for (let i = 0; i < steps.length; i++) {
+        const hex = steps[i];
+        if (hasEnemyInRange(state, hex, def.range, foe)) {
+          steps = steps.slice(0, i + 1);
+          break;
+        }
+      }
+    }
+
     if (steps.length > 0) {
       const dest = steps[steps.length - 1];
       unit.hex = dest;
       blocked.add(hexKey(dest)); // Mark new position occupied for subsequent movers.
       log.push(`${owner} ${unit.type} → (${dest.q},${dest.r})`);
+
+      if (isAttackMove) {
+        // For attack-move, persist the attack target — not a move target.
+        unit.attackTargetHex = { ...command.targetHex };
+      } else {
+        // Persist move target if unit hasn't arrived yet; clear if it has.
+        if (hexEqual(dest, command.targetHex)) {
+          unit.moveTargetHex = null;
+        } else {
+          unit.moveTargetHex = { ...command.targetHex };
+        }
+      }
     } else {
       blocked.add(ownKey); // Unit didn't move; restore its hex in the blocked set.
     }
   }
+}
+
+/** Returns true if any enemy unit or structure is within `range` hexes of `hex`. */
+function hasEnemyInRange(state: GameState, hex: Hex, range: number, foe: PlayerId): boolean {
+  for (const u of state.units.values()) {
+    if (u.owner === foe && hexDistance(hex, u.hex) <= range) return true;
+  }
+  for (const s of state.structures.values()) {
+    if (s.owner === foe && hexDistance(hex, s.hex) <= range) return true;
+  }
+  return false;
+}
+
+/** Finds the closest enemy unit or structure within `range` of `hex`. */
+function findClosestEnemyInRange(
+  state: GameState, hex: Hex, range: number, foe: PlayerId,
+): { hex: Hex; kind: 'unit' | 'structure' } | null {
+  let best: { hex: Hex; kind: 'unit' | 'structure'; dist: number } | null = null;
+  for (const u of state.units.values()) {
+    if (u.owner !== foe) continue;
+    const d = hexDistance(hex, u.hex);
+    if (d <= range && (!best || d < best.dist)) {
+      best = { hex: u.hex, kind: 'unit', dist: d };
+    }
+  }
+  for (const s of state.structures.values()) {
+    if (s.owner !== foe) continue;
+    const d = hexDistance(hex, s.hex);
+    if (d <= range && (!best || d < best.dist)) {
+      best = { hex: s.hex, kind: 'structure', dist: d };
+    }
+  }
+  return best;
 }
 
 // ── Step 4: Attack ────────────────────────────────────────────────────────────
@@ -494,11 +598,29 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
     const foe = opponent(owner);
 
     // Find enemy unit at target hex first; else enemy structure.
-    const targetUnit   = findUnitAt(state, command.targetHex, foe);
-    const targetStruct = targetUnit ? undefined : findStructureAt(state, command.targetHex, foe);
+    let targetUnit   = findUnitAt(state, command.targetHex, foe);
+    let targetStruct = targetUnit ? undefined : findStructureAt(state, command.targetHex, foe);
+    let actualTargetHex = command.targetHex;
+
+    // Attack-move: if no enemy at the designated hex, scan for the closest
+    // enemy within attack range of the attacker's current position.
+    if (!targetUnit && !targetStruct) {
+      const nearby = findClosestEnemyInRange(state, attacker.hex, def.range, foe);
+      if (nearby) {
+        actualTargetHex = nearby.hex;
+        if (nearby.kind === 'unit') {
+          targetUnit = findUnitAt(state, nearby.hex, foe);
+        } else {
+          targetStruct = findStructureAt(state, nearby.hex, foe);
+        }
+      }
+    }
 
     if (!targetUnit && !targetStruct) continue;
-    if (hexDistance(attacker.hex, command.targetHex) > def.range) continue;
+    if (hexDistance(attacker.hex, actualTargetHex) > def.range) continue;
+
+    // Persist the attack target so the order auto-repopulates next epoch.
+    attacker.attackTargetHex = { ...command.targetHex };
 
     if (targetUnit) {
       const effAtk = effectiveAttack(attacker);
@@ -512,7 +634,7 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
       // Void Striker splash: 50% damage to all adjacent hexes.
       if (attacker.type === 'void_striker') {
         const splashDmg = Math.max(1, Math.ceil(effAtk * 0.5 * attackMult));
-        for (const adjHex of hexNeighbors(command.targetHex)) {
+        for (const adjHex of hexNeighbors(actualTargetHex)) {
           const splashUnit = findUnitAt(state, adjHex, foe);
           if (splashUnit && splashUnit.id !== targetUnit.id) {
             unitDamage.set(splashUnit.id, (unitDamage.get(splashUnit.id) ?? 0) + splashDmg);
@@ -543,6 +665,8 @@ function stepAttack(state: GameState, commands: CommandEntry[], log: string[]): 
       : dmg;
 
     unit.hp -= shieldedDmg;
+    // Cancel continuous movement when a unit takes damage.
+    unit.moveTargetHex = null;
     if (unit.hp <= 0) {
       // Chrono Titan on-death: grant damageShield to all nearby friendly units.
       if (unit.type === 'chrono_titan') {
@@ -643,39 +767,48 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
     const player = state.players[owner];
     const def    = STRUCTURE_DEFS[command.structureType];
 
+    // Helper: cancel pending build on validation failure so the drone stops retrying.
+    const failBuild = (reason: string) => {
+      log.push(`${owner} Build ${command.structureType} failed — ${reason}`);
+      drone.pendingBuild = null;
+      drone.moveTargetHex = null;
+    };
+
     // Tech tier check.
     if (def.techTierRequired > player.techTier) {
-      log.push(`${owner} Build ${command.structureType} failed — requires Tech Tier ${def.techTierRequired}`);
+      failBuild(`requires Tech Tier ${def.techTierRequired}`);
       continue;
     }
-    // CC cost check.
+    // CC cost check — don't cancel pendingBuild since resources may become available.
     if (player.resources.cc < def.costCC) {
       log.push(`${owner} Build ${command.structureType} failed — insufficient CC`);
       continue;
     }
-    // FX cost check.
+    // FX cost check — don't cancel pendingBuild since resources may become available.
     if (player.resources.fx < def.costFX) {
       log.push(`${owner} Build ${command.structureType} failed — insufficient FX`);
       continue;
     }
-    // Hex must be empty (no unit, no structure).
+    // Hex must be empty (no other unit, no structure). The building drone
+    // itself may be on the target hex after walking there.
+    const unitOnHex = findUnitAt(state, command.targetHex);
     const hexOccupied =
-      findUnitAt(state, command.targetHex) !== undefined ||
+      (unitOnHex !== undefined && unitOnHex.id !== drone.id) ||
       findStructureAt(state, command.targetHex) !== undefined;
     if (hexOccupied) {
-      log.push(`${owner} Build ${command.structureType} failed — hex occupied`);
+      failBuild('hex occupied');
       continue;
     }
     // Hex must be on the map and passable.
     const cell = state.map.cells.get(hexKey(command.targetHex));
     if (!cell || !TERRAIN[cell.terrain].passable) {
-      log.push(`${owner} Build ${command.structureType} failed — impassable hex`);
+      failBuild('impassable hex');
       continue;
     }
     // Crystal Extractor must be on a Crystal Node.
     if (command.structureType === 'crystal_extractor') {
       if (cell.terrain !== 'crystal_node') {
-        log.push(`${owner} Build crystal_extractor failed — must be on a Crystal Node`);
+        failBuild('must be on a Crystal Node');
         continue;
       }
     }
@@ -687,45 +820,49 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
         return nbCell?.terrain === 'flux_vent';
       });
       if (!onVent && !adjToVent) {
-        log.push(`${owner} Build flux_conduit failed — must be on or adjacent to a Flux Vent`);
+        failBuild('must be on or adjacent to a Flux Vent');
         continue;
       }
     }
     // All other structures may NOT be placed on harvesting terrain.
     if (command.structureType !== 'crystal_extractor' && command.structureType !== 'flux_conduit') {
       if (cell.terrain === 'crystal_node' || cell.terrain === 'flux_vent') {
-        log.push(`${owner} Build ${command.structureType} failed — cannot build on resource terrain`);
+        failBuild('cannot build on resource terrain');
+        continue;
+      }
+    }
+
+    // Drone must be adjacent (≤1 hex) to the build site. If too far,
+    // set a pending build order so the drone walks there over multiple epochs.
+    const dist = hexDistance(drone.hex, command.targetHex);
+    if (dist > 1) {
+      drone.pendingBuild = { targetHex: { ...command.targetHex }, structureType: command.structureType };
+      drone.moveTargetHex = { ...command.targetHex };
+      log.push(`${owner} Drone heading to (${command.targetHex.q},${command.targetHex.r}) for ${def.label}`);
+      continue;
+    }
+
+    // If the drone is standing on the build hex, move it to a passable neighbor.
+    if (hexEqual(drone.hex, command.targetHex)) {
+      const neighbors = hexNeighbors(command.targetHex);
+      let moved = false;
+      for (const nb of neighbors) {
+        const nbCell = state.map.cells.get(hexKey(nb));
+        if (!nbCell || !TERRAIN[nbCell.terrain].passable) continue;
+        if (findUnitAt(state, nb)) continue;
+        if (findStructureAt(state, nb)) continue;
+        drone.hex = nb;
+        moved = true;
+        break;
+      }
+      if (!moved) {
+        failBuild('no adjacent space for drone');
         continue;
       }
     }
 
     player.resources.cc -= def.costCC;
     player.resources.fx -= def.costFX;
-
-    // Move the drone adjacent to the build site when building at range > 1.
-    const dist = hexDistance(drone.hex, command.targetHex);
-    if (dist > 1) {
-      // Pick the neighbor of the target hex closest to the drone's current position.
-      const neighbors = hexNeighbors(command.targetHex);
-      let bestHex = drone.hex;
-      let bestDist = Infinity;
-      for (const nb of neighbors) {
-        const d = hexDistance(drone.hex, nb);
-        const nbKey = hexKey(nb);
-        const cell2 = state.map.cells.get(nbKey);
-        if (!cell2 || !TERRAIN[cell2.terrain].passable) continue;
-        if (findUnitAt(state, nb)) continue;
-        if (findStructureAt(state, nb)) continue;
-        if (d < bestDist) {
-          bestDist = d;
-          bestHex = nb;
-        }
-      }
-      if (!hexEqual(bestHex, drone.hex)) {
-        drone.hex = bestHex;
-        log.push(`${owner} Drone moved to (${bestHex.q},${bestHex.r}) for build`);
-      }
-    }
 
     const id = newId('s');
     state.structures.set(id, {
@@ -737,6 +874,8 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
       buildProgress: def.buildEpochs,
       assignedDroneId: null,
     });
+    drone.pendingBuild = null;
+    drone.moveTargetHex = null;
     log.push(`${owner} began building ${def.label}`);
   }
 }
@@ -927,6 +1066,9 @@ function stepTrain(state: GameState, commands: CommandEntry[], log: string[]): v
       mergeCount:          0,
       bonusMaxHp:          0,
       bonusAttack:         0,
+      attackTargetHex:     null,
+      moveTargetHex:       null,
+      pendingBuild:        null,
     });
     log.push(`${owner} trained ${unitDef.label}`);
   }
@@ -1069,13 +1211,67 @@ function stepPostResolution(state: GameState, commands: CommandEntry[]): void {
     p.lockedIn = false;
     p.defaultOrderUnitIds = new Set();
 
-    // Auto-populate gather orders for drones still assigned to extractors.
+    // Auto-populate default orders for persistent unit tasks.
+    // Priority: gather > attack > move (earlier wins, later won't overwrite).
+    const foe = opponent(pid);
     for (const unit of state.units.values()) {
-      if (unit.owner !== pid || unit.type !== 'drone' || !unit.assignedExtractorId) continue;
-      const extractor = state.structures.get(unit.assignedExtractorId);
-      if (!extractor) continue;
-      p.unitOrders.set(unit.id, { type: 'gather', unitId: unit.id, targetHex: extractor.hex });
-      p.defaultOrderUnitIds.add(unit.id);
+      if (unit.owner !== pid) continue;
+
+      // Gather: drones assigned to extractors.
+      if (unit.type === 'drone' && unit.assignedExtractorId) {
+        const extractor = state.structures.get(unit.assignedExtractorId);
+        if (extractor) {
+          p.unitOrders.set(unit.id, { type: 'gather', unitId: unit.id, targetHex: extractor.hex });
+          p.defaultOrderUnitIds.add(unit.id);
+          continue;
+        }
+      }
+
+      // Build: drones with a pending build order walk to the site, then build.
+      if (unit.type === 'drone' && unit.pendingBuild) {
+        const buildDist = hexDistance(unit.hex, unit.pendingBuild.targetHex);
+        if (buildDist <= 1) {
+          // Arrived — queue the build command for next epoch.
+          p.unitOrders.set(unit.id, {
+            type: 'build',
+            unitId: unit.id,
+            targetHex: unit.pendingBuild.targetHex,
+            structureType: unit.pendingBuild.structureType,
+          });
+          p.defaultOrderUnitIds.add(unit.id);
+        } else {
+          // Still en route — keep walking.
+          p.unitOrders.set(unit.id, { type: 'move', unitId: unit.id, targetHex: unit.pendingBuild.targetHex });
+          p.defaultOrderUnitIds.add(unit.id);
+        }
+        continue;
+      }
+
+      // Attack: units with a persistent attack target.
+      // The unit keeps its attack order whether it's still walking toward the
+      // target or actively fighting an enemy in range.
+      if (unit.attackTargetHex) {
+        const def = UNIT_DEFS[unit.type];
+        const enemyUnit   = findUnitAt(state, unit.attackTargetHex, foe);
+        const enemyStruct = enemyUnit ? undefined : findStructureAt(state, unit.attackTargetHex, foe);
+        const inRange = hasEnemyInRange(state, unit.hex, def.range, foe);
+        const arrived = hexEqual(unit.hex, unit.attackTargetHex)
+                     || hexDistance(unit.hex, unit.attackTargetHex) <= def.range;
+        if (enemyUnit || enemyStruct || inRange || !arrived) {
+          // Still has a reason to persist: enemy at target, enemy nearby, or not yet arrived.
+          p.unitOrders.set(unit.id, { type: 'attack', unitId: unit.id, targetHex: unit.attackTargetHex });
+          p.defaultOrderUnitIds.add(unit.id);
+          continue;
+        }
+        // Arrived at/near target and no enemies around — clear.
+        unit.attackTargetHex = null;
+      }
+
+      // Move: units with a persistent move target.
+      if (unit.moveTargetHex) {
+        p.unitOrders.set(unit.id, { type: 'move', unitId: unit.id, targetHex: unit.moveTargetHex });
+        p.defaultOrderUnitIds.add(unit.id);
+      }
     }
   }
 
