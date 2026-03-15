@@ -673,6 +673,7 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
     const failBuild = (reason: string) => {
       log.push(`${owner} Build ${command.structureType} failed — ${reason}`);
       drone.pendingBuild = null;
+      drone.moveTargetHex = null;
     };
 
     // Tech tier check.
