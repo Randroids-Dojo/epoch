@@ -282,10 +282,15 @@ export default function GameCanvas({
     lastFrameTimeRef.current = now;
     drawParticles(ctx, dt);
 
-    // ── Command arrows (planning phase only) ──────────────────────────────────
-    if (!anim) {
+    // ── Command arrows ────────────────────────────────────────────────────────
+    {
       const player = gs.players.player;
-      drawCommandArrows(ctx, gs.units, player.unitOrders, player.defaultOrderUnitIds, cam);
+      if (anim) {
+        // During animation, only show persistent multi-turn paths.
+        drawCommandArrows(ctx, gs.units, player.unitOrders, player.defaultOrderUnitIds, cam, true);
+      } else {
+        drawCommandArrows(ctx, gs.units, player.unitOrders, player.defaultOrderUnitIds, cam);
+      }
     }
 
     // ── Temporal Echo overlay (planning phase only) ───────────────────────────

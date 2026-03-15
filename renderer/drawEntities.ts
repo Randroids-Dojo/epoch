@@ -1076,6 +1076,8 @@ export function drawCommandArrows(
   unitOrders: Map<string, UnitCommand>,
   defaultOrderUnitIds: Set<string>,
   cam: Camera,
+  /** When true, only draw persistent multi-turn paths (pendingBuild / moveTargetHex). */
+  persistentOnly = false,
 ): void {
   const prevAlpha = ctx.globalAlpha;
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
@@ -1085,10 +1087,10 @@ export function drawCommandArrows(
     // Exception: show persistent multi-turn paths (moveTargetHex / pendingBuild)
     // so the player can see where units are heading.
     const isDefault = defaultOrderUnitIds.has(unitId);
-    if (isDefault) {
-      const u = units.get(unitId);
-      if (!u || (!u.moveTargetHex && !u.pendingBuild)) continue;
-    }
+    const u = units.get(unitId);
+    const isPersistent = !!u && !!(u.moveTargetHex || u.pendingBuild);
+    if (isDefault && !isPersistent) continue;
+    if (persistentOnly && !isPersistent) continue;
 
     // Only commands with a targetHex get arrows.
     if (!('targetHex' in cmd)) continue;
