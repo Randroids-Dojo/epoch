@@ -642,6 +642,18 @@ export default function GameView() {
 
     resolveEpoch(state);
 
+    // When the game ends, skip the execution animation and show the result
+    // immediately. Otherwise the victory/defeat overlay stacks on top of
+    // the execution overlay, blocking the SKIP button and leaving the player
+    // unable to interact for several seconds.
+    // Note: resolveEpoch mutates state.phase; cast to avoid TS narrowing issue.
+    if ((state.phase as string) === 'over') {
+      animationRef.current = null;
+      setMode({ kind: 'idle' });
+      setGameState({ ...state });
+      return;
+    }
+
     const anim = buildAnimationTimeline(unitSnaps, structSnaps, state);
     animationRef.current = anim;
     setActionBeats(buildActionSequence(anim, state.map));

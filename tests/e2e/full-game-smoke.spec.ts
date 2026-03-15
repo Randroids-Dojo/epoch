@@ -288,7 +288,16 @@ test('smoke: player can play full match from planning to game-over @smoke', asyn
     await fillEpoch(page);
 
     await page.getByTestId('lock-in-btn').click({ force: true });
-    await expect(page.getByTestId('phase-label')).toBeVisible({ timeout: 10_000 });
+
+    // Wait for either execution overlay (phase-label) or immediate game-over.
+    // When the game ends during resolution, execution animation is skipped and
+    // game-over-overlay appears directly.
+    await page.waitForSelector(
+      '[data-testid="phase-label"],[data-testid="game-over-overlay"]',
+      { timeout: 10_000 },
+    );
+    const immediateGameOver = await page.getByTestId('game-over-overlay').isVisible().catch(() => false);
+    if (immediateGameOver) break;
 
     const result = await waitForPlanningOrGameOver(page);
 
