@@ -1095,15 +1095,22 @@ export function drawCommandArrows(
 
     const unit = units.get(unitId);
     if (!unit || unit.owner !== 'player') continue;
-    if (hexEqual(unit.hex, cmd.targetHex)) continue;
 
-    const style = ARROW_STYLES[cmd.type];
+    // When a drone has a pending build, show a yellow build-style arrow to the
+    // build target instead of a red move arrow — the move is just the means.
+    const hasPendingBuild = unit.pendingBuild && isDefault;
+    const effectiveType = hasPendingBuild ? 'build' : cmd.type;
+    const effectiveTarget = hasPendingBuild ? unit.pendingBuild!.targetHex : cmd.targetHex;
+
+    if (hexEqual(unit.hex, effectiveTarget)) continue;
+
+    const style = ARROW_STYLES[effectiveType];
     if (!style) continue;
     // Dim persistent multi-turn paths vs explicit orders.
     const lineAlpha = isDefault ? 0.4 : 0.7;
 
     const fromWp = hexToPixel(unit.hex, BASE_HEX_SIZE);
-    const toWp   = hexToPixel(cmd.targetHex, BASE_HEX_SIZE);
+    const toWp   = hexToPixel(effectiveTarget, BASE_HEX_SIZE);
     const fx = cam.x + fromWp.x * cam.zoom;
     const fy = cam.y + fromWp.y * cam.zoom;
     const tx = cam.x + toWp.x * cam.zoom;
@@ -1138,9 +1145,12 @@ export function drawCommandArrows(
     drawArrowhead(ctx, asx, asy, ex, ey, 7 * cam.zoom);
 
     // Build orders: draw a ghost of the planned structure at the target.
-    if (cmd.type === 'build') {
-      ctx.globalAlpha = 0.3;
-      paintStructure(ctx, tx, ty, r, cmd.structureType, style.color);
+    const buildStructureType: StructureType | null = hasPendingBuild
+      ? unit.pendingBuild!.structureType
+      : cmd.type === 'build' ? (cmd as { structureType: StructureType }).structureType : null;
+    if (effectiveType === 'build' && buildStructureType) {
+      ctx.globalAlpha = isDefault ? 0.2 : 0.3;
+      paintStructure(ctx, tx, ty, r, buildStructureType, style.color);
       // Dashed ring around the ghost.
       ctx.globalAlpha = 0.5;
       ctx.strokeStyle = style.color;
