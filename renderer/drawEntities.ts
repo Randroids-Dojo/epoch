@@ -1082,7 +1082,13 @@ export function drawCommandArrows(
 
   for (const [unitId, cmd] of unitOrders) {
     // Skip default (auto-populated) orders — keep the display clean.
-    if (defaultOrderUnitIds.has(unitId)) continue;
+    // Exception: show persistent multi-turn paths (moveTargetHex / pendingBuild)
+    // so the player can see where units are heading.
+    const isDefault = defaultOrderUnitIds.has(unitId);
+    if (isDefault) {
+      const u = units.get(unitId);
+      if (!u || (!u.moveTargetHex && !u.pendingBuild)) continue;
+    }
 
     // Only commands with a targetHex get arrows.
     if (!('targetHex' in cmd)) continue;
@@ -1093,6 +1099,8 @@ export function drawCommandArrows(
 
     const style = ARROW_STYLES[cmd.type];
     if (!style) continue;
+    // Dim persistent multi-turn paths vs explicit orders.
+    const lineAlpha = isDefault ? 0.4 : 0.7;
 
     const fromWp = hexToPixel(unit.hex, BASE_HEX_SIZE);
     const toWp   = hexToPixel(cmd.targetHex, BASE_HEX_SIZE);
@@ -1115,7 +1123,7 @@ export function drawCommandArrows(
     const ey = ty - uy * inset;
 
     // Draw line.
-    ctx.globalAlpha = 0.7;
+    ctx.globalAlpha = lineAlpha;
     ctx.strokeStyle = style.color;
     ctx.lineWidth = 2;
     ctx.setLineDash(style.dash);
