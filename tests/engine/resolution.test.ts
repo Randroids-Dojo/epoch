@@ -393,11 +393,13 @@ describe('Build step', () => {
 
 
 
-  it('fails to build on an occupied hex', () => {
+  it('fails to build on a hex occupied by another unit', () => {
     const s = createInitialState(1);
     const drone = [...s.units.values()].find((u) => u.owner === 'player')!;
     s.players.player.resources.cc = 10;
-    const occupiedHex = drone.hex;
+    // Place a second unit on an adjacent hex, then try to build there.
+    const blocker = addUnit(s, { owner: 'player', type: 'pulse_sentry', hex: { q: drone.hex.q + 1, r: drone.hex.r }, hp: 30 });
+    const occupiedHex = blocker.hex;
 
     queueCommand(s, 'player', 0, {
       type: 'build', unitId: drone.id, targetHex: occupiedHex, structureType: 'watchtower',

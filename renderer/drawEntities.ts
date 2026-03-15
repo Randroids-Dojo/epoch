@@ -1085,20 +1085,18 @@ export function drawCommandArrows(
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
 
   for (const [unitId, cmd] of unitOrders) {
-    // Skip default (auto-populated) orders — keep the display clean.
-    // Exception: show persistent multi-turn paths (moveTargetHex / pendingBuild)
-    // so the player can see where units are heading.
-    const isDefault = defaultOrderUnitIds.has(unitId);
-    const u = units.get(unitId);
-    const isPersistent = !!u && !!(u.moveTargetHex || u.pendingBuild);
-    if (isDefault && !isPersistent) continue;
-    if (persistentOnly && !isPersistent) continue;
-
     // Only commands with a targetHex get arrows.
     if (!('targetHex' in cmd)) continue;
 
     const unit = units.get(unitId);
     if (!unit || unit.owner !== 'player') continue;
+
+    // Skip default (auto-populated) orders — keep the display clean.
+    // Exception: show persistent multi-turn paths (moveTargetHex / pendingBuild).
+    const isDefault = defaultOrderUnitIds.has(unitId);
+    const isPersistent = !!(unit.moveTargetHex || unit.pendingBuild);
+    if (isDefault && !isPersistent) continue;
+    if (persistentOnly && !isPersistent) continue;
 
     // When a drone has a pending build, show a yellow build-style arrow to the
     // build target instead of a red move arrow — the move is just the means.

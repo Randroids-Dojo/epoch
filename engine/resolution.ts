@@ -680,19 +680,21 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
       failBuild(`requires Tech Tier ${def.techTierRequired}`);
       continue;
     }
-    // CC cost check.
+    // CC cost check — don't cancel pendingBuild since resources may become available.
     if (player.resources.cc < def.costCC) {
-      failBuild('insufficient CC');
+      log.push(`${owner} Build ${command.structureType} failed — insufficient CC`);
       continue;
     }
-    // FX cost check.
+    // FX cost check — don't cancel pendingBuild since resources may become available.
     if (player.resources.fx < def.costFX) {
-      failBuild('insufficient FX');
+      log.push(`${owner} Build ${command.structureType} failed — insufficient FX`);
       continue;
     }
-    // Hex must be empty (no unit, no structure).
+    // Hex must be empty (no other unit, no structure). The building drone
+    // itself may be on the target hex after walking there.
+    const unitOnHex = findUnitAt(state, command.targetHex);
     const hexOccupied =
-      findUnitAt(state, command.targetHex) !== undefined ||
+      (unitOnHex !== undefined && unitOnHex.id !== drone.id) ||
       findStructureAt(state, command.targetHex) !== undefined;
     if (hexOccupied) {
       failBuild('hex occupied');
@@ -741,6 +743,25 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
       continue;
     }
 
+    // If the drone is standing on the build hex, move it to a passable neighbor.
+    if (hexEqual(drone.hex, command.targetHex)) {
+      const neighbors = hexNeighbors(command.targetHex);
+      let moved = false;
+      for (const nb of neighbors) {
+        const nbCell = state.map.cells.get(hexKey(nb));
+        if (!nbCell || !TERRAIN[nbCell.terrain].passable) continue;
+        if (findUnitAt(state, nb)) continue;
+        if (findStructureAt(state, nb)) continue;
+        drone.hex = nb;
+        moved = true;
+        break;
+      }
+      if (!moved) {
+        failBuild('no adjacent space for drone');
+        continue;
+      }
+    }
+
     player.resources.cc -= def.costCC;
     player.resources.fx -= def.costFX;
 
@@ -755,6 +776,7 @@ function stepBuild(state: GameState, commands: CommandEntry[], log: string[]): v
       assignedDroneId: null,
     });
     drone.pendingBuild = null;
+    drone.moveTargetHex = null;
     log.push(`${owner} began building ${def.label}`);
   }
 }
