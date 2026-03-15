@@ -29,12 +29,15 @@ export default function IntroAnimation({ onComplete }: IntroAnimationProps) {
   return (
     <div
       data-testid="intro-animation"
+      onClick={onComplete}
+      onTouchEnd={onComplete}
       style={{
         position: 'absolute',
         inset: 0,
         zIndex: 100,
         background: COLORS.NAVY,
         overflow: 'hidden',
+        cursor: 'pointer',
         opacity: phase === 'fadeout' ? 0 : 1,
         transition: 'opacity 0.6s ease-out',
       }}
@@ -192,13 +195,12 @@ export default function IntroAnimation({ onComplete }: IntroAnimationProps) {
           fontSize: '0.7rem',
           letterSpacing: '0.1em',
           color: '#334155',
-          opacity: phase === 'tagline' || phase === 'fadeout' ? 1 : 0,
+          opacity: phase === 'black' ? 0 : 1,
           transition: 'opacity 0.5s ease',
-          cursor: 'pointer',
+          pointerEvents: 'none',
         }}
-        onClick={onComplete}
       >
-        CLICK TO SKIP
+        TAP TO SKIP
       </div>
     </div>
   );
