@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import CommandPicker from '@/components/hud/CommandPicker';
 import CommandTray from '@/components/hud/CommandTray';
-import type { TutorialStep } from '@/lib/types';
 import type { GlobalCommand } from '@/engine/commands';
 
 const globalPickerProps = {
@@ -24,6 +23,8 @@ const globalPickerProps = {
   onTrainSelect: vi.fn(),
   onClose: vi.fn(),
 };
+
+const emptyCommands: Array<GlobalCommand | null> = [null, null];
 
 describe('Tutorial — Temporal Echo phase', () => {
   it('echo_select_echo step highlights the Echo button', () => {
@@ -61,7 +62,6 @@ describe('Tutorial — Temporal Echo phase', () => {
   });
 
   it('echo_select_slot step highlights the first empty command slot', () => {
-    const emptyCommands: Array<GlobalCommand | null> = [null, null];
     render(
       <CommandTray
         globalCommands={emptyCommands}
@@ -79,7 +79,6 @@ describe('Tutorial — Temporal Echo phase', () => {
   });
 
   it('echo_lock_in step highlights the lock-in button', () => {
-    const emptyCommands: Array<GlobalCommand | null> = [null, null];
     render(
       <CommandTray
         globalCommands={emptyCommands}
@@ -94,19 +93,5 @@ describe('Tutorial — Temporal Echo phase', () => {
     );
     const lockBtn = screen.getByTestId('lock-in-btn');
     expect(lockBtn.className).toContain('tutorial-highlight');
-  });
-
-  it('tutorial step types include all temporal echo steps', () => {
-    const echoSteps: TutorialStep[] = [
-      'wait_for_echo_epoch',
-      'echo_select_slot',
-      'echo_select_echo',
-      'echo_lock_in',
-    ];
-    // Verify each is a valid TutorialStep (TypeScript ensures this at compile time,
-    // but this runtime check documents the expected flow).
-    for (const step of echoSteps) {
-      expect(step).toBeTruthy();
-    }
   });
 });

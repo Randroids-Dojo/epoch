@@ -303,10 +303,15 @@ export default function GameView() {
         setTutorialStep('gather_select_drone');
         break;
       case 'wait_for_echo_epoch':
-        setTutorialStep('echo_select_slot');
+        // Skip temporal echo phase if player can't afford it.
+        if (gameState.players.player.resources.te >= TEMPORAL_ECHO_COST) {
+          setTutorialStep('echo_select_slot');
+        } else {
+          setTutorialStep(null);
+        }
         break;
     }
-  }, [tutorialActive, tutorialStep, gameState.phase, lockedIn]);
+  }, [tutorialActive, tutorialStep, gameState.phase, gameState.players.player.resources.te, lockedIn]);
 
   // Mode-driven step advancement (runs on mode / gameState changes).
   useEffect(() => {
