@@ -1633,6 +1633,187 @@ export function drawEchoOverlay(
   ctx.globalAlpha = prevAlpha;
 }
 
+// ── Echo Reveal: spiral time-travel mist ──────────────────────────────────────
+
+/** Progress of the echo reveal cinematic (0→1). */
+export interface EchoRevealState {
+  /** World-space center of the echo targets to zoom toward. */
+  targetWorldX: number;
+  targetWorldY: number;
+  /** Timestamp the reveal started (performance.now()). */
+  startedAt: number;
+  /** Duration of the full reveal in ms. */
+  durationMs: number;
+}
+
+/** Total echo reveal duration in ms. */
+export const ECHO_REVEAL_DURATION_MS = 2400;
+
+/**
+ * Draw a spiral time-travel mist effect that radiates outward from screen center.
+ * Called each frame during the echo reveal cinematic.
+ *
+ * t=0: dense swirling mist.  t=0.5: mist at peak during zoom-in.  t=1: mist fades.
+ */
+export function drawEchoRevealMist(
+  ctx: CanvasRenderingContext2D,
+  cssW: number,
+  cssH: number,
+  t: number,
+): void {
+  const prevAlpha = ctx.globalAlpha;
+  const cx = cssW / 2;
+  const cy = cssH / 2;
+  const maxR = Math.hypot(cx, cy) * 1.2;
+
+  // Opacity envelope: fade in 0-0.15, hold 0.15-0.7, fade out 0.7-1.0
+  const opacity =
+    t < 0.15 ? t / 0.15
+    : t < 0.7 ? 1
+    : 1 - (t - 0.7) / 0.3;
+
+  // Spiral arm count and rotation speed
+  const arms = 5;
+  const rotation = t * Math.PI * 4; // 2 full rotations over the reveal
+
+  // Draw multiple spiraling mist tendrils
+  for (let arm = 0; arm < arms; arm++) {
+    const baseAngle = (arm / arms) * Math.PI * 2 + rotation;
+
+    // Each arm is a series of fading circles along a spiral
+    const steps = 40;
+    for (let i = 0; i < steps; i++) {
+      const frac = i / steps;
+      const r = frac * maxR * (0.3 + t * 0.7);
+      const spiralTwist = frac * Math.PI * 2.5;
+      const angle = baseAngle + spiralTwist;
+
+      const x = cx + Math.cos(angle) * r;
+      const y = cy + Math.sin(angle) * r;
+
+      // Each blob fades with distance and overall opacity
+      const distFade = 1 - frac * 0.7;
+      const blobAlpha = opacity * distFade * 0.12;
+      const blobR = maxR * 0.08 * (1 + frac * 0.5);
+
+      ctx.globalAlpha = blobAlpha;
+
+      // Crimson-tinted radial gradient for each blob
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, blobR);
+      grad.addColorStop(0, 'rgba(230, 57, 70, 0.6)');
+      grad.addColorStop(0.5, 'rgba(180, 40, 55, 0.3)');
+      grad.addColorStop(1, 'rgba(120, 20, 40, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, blobR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Central vortex glow — bright swirling core
+  {
+    const coreAlpha = opacity * 0.25;
+    const coreR = maxR * 0.15 * (0.5 + t * 0.5);
+    ctx.globalAlpha = coreAlpha;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+    grad.addColorStop(0, 'rgba(255, 200, 180, 0.8)');
+    grad.addColorStop(0.4, 'rgba(230, 57, 70, 0.4)');
+    grad.addColorStop(1, 'rgba(100, 20, 30, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Floating mist wisps — scattered translucent circles drifting outward
+  {
+    const wispCount = 20;
+    for (let i = 0; i < wispCount; i++) {
+      // Deterministic positions based on index, animated by t
+      const seed = i * 137.508; // golden angle
+      const angle = seed + t * Math.PI * 3;
+      const drift = (0.2 + (i % 7) / 7) * maxR * (0.1 + t * 0.9);
+      const x = cx + Math.cos(angle) * drift;
+      const y = cy + Math.sin(angle) * drift;
+      const wispR = maxR * 0.03 * (0.5 + (i % 3) * 0.3);
+      const wispAlpha = opacity * 0.08 * (1 - drift / maxR);
+
+      if (wispAlpha < 0.005) continue;
+
+      ctx.globalAlpha = wispAlpha;
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(230, 57, 70, 0.5)' : 'rgba(200, 60, 80, 0.4)';
+      ctx.beginPath();
+      ctx.arc(x, y, wispR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  ctx.globalAlpha = prevAlpha;
+}
+
+/**
+ * Compute the camera target for the echo reveal cinematic.
+ * Returns zoom-out/zoom-in camera params based on progress (0→1).
+ */
+export function getEchoRevealCamera(
+  reveal: EchoRevealState,
+  cssW: number,
+  cssH: number,
+  userCam: Camera,
+): { cam: Camera; t: number; done: boolean } {
+  const elapsed = performance.now() - reveal.startedAt;
+  const t = Math.min(1, elapsed / reveal.durationMs);
+
+  if (t >= 1) {
+    return { cam: userCam, t: 1, done: true };
+  }
+
+  // Easing: smooth start + end
+  const ease = (x: number) => x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+
+  // Phase 1 (0–0.35): zoom out from user position
+  // Phase 2 (0.35–0.65): hold wide, pan toward echo targets
+  // Phase 3 (0.65–1.0): zoom in on echo targets
+  const zoomOutTarget = Math.max(0.35, userCam.zoom * 0.45);
+  const zoomInTarget = Math.max(0.8, userCam.zoom * 0.9);
+
+  let zoom: number;
+  let worldX: number;
+  let worldY: number;
+
+  // User camera center in world space
+  const userWorldX = (cssW / 2 - userCam.x) / userCam.zoom;
+  const userWorldY = (cssH / 2 - userCam.y) / userCam.zoom;
+
+  if (t < 0.35) {
+    // Zoom out
+    const p = ease(t / 0.35);
+    zoom = userCam.zoom + (zoomOutTarget - userCam.zoom) * p;
+    worldX = userWorldX + (reveal.targetWorldX - userWorldX) * p * 0.3;
+    worldY = userWorldY + (reveal.targetWorldY - userWorldY) * p * 0.3;
+  } else if (t < 0.65) {
+    // Hold wide, pan to targets
+    const p = ease((t - 0.35) / 0.3);
+    zoom = zoomOutTarget;
+    worldX = userWorldX + (reveal.targetWorldX - userWorldX) * (0.3 + 0.7 * p);
+    worldY = userWorldY + (reveal.targetWorldY - userWorldY) * (0.3 + 0.7 * p);
+  } else {
+    // Zoom in on targets
+    const p = ease((t - 0.65) / 0.35);
+    zoom = zoomOutTarget + (zoomInTarget - zoomOutTarget) * p;
+    worldX = reveal.targetWorldX;
+    worldY = reveal.targetWorldY;
+  }
+
+  const cam: Camera = {
+    x: cssW / 2 - worldX * zoom,
+    y: cssH / 2 - worldY * zoom,
+    zoom,
+  };
+
+  return { cam, t, done: false };
+}
+
 // ── Timeline Fork overlay ─────────────────────────────────────────────────────
 
 /**

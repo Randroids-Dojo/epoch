@@ -38,6 +38,7 @@ import {
   categorizeLogEntry,
 } from '@/renderer/animation';
 import { ActionBeat, buildActionSequence } from '@/renderer/actionSequence';
+import { EchoRevealState, ECHO_REVEAL_DURATION_MS } from '@/renderer/drawEntities';
 import { audioEngine } from '@/audio/engine';
 import GameCanvas from './GameCanvas';
 import { CameraSnapshot } from './GameCanvas';
@@ -134,6 +135,9 @@ export default function GameView() {
   const [chronoScoutResult, setChronoScoutResult]   = useState<ChronoScoutResult | null>(null);
   const timelineForkActiveRef = useRef(false);
   const [timelineForkActive, setTimelineForkActive]  = useState(false);
+
+  // ── Echo reveal cinematic state ──────────────────────────────────────────
+  const [echoReveal, setEchoReveal] = useState<EchoRevealState | null>(null);
 
   // ── Epoch stats popup state ─────────────────────────────────────────────
   const [epochStatsPopup, setEpochStatsPopup] = useState<EpochStatsSnapshot | null>(null);
@@ -535,6 +539,7 @@ export default function GameView() {
     setTimeLeft(PLANNING_DURATION);
     setTimelineForkResult(null);
     setChronoScoutResult(null);
+    setEchoReveal(null);
     timelineForkActiveRef.current = false;
     setTimelineForkActive(false);
 
@@ -1039,6 +1044,25 @@ export default function GameView() {
 
       if (type === 'temporal') {
         commitGlobalCommand(slotIndex, { type: 'temporal', ability: 'echo', teCost: TEMPORAL_ECHO_COST });
+
+        // Trigger echo reveal cinematic: compute centroid of AI's previous commands.
+        const aiCmds = state.prevEpochCommands.ai;
+        const targets: { x: number; y: number }[] = [];
+        for (const cmd of aiCmds) {
+          if ('targetHex' in cmd && cmd.targetHex) {
+            targets.push(hexToPixel(cmd.targetHex as Hex, BASE_HEX_SIZE));
+          }
+        }
+        if (targets.length > 0) {
+          const cx = targets.reduce((s, p) => s + p.x, 0) / targets.length;
+          const cy = targets.reduce((s, p) => s + p.y, 0) / targets.length;
+          setEchoReveal({
+            targetWorldX: cx,
+            targetWorldY: cy,
+            startedAt: performance.now(),
+            durationMs: ECHO_REVEAL_DURATION_MS,
+          });
+        }
         return;
       }
 
@@ -1437,6 +1461,8 @@ export default function GameView() {
           animation={animationRef.current}
           actionBeats={actionBeats}
           echoCommands={echoCommands}
+          echoReveal={echoReveal}
+          onEchoRevealDone={() => setEchoReveal(null)}
           timelineForkResult={timelineForkResult}
           chronoScoutResult={chronoScoutResult}
           onHexClick={handleHexClick}

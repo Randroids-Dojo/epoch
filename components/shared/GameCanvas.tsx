@@ -8,7 +8,7 @@ import { Hex, hexKey, hexToPixel, pixelToHex } from '@/engine/hex';
 import { Camera, DEFAULT_ZOOM, zoomToward, canvasToWorld, lerpCamera } from '@/renderer/camera';
 import { ActionBeat, getSequenceCameraTarget } from '@/renderer/actionSequence';
 import { BASE_HEX_SIZE, drawBackground, drawHexCell } from '@/renderer/drawHex';
-import { drawUnits, drawStructures, drawTargetingOverlay, drawRangeBorders, drawCommandArrows, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawMergeAnimations, drawEchoOverlay, drawTimelineForkOverlay, drawChronoScoutOverlay, drawParticles } from '@/renderer/drawEntities';
+import { drawUnits, drawStructures, drawTargetingOverlay, drawRangeBorders, drawCommandArrows, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawMergeAnimations, drawEchoOverlay, drawTimelineForkOverlay, drawChronoScoutOverlay, drawParticles, EchoRevealState, getEchoRevealCamera, drawEchoRevealMist } from '@/renderer/drawEntities';
 import { TimelineForkResult, ChronoScoutResult } from '@/engine/simulation';
 import { InteractionMode } from '@/lib/types';
 import { ExecutionAnimation, getAnimatedUnitPosition } from '@/renderer/animation';
@@ -27,6 +27,8 @@ interface GameCanvasProps {
   /** Cinematic camera beats for the execution animation. */
   actionBeats: ActionBeat[] | null;
   echoCommands: Command[] | null;
+  echoReveal?: EchoRevealState | null;
+  onEchoRevealDone?: () => void;
   timelineForkResult?: TimelineForkResult | null;
   chronoScoutResult?: ChronoScoutResult | null;
   onHexClick(hex: Hex): void;
@@ -91,6 +93,8 @@ export default function GameCanvas({
   animation,
   actionBeats,
   echoCommands,
+  echoReveal,
+  onEchoRevealDone,
   timelineForkResult,
   chronoScoutResult,
   onHexClick,
@@ -153,6 +157,15 @@ export default function GameCanvas({
 
   const echoCommandsRef = useRef<Command[] | null>(echoCommands);
   echoCommandsRef.current = echoCommands;
+
+  const echoRevealRef = useRef<EchoRevealState | null>(echoReveal ?? null);
+  echoRevealRef.current = echoReveal ?? null;
+
+  const onEchoRevealDoneRef = useRef(onEchoRevealDone);
+  onEchoRevealDoneRef.current = onEchoRevealDone;
+
+  /** User camera saved when echo reveal starts, restored when it ends. */
+  const echoRevealSavedCamRef = useRef<Camera | null>(null);
 
   const timelineForkResultRef = useRef<TimelineForkResult | null>(timelineForkResult ?? null);
   timelineForkResultRef.current = timelineForkResult ?? null;
@@ -218,6 +231,26 @@ export default function GameCanvas({
         cam = lerpCamera(cam, saved, 0.1);
         camRef.current = cam;
       }
+    }
+
+    // ── Echo reveal cinematic camera drive ────────────────────────────────
+    let echoRevealT = -1; // <0 means not active
+    const reveal = echoRevealRef.current;
+    if (reveal) {
+      if (!echoRevealSavedCamRef.current) {
+        echoRevealSavedCamRef.current = { ...cam };
+      }
+      const result = getEchoRevealCamera(reveal, cssW, cssH, echoRevealSavedCamRef.current);
+      echoRevealT = result.t;
+      if (result.done) {
+        echoRevealSavedCamRef.current = null;
+        onEchoRevealDoneRef.current?.();
+      } else {
+        cam = result.cam;
+        camRef.current = cam;
+      }
+    } else if (echoRevealSavedCamRef.current) {
+      echoRevealSavedCamRef.current = null;
     }
 
     // Reset transform every frame so DPR scaling is idempotent.
@@ -303,6 +336,11 @@ export default function GameCanvas({
     const echo = echoCommandsRef.current;
     if (echo && echo.length > 0 && !anim) {
       drawEchoOverlay(ctx, echo, cam, performance.now());
+    }
+
+    // ── Echo reveal mist overlay (during cinematic) ─────────────────────────
+    if (echoRevealT >= 0 && echoRevealT < 1) {
+      drawEchoRevealMist(ctx, cssW, cssH, echoRevealT);
     }
 
     // ── Timeline Fork ghost overlay (planning phase only) ─────────────────────
