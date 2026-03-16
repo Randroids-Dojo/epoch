@@ -1,4 +1,4 @@
-import { Camera, worldToCanvas } from './camera';
+import { Camera, worldToCanvas, canvasToWorld } from './camera';
 import { BASE_HEX_SIZE, hexPath } from './drawHex';
 import { Hex, hexToPixel, hexEqual, hexKey, hexesInRange } from '../engine/hex';
 import { Unit, UnitType, effectiveMaxHp } from '../engine/units';
@@ -2004,8 +2004,9 @@ export function getEchoRevealCamera(
   let worldY: number;
 
   // User camera center in world space
-  const userWorldX = (cssW / 2 - userCam.x) / userCam.zoom;
-  const userWorldY = (cssH / 2 - userCam.y) / userCam.zoom;
+  const userWorld = canvasToWorld(cssW / 2, cssH / 2, userCam);
+  const userWorldX = userWorld.x;
+  const userWorldY = userWorld.y;
 
   if (t < 0.35) {
     // Zoom out
