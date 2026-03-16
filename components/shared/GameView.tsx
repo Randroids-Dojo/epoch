@@ -287,6 +287,15 @@ export default function GameView() {
         setTutorialStep('wait_for_echo_epoch');
         break;
       case 'echo_lock_in':
+        setTutorialStep('wait_for_techlab_epoch');
+        break;
+      case 'techlab_lock_in':
+        setTutorialStep('wait_for_research_epoch');
+        break;
+      case 'research_lock_in':
+        setTutorialStep('wait_for_research_complete');
+        break;
+      case 'flux_lock_in':
         setTutorialStep(null); // tutorial complete
         break;
     }
@@ -307,11 +316,23 @@ export default function GameView() {
         if (gameState.players.player.resources.te >= TEMPORAL_ECHO_COST) {
           setTutorialStep('echo_select_slot');
         } else {
-          setTutorialStep(null);
+          setTutorialStep('wait_for_techlab_epoch');
+        }
+        break;
+      case 'wait_for_techlab_epoch':
+        setTutorialStep('techlab_select_drone');
+        break;
+      case 'wait_for_research_epoch':
+        setTutorialStep('research_select_slot');
+        break;
+      case 'wait_for_research_complete':
+        // Stay in wait state until research finishes and Tier 1 unlocks.
+        if (researchEpochsLeft === 0 && playerTechTier >= 1) {
+          setTutorialStep('flux_select_drone');
         }
         break;
     }
-  }, [tutorialActive, tutorialStep, gameState.phase, gameState.players.player.resources.te, lockedIn]);
+  }, [tutorialActive, tutorialStep, gameState.phase, gameState.players.player.resources.te, researchEpochsLeft, playerTechTier, lockedIn]);
 
   // Mode-driven step advancement (runs on mode / gameState changes).
   useEffect(() => {
@@ -431,6 +452,67 @@ export default function GameView() {
         for (const cmd of gameState.players.player.globalCommands) {
           if (cmd?.type === 'temporal') {
             setTutorialStep('echo_lock_in');
+            break;
+          }
+        }
+        break;
+
+      // ── Phase 6: build Tech Lab ──────────────────────────────
+      case 'techlab_select_drone':
+        if (mode.kind === 'unit_picker_open') {
+          const u = gameState.units.get(mode.unitId);
+          if (u?.type === 'drone') setTutorialStep('techlab_select_build');
+        }
+        break;
+      case 'techlab_select_build':
+        if (mode.kind === 'build_select') setTutorialStep('techlab_select_techlab');
+        break;
+      case 'techlab_select_techlab':
+        if (mode.kind === 'build_targeting' && mode.structureType === 'tech_lab') {
+          setTutorialStep('techlab_select_hex');
+        }
+        break;
+      case 'techlab_select_hex':
+        for (const cmd of gameState.players.player.unitOrders.values()) {
+          if (cmd.type === 'build' && cmd.structureType === 'tech_lab') {
+            setTutorialStep('techlab_lock_in');
+            break;
+          }
+        }
+        break;
+
+      // ── Phase 7: research Tier 1 ─────────────────────────────
+      case 'research_select_slot':
+        if (mode.kind === 'global_picker_open') setTutorialStep('research_select_research');
+        break;
+      case 'research_select_research':
+        for (const cmd of gameState.players.player.globalCommands) {
+          if (cmd?.type === 'research') {
+            setTutorialStep('research_lock_in');
+            break;
+          }
+        }
+        break;
+
+      // ── Phase 8: build Flux Conduit ──────────────────────────
+      case 'flux_select_drone':
+        if (mode.kind === 'unit_picker_open') {
+          const u = gameState.units.get(mode.unitId);
+          if (u?.type === 'drone') setTutorialStep('flux_select_build');
+        }
+        break;
+      case 'flux_select_build':
+        if (mode.kind === 'build_select') setTutorialStep('flux_select_conduit');
+        break;
+      case 'flux_select_conduit':
+        if (mode.kind === 'build_targeting' && mode.structureType === 'flux_conduit') {
+          setTutorialStep('flux_select_hex');
+        }
+        break;
+      case 'flux_select_hex':
+        for (const cmd of gameState.players.player.unitOrders.values()) {
+          if (cmd.type === 'build' && cmd.structureType === 'flux_conduit') {
+            setTutorialStep('flux_lock_in');
             break;
           }
         }
@@ -1370,6 +1452,7 @@ export default function GameView() {
             lockedIn={lockedIn}
             tutorialHighlightUnitId={
               tutorialStep === 'select_drone' || tutorialStep === 'extractor_select_drone' || tutorialStep === 'gather_select_drone'
+              || tutorialStep === 'techlab_select_drone' || tutorialStep === 'flux_select_drone'
                 ? tutorialDroneId : null
             }
             onUnitClick={handleUnitCardClick}
@@ -1411,7 +1494,8 @@ export default function GameView() {
             canChronoShift={unitPickerProps.canChronoShift}
             canMerge={unitPickerProps.canMerge}
             tutorialHighlightType={
-              tutorialStep === 'select_build' || tutorialStep === 'extractor_select_build' ? 'build'
+              tutorialStep === 'select_build' || tutorialStep === 'extractor_select_build'
+              || tutorialStep === 'techlab_select_build' || tutorialStep === 'flux_select_build' ? 'build'
               : tutorialStep === 'gather_select_gather' ? 'gather'
               : undefined
             }
@@ -1445,6 +1529,7 @@ export default function GameView() {
             tutorialHighlightType={
               tutorialStep === 'train_select_train' || tutorialStep === 'extractor_train_select_train' ? 'train'
               : tutorialStep === 'echo_select_echo' ? 'temporal'
+              : tutorialStep === 'research_select_research' ? 'research'
               : undefined
             }
             onSelect={handleCommandPick}
@@ -1519,7 +1604,9 @@ export default function GameView() {
               const disabledLabel = !ccOk ? 'no CC' : !fxOk ? 'no FX' : undefined;
               const isTutorial =
                 (tutorialStep === 'select_barracks' && opt === 'barracks') ||
-                (tutorialStep === 'extractor_select_extractor' && opt === 'crystal_extractor');
+                (tutorialStep === 'extractor_select_extractor' && opt === 'crystal_extractor') ||
+                (tutorialStep === 'techlab_select_techlab' && opt === 'tech_lab') ||
+                (tutorialStep === 'flux_select_conduit' && opt === 'flux_conduit');
               return (
                 <button
                   key={opt}
@@ -1751,12 +1838,16 @@ export default function GameView() {
               tutorialStep === 'extractor_lock_in' ||
               tutorialStep === 'train_lock_in' ||
               tutorialStep === 'gather_lock_in' ||
-              tutorialStep === 'echo_lock_in'
+              tutorialStep === 'echo_lock_in' ||
+              tutorialStep === 'techlab_lock_in' ||
+              tutorialStep === 'research_lock_in' ||
+              tutorialStep === 'flux_lock_in'
             }
             tutorialHighlightSlot={
               tutorialStep === 'train_select_slot' ||
               tutorialStep === 'extractor_train_select_slot' ||
-              tutorialStep === 'echo_select_slot'
+              tutorialStep === 'echo_select_slot' ||
+              tutorialStep === 'research_select_slot'
             }
             onSlotClick={handleGlobalSlotClick}
             onSlotClear={handleGlobalSlotClear}

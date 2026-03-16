@@ -27,7 +27,7 @@ const globalPickerProps = {
 const emptyCommands: Array<GlobalCommand | null> = [null, null];
 
 describe('Tutorial — Temporal Echo phase', () => {
-  it('echo_select_echo step highlights the Echo button', () => {
+  it('highlights the Echo button when tutorialHighlightType=temporal', () => {
     render(
       <CommandPicker
         {...globalPickerProps}
@@ -39,7 +39,7 @@ describe('Tutorial — Temporal Echo phase', () => {
     expect(echoBtn.className).toContain('tutorial-highlight');
   });
 
-  it('echo_select_echo step shows "USE TEMPORAL ECHO" tooltip', () => {
+  it('shows "USE TEMPORAL ECHO" tooltip', () => {
     render(
       <CommandPicker
         {...globalPickerProps}
@@ -61,7 +61,7 @@ describe('Tutorial — Temporal Echo phase', () => {
     expect(echoBtn).toBeDisabled();
   });
 
-  it('echo_select_slot step highlights the first empty command slot', () => {
+  it('highlights the first empty command slot for echo_select_slot', () => {
     render(
       <CommandTray
         globalCommands={emptyCommands}
@@ -78,7 +78,7 @@ describe('Tutorial — Temporal Echo phase', () => {
     expect(slot0.className).toContain('tutorial-highlight');
   });
 
-  it('echo_lock_in step highlights the lock-in button', () => {
+  it('highlights the lock-in button for echo_lock_in', () => {
     render(
       <CommandTray
         globalCommands={emptyCommands}
@@ -93,5 +93,48 @@ describe('Tutorial — Temporal Echo phase', () => {
     );
     const lockBtn = screen.getByTestId('lock-in-btn');
     expect(lockBtn.className).toContain('tutorial-highlight');
+  });
+});
+
+describe('Tutorial — Research phase', () => {
+  it('highlights the Research button when tutorialHighlightType=research', () => {
+    render(
+      <CommandPicker
+        {...globalPickerProps}
+        hasCompletedTechLab={true}
+        tutorialHighlightType="research"
+      />,
+    );
+    const researchBtn = screen.getByRole('menuitem', { name: /Research/ });
+    expect(researchBtn).not.toBeDisabled();
+    expect(researchBtn.className).toContain('tutorial-highlight');
+  });
+
+  it('shows "START RESEARCH" tooltip', () => {
+    render(
+      <CommandPicker
+        {...globalPickerProps}
+        hasCompletedTechLab={true}
+        tutorialHighlightType="research"
+      />,
+    );
+    expect(screen.getByText('START RESEARCH')).toBeInTheDocument();
+  });
+
+  it('highlights the first empty slot for research_select_slot', () => {
+    render(
+      <CommandTray
+        globalCommands={emptyCommands}
+        selectedGlobalSlot={null}
+        lockedIn={false}
+        lockInFlash={false}
+        tutorialHighlightSlot={true}
+        onSlotClick={() => {}}
+        onSlotClear={() => {}}
+        onLockIn={() => {}}
+      />,
+    );
+    const slot0 = screen.getByTestId('command-slot-0');
+    expect(slot0.className).toContain('tutorial-highlight');
   });
 });

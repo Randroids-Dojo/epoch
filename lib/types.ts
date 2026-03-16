@@ -92,6 +92,26 @@ export type TutorialStep =
   | 'echo_select_slot'
   | 'echo_select_echo'
   | 'echo_lock_in'
+  // Phase 6 — build a Tech Lab (unlocks research)
+  | 'wait_for_techlab_epoch'
+  | 'techlab_select_drone'
+  | 'techlab_select_build'
+  | 'techlab_select_techlab'
+  | 'techlab_select_hex'
+  | 'techlab_lock_in'
+  // Phase 7 — research Tier 1 (unlocks Flux Conduit)
+  | 'wait_for_research_epoch'
+  | 'research_select_slot'
+  | 'research_select_research'
+  | 'research_lock_in'
+  // Wait for research to complete (3 epochs, auto-advances each planning phase)
+  | 'wait_for_research_complete'
+  // Phase 8 — build a Flux Conduit on a flux vent
+  | 'flux_select_drone'
+  | 'flux_select_build'
+  | 'flux_select_conduit'
+  | 'flux_select_hex'
+  | 'flux_lock_in'
   | null;
 
 export type Phase = 'planning' | 'temporal' | 'execution'
