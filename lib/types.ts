@@ -87,6 +87,11 @@ export type TutorialStep =
   | 'gather_select_gather'
   | 'gather_select_target'
   | 'gather_lock_in'
+  // Phase 5 — Epoch 5: use Temporal Echo to reveal enemy's previous moves
+  | 'wait_for_echo_epoch'
+  | 'echo_select_slot'
+  | 'echo_select_echo'
+  | 'echo_lock_in'
   | null;
 
 export type Phase = 'planning' | 'temporal' | 'execution'

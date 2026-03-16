@@ -284,6 +284,9 @@ export default function GameView() {
         setTutorialStep('wait_for_gather_epoch');
         break;
       case 'gather_lock_in':
+        setTutorialStep('wait_for_echo_epoch');
+        break;
+      case 'echo_lock_in':
         setTutorialStep(null); // tutorial complete
         break;
     }
@@ -298,6 +301,9 @@ export default function GameView() {
         break;
       case 'wait_for_gather_epoch':
         setTutorialStep('gather_select_drone');
+        break;
+      case 'wait_for_echo_epoch':
+        setTutorialStep('echo_select_slot');
         break;
     }
   }, [tutorialActive, tutorialStep, gameState.phase, lockedIn]);
@@ -407,6 +413,19 @@ export default function GameView() {
         for (const cmd of gameState.players.player.unitOrders.values()) {
           if (cmd.type === 'gather') {
             setTutorialStep('gather_lock_in');
+            break;
+          }
+        }
+        break;
+
+      // ── Phase 5: Temporal Echo ───────────────────────────────
+      case 'echo_select_slot':
+        if (mode.kind === 'global_picker_open') setTutorialStep('echo_select_echo');
+        break;
+      case 'echo_select_echo':
+        for (const cmd of gameState.players.player.globalCommands) {
+          if (cmd?.type === 'temporal') {
+            setTutorialStep('echo_lock_in');
             break;
           }
         }
@@ -1418,7 +1437,11 @@ export default function GameView() {
             canTimelineFork={canTimelineFork}
             timelineForkDisabledReason={timelineForkDisabledReason}
             canChronoScout={canChronoScout}
-            tutorialHighlightType={tutorialStep === 'train_select_train' || tutorialStep === 'extractor_train_select_train' ? 'train' : undefined}
+            tutorialHighlightType={
+              tutorialStep === 'train_select_train' || tutorialStep === 'extractor_train_select_train' ? 'train'
+              : tutorialStep === 'echo_select_echo' ? 'temporal'
+              : undefined
+            }
             onSelect={handleCommandPick}
             onEpochAnchorAction={handleEpochAnchorAction}
             onClose={() => setMode({ kind: 'idle' })}
@@ -1722,9 +1745,14 @@ export default function GameView() {
               tutorialStep === 'lock_in' ||
               tutorialStep === 'extractor_lock_in' ||
               tutorialStep === 'train_lock_in' ||
-              tutorialStep === 'gather_lock_in'
+              tutorialStep === 'gather_lock_in' ||
+              tutorialStep === 'echo_lock_in'
             }
-            tutorialHighlightSlot={tutorialStep === 'train_select_slot' || tutorialStep === 'extractor_train_select_slot'}
+            tutorialHighlightSlot={
+              tutorialStep === 'train_select_slot' ||
+              tutorialStep === 'extractor_train_select_slot' ||
+              tutorialStep === 'echo_select_slot'
+            }
             onSlotClick={handleGlobalSlotClick}
             onSlotClear={handleGlobalSlotClear}
             onLockIn={handleLockIn}

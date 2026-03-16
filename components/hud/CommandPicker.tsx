@@ -305,7 +305,7 @@ export default function CommandPicker(props: CommandPickerProps) {
             )}
             {isTutorial && (
               <span className="tutorial-tooltip" style={{ top: -20, left: 4 }}>
-                {entry.type === 'gather' ? 'SELECT GATHER' : entry.type === 'train' ? 'SELECT TRAIN' : 'SELECT BUILD'}
+                {entry.type === 'gather' ? 'SELECT GATHER' : entry.type === 'train' ? 'SELECT TRAIN' : entry.type === 'temporal' ? 'USE TEMPORAL ECHO' : 'SELECT BUILD'}
               </span>
             )}
           </button>
