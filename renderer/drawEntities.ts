@@ -10,7 +10,7 @@ import { TimelineForkResult, ChronoScoutResult } from '../engine/simulation';
 import {
   ExecutionAnimation,
   getAnimatedUnitPosition, getCurrentPhase, getPhaseProgress,
-  PHASE_DEFEND, PHASE_ATTACK, PHASE_BUILD,
+  PHASE_DEFEND, PHASE_MOVE, PHASE_ATTACK, PHASE_BUILD,
 } from './animation';
 
 // ── Theme colors ────────────────────────────────────────────────────────────
@@ -1339,6 +1339,197 @@ function drawWeaponEffect(
 /** Update and render all active particles. Call once per frame. */
 export function drawParticles(ctx: CanvasRenderingContext2D, dt: number): void {
   updateAndDrawParticles(ctx, dt);
+}
+
+// ── Ability VFX (drawn during execution animation) ──────────────────────────
+
+/**
+ * Draw Chrono Shift VFX: rewind shimmer around a unit that was time-shifted.
+ * Shows a clockwise sweeping arc + temporal particles during the defend phase.
+ */
+export function drawChronoShiftVFX(
+  ctx: CanvasRenderingContext2D,
+  animation: ExecutionAnimation,
+  cam: Camera,
+  elapsed: number,
+): void {
+  const phase = getCurrentPhase(elapsed);
+  if (phase !== 'defend') return;
+  const dp = getPhaseProgress(elapsed, PHASE_DEFEND);
+  if (dp < 0) return;
+
+  const r = BASE_HEX_SIZE * cam.zoom * 0.32;
+  const prevAlpha = ctx.globalAlpha;
+
+  for (const anim of animation.units.values()) {
+    if (!anim.wasChronoShifted) continue;
+
+    const sx = cam.x + anim.toPixel.x * cam.zoom;
+    const sy = cam.y + anim.toPixel.y * cam.zoom;
+
+    // Clockwise sweep arc (like a clock hand rewinding)
+    const sweepAngle = dp * Math.PI * 4; // 2 full sweeps
+    ctx.globalAlpha = (1 - dp) * 0.6;
+    ctx.strokeStyle = '#60a5fa'; // blue
+    ctx.lineWidth = 3 * cam.zoom;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r + 6 * cam.zoom, -Math.PI / 2, -Math.PI / 2 + sweepAngle);
+    ctx.stroke();
+
+    // Inner glow ring
+    const ringR = r + 4 * cam.zoom + dp * 8 * cam.zoom;
+    ctx.globalAlpha = (1 - dp) * 0.35;
+    const grad = ctx.createRadialGradient(sx, sy, r * 0.5, sx, sy, ringR);
+    grad.addColorStop(0, 'rgba(96, 165, 250, 0.0)');
+    grad.addColorStop(0.7, 'rgba(96, 165, 250, 0.3)');
+    grad.addColorStop(1, 'rgba(96, 165, 250, 0.0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(sx, sy, ringR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Shield icon (small diamond) indicating damage shield
+    if (dp > 0.5) {
+      const shieldAlpha = Math.min(1, (dp - 0.5) * 4);
+      ctx.globalAlpha = shieldAlpha * 0.8;
+      ctx.fillStyle = '#93c5fd';
+      const ds = r * 0.3;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - r - ds * 1.5);
+      ctx.lineTo(sx + ds, sy - r - ds * 0.5);
+      ctx.lineTo(sx, sy - r + ds * 0.2);
+      ctx.lineTo(sx - ds, sy - r - ds * 0.5);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  ctx.globalAlpha = prevAlpha;
+}
+
+/**
+ * Draw Phase Surge VFX: speed trails behind a surging unit during the move phase.
+ * Shows stretched afterimages and motion lines.
+ */
+export function drawPhaseSurgeVFX(
+  ctx: CanvasRenderingContext2D,
+  animation: ExecutionAnimation,
+  cam: Camera,
+  elapsed: number,
+): void {
+  const phase = getCurrentPhase(elapsed);
+  if (phase !== 'move') return;
+  const mp = getPhaseProgress(elapsed, PHASE_MOVE);
+  if (mp < 0 || mp >= 1) return;
+
+  const r = BASE_HEX_SIZE * cam.zoom * 0.32;
+  const prevAlpha = ctx.globalAlpha;
+
+  for (const anim of animation.units.values()) {
+    if (!anim.wasPhaseSurged) continue;
+
+    const curPos = getAnimatedUnitPosition(anim, elapsed);
+    const sx = cam.x + curPos.x * cam.zoom;
+    const sy = cam.y + curPos.y * cam.zoom;
+
+    // Direction of travel
+    const dx = anim.toPixel.x - anim.fromPixel.x;
+    const dy = anim.toPixel.y - anim.fromPixel.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1) continue;
+
+    const ux = dx / len;
+    const uy = dy / len;
+
+    // Trailing afterimages (3 ghosts behind the unit)
+    const color = entityColor(anim.owner);
+    for (let i = 1; i <= 3; i++) {
+      const trailDist = i * r * 1.2;
+      const tx = sx - ux * trailDist * cam.zoom;
+      const ty = sy - uy * trailDist * cam.zoom;
+      ctx.globalAlpha = 0.15 * (1 - i / 4);
+      paintUnit(ctx, tx, ty, r * (1 - i * 0.1), anim.unitType, color);
+    }
+
+    // Speed lines — parallel streaks flanking the unit
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = '#c084fc'; // purple surge color
+    ctx.lineWidth = 1.5 * cam.zoom;
+    const perpX = -uy;
+    const perpY = ux;
+
+    for (let side = -1; side <= 1; side += 2) {
+      for (let j = 0; j < 3; j++) {
+        const offset = (r * 0.6 + j * r * 0.4) * side;
+        const lineLen = r * (2 + j * 0.5);
+        const lx = sx + perpX * offset * cam.zoom;
+        const ly = sy + perpY * offset * cam.zoom;
+        ctx.globalAlpha = 0.25 * (1 - j / 4);
+        ctx.beginPath();
+        ctx.moveTo(lx, ly);
+        ctx.lineTo(lx - ux * lineLen * cam.zoom, ly - uy * lineLen * cam.zoom);
+        ctx.stroke();
+      }
+    }
+  }
+
+  ctx.globalAlpha = prevAlpha;
+}
+
+/**
+ * Draw Epoch Anchor Activate VFX: golden flash over all player units at the start
+ * of the defend phase, indicating they're being restored to anchored state.
+ */
+export function drawAnchorActivateVFX(
+  ctx: CanvasRenderingContext2D,
+  animation: ExecutionAnimation,
+  cam: Camera,
+  elapsed: number,
+  cssW: number,
+  cssH: number,
+): void {
+  if (!animation.anchorActivated) return;
+
+  const phase = getCurrentPhase(elapsed);
+  if (phase !== 'defend') return;
+  const dp = getPhaseProgress(elapsed, PHASE_DEFEND);
+  if (dp < 0) return;
+
+  const prevAlpha = ctx.globalAlpha;
+  const r = BASE_HEX_SIZE * cam.zoom * 0.32;
+
+  // Screen-wide golden flash (brief, fading quickly)
+  if (dp < 0.3) {
+    const flashAlpha = (0.3 - dp) / 0.3 * 0.15;
+    ctx.globalAlpha = flashAlpha;
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(0, 0, cssW, cssH);
+  }
+
+  // Golden ring expanding from each player unit
+  for (const anim of animation.units.values()) {
+    if (anim.owner !== 'player') continue;
+
+    const sx = cam.x + anim.toPixel.x * cam.zoom;
+    const sy = cam.y + anim.toPixel.y * cam.zoom;
+
+    const ringR = r + dp * r * 2;
+    ctx.globalAlpha = (1 - dp) * 0.4;
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 2 * cam.zoom;
+    ctx.beginPath();
+    ctx.arc(sx, sy, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Inner golden fill
+    ctx.globalAlpha = (1 - dp) * 0.1;
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.globalAlpha = prevAlpha;
 }
 
 // ── Main animation draw functions ──────────────────────────────────────────

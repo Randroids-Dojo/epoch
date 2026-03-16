@@ -135,6 +135,7 @@ describe('getAnimatedUnitPosition', () => {
     fromPixel: from, toPixel: to,
     oldHp: 10, newHp: 10, maxHp: 15,
     wasDestroyed: false, wasSpawned: false, isDefending: false,
+    wasChronoShifted: false, wasPhaseSurged: false,
     wasMergeConsumed: false, mergeCount: 0,
   };
 

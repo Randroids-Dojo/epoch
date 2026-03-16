@@ -7,7 +7,8 @@ import { Hex, hexKey, hexToPixel } from '@/engine/hex';
 import { BASE_HEX_SIZE } from '@/renderer/drawHex';
 import {
   Command, GlobalCommand, EpochAnchorCommand,
-  TEMPORAL_ECHO_COST, TIMELINE_FORK_COST, CHRONO_SCOUT_COST, CHRONO_SHIFT_COST,
+  TEMPORAL_ECHO_COST, TIMELINE_FORK_COST, CHRONO_SCOUT_COST, CHRONO_SHIFT_COST, PHASE_SURGE_COST,
+  EPOCH_ANCHOR_SET_COST, EPOCH_ANCHOR_ACTIVATE_COST,
   TrainCommand, UnitCommand,
 } from '@/engine/commands';
 import { runTimelineForkSimulation, computeChronoScout, TimelineForkResult, ChronoScoutResult } from '@/engine/simulation';
@@ -264,6 +265,24 @@ export default function GameView() {
     return null;
   }, [tutorialActive, gameState]);
 
+  // Find the first idle non-drone combat unit for surge/shift tutorial.
+  const tutorialCombatUnitId = useMemo(() => {
+    if (!tutorialActive) return null;
+    const snapshot = getOldestSnapshot(gameState);
+    for (const u of gameState.units.values()) {
+      if (u.owner === 'player' && u.type !== 'drone' && !gameState.players.player.unitOrders.has(u.id)) {
+        // For shift, prefer a unit with chrono history.
+        if (tutorialStep?.startsWith('shift') && snapshot && !snapshot.has(u.id)) continue;
+        return u.id;
+      }
+    }
+    // Fallback: any non-drone player unit.
+    for (const u of gameState.units.values()) {
+      if (u.owner === 'player' && u.type !== 'drone') return u.id;
+    }
+    return null;
+  }, [tutorialActive, tutorialStep, gameState]);
+
   // When lock-in completes, decide the next tutorial phase for the upcoming epoch.
   const prevLockedInRef = useRef(false);
   useEffect(() => {
@@ -300,6 +319,18 @@ export default function GameView() {
         setTutorialStep('wait_for_research_complete');
         break;
       case 'flux_lock_in':
+        setTutorialStep('wait_for_surge_epoch');
+        break;
+      case 'surge_lock_in':
+        setTutorialStep('wait_for_shift_epoch');
+        break;
+      case 'shift_lock_in':
+        setTutorialStep('wait_for_anchor_epoch');
+        break;
+      case 'anchor_lock_in':
+        setTutorialStep('wait_for_recall_epoch');
+        break;
+      case 'recall_lock_in':
         setTutorialStep(null); // tutorial complete
         break;
     }
@@ -335,8 +366,38 @@ export default function GameView() {
           setTutorialStep('flux_select_drone');
         }
         break;
+      case 'wait_for_surge_epoch': {
+        // Need a non-drone combat unit + enough TE for phase surge.
+        const hasCombatUnit = [...gameState.units.values()].some(u => u.owner === 'player' && u.type !== 'drone');
+        if (hasCombatUnit && gameState.players.player.resources.te >= PHASE_SURGE_COST) {
+          setTutorialStep('surge_select_unit');
+        }
+        break;
+      }
+      case 'wait_for_shift_epoch': {
+        // Need Tech Tier 1 + TE + a unit with 2-epoch history.
+        const snapshot = getOldestSnapshot(gameState);
+        const canShift = playerTechTier >= 1 && gameState.players.player.resources.te >= CHRONO_SHIFT_COST
+          && snapshot && [...gameState.units.values()].some(u => u.owner === 'player' && u.type !== 'drone' && snapshot.has(u.id));
+        if (canShift) {
+          setTutorialStep('shift_select_unit');
+        }
+        break;
+      }
+      case 'wait_for_anchor_epoch':
+        // Need Tech Tier 3 + 5 TE.
+        if (playerTechTier >= 3 && gameState.players.player.resources.te >= EPOCH_ANCHOR_SET_COST) {
+          setTutorialStep('anchor_select_slot');
+        }
+        break;
+      case 'wait_for_recall_epoch':
+        // Need epoch anchor already set (from prior epoch) + 3 TE.
+        if (hasEpochAnchor && gameState.players.player.resources.te >= EPOCH_ANCHOR_ACTIVATE_COST) {
+          setTutorialStep('recall_select_slot');
+        }
+        break;
     }
-  }, [tutorialActive, tutorialStep, gameState.phase, gameState.players.player.resources.te, researchEpochsLeft, playerTechTier, lockedIn]);
+  }, [tutorialActive, tutorialStep, gameState.phase, gameState.players.player.resources.te, researchEpochsLeft, playerTechTier, lockedIn, hasEpochAnchor, gameState]);
 
   // Mode-driven step advancement (runs on mode / gameState changes).
   useEffect(() => {
@@ -517,6 +578,69 @@ export default function GameView() {
         for (const cmd of gameState.players.player.unitOrders.values()) {
           if (cmd.type === 'build' && cmd.structureType === 'flux_conduit') {
             setTutorialStep('flux_lock_in');
+            break;
+          }
+        }
+        break;
+
+      // ── Phase 9: Phase Surge ──────────────────────────────────
+      case 'surge_select_unit':
+        if (mode.kind === 'unit_picker_open') {
+          const u = gameState.units.get(mode.unitId);
+          if (u && u.type !== 'drone') setTutorialStep('surge_select_surge');
+        }
+        break;
+      case 'surge_select_surge':
+        if (mode.kind === 'targeting' && mode.commandType === 'phase_surge') {
+          setTutorialStep('surge_select_target');
+        }
+        break;
+      case 'surge_select_target':
+        for (const cmd of gameState.players.player.unitOrders.values()) {
+          if (cmd.type === 'phase_surge') {
+            setTutorialStep('surge_lock_in');
+            break;
+          }
+        }
+        break;
+
+      // ── Phase 10: Chrono Shift ────────────────────────────────
+      case 'shift_select_unit':
+        if (mode.kind === 'unit_picker_open') {
+          const u = gameState.units.get(mode.unitId);
+          if (u && u.type !== 'drone') setTutorialStep('shift_select_shift');
+        }
+        break;
+      case 'shift_select_shift':
+        for (const cmd of gameState.players.player.unitOrders.values()) {
+          if (cmd.type === 'chrono_shift') {
+            setTutorialStep('shift_lock_in');
+            break;
+          }
+        }
+        break;
+
+      // ── Phase 11: Epoch Anchor (set) ──────────────────────────
+      case 'anchor_select_slot':
+        if (mode.kind === 'global_picker_open') setTutorialStep('anchor_select_set');
+        break;
+      case 'anchor_select_set':
+        for (const cmd of gameState.players.player.globalCommands) {
+          if (cmd?.type === 'epoch_anchor' && cmd.action === 'set') {
+            setTutorialStep('anchor_lock_in');
+            break;
+          }
+        }
+        break;
+
+      // ── Phase 12: Epoch Anchor (recall/activate) ──────────────
+      case 'recall_select_slot':
+        if (mode.kind === 'global_picker_open') setTutorialStep('recall_select_activate');
+        break;
+      case 'recall_select_activate':
+        for (const cmd of gameState.players.player.globalCommands) {
+          if (cmd?.type === 'epoch_anchor' && cmd.action === 'activate') {
+            setTutorialStep('recall_lock_in');
             break;
           }
         }
@@ -751,6 +875,15 @@ export default function GameView() {
       structSnaps.set(id, { hex: { ...s.hex }, hp: s.hp, owner: s.owner, type: s.type });
     }
 
+    // Capture player unit commands before resolution mutates state.
+    const playerUnitCmds = new Map<string, { type: string }>();
+    for (const [uid, cmd] of state.players.player.unitOrders) {
+      playerUnitCmds.set(uid, { type: cmd.type });
+    }
+    const anchorWasActivated = state.players.player.globalCommands.some(
+      c => c?.type === 'epoch_anchor' && c.action === 'activate',
+    );
+
     resolveEpoch(state);
 
     // When the game ends, skip the execution animation and show the result
@@ -765,7 +898,7 @@ export default function GameView() {
       return;
     }
 
-    const anim = buildAnimationTimeline(unitSnaps, structSnaps, state);
+    const anim = buildAnimationTimeline(unitSnaps, structSnaps, state, playerUnitCmds, anchorWasActivated);
     animationRef.current = anim;
     setActionBeats(buildActionSequence(anim, state.map));
 
@@ -1479,7 +1612,10 @@ export default function GameView() {
             tutorialHighlightUnitId={
               tutorialStep === 'select_drone' || tutorialStep === 'extractor_select_drone' || tutorialStep === 'gather_select_drone'
               || tutorialStep === 'techlab_select_drone' || tutorialStep === 'flux_select_drone'
-                ? tutorialDroneId : null
+                ? tutorialDroneId
+              : tutorialStep === 'surge_select_unit' || tutorialStep === 'shift_select_unit'
+                ? tutorialCombatUnitId
+              : null
             }
             onUnitClick={handleUnitCardClick}
             onOrderClear={handleUnitOrderClear}
@@ -1523,6 +1659,8 @@ export default function GameView() {
               tutorialStep === 'select_build' || tutorialStep === 'extractor_select_build'
               || tutorialStep === 'techlab_select_build' || tutorialStep === 'flux_select_build' ? 'build'
               : tutorialStep === 'gather_select_gather' ? 'gather'
+              : tutorialStep === 'surge_select_surge' ? 'phase_surge'
+              : tutorialStep === 'shift_select_shift' ? 'chrono_shift'
               : undefined
             }
             onSelect={handleCommandPick}
@@ -1556,6 +1694,8 @@ export default function GameView() {
               tutorialStep === 'train_select_train' || tutorialStep === 'extractor_train_select_train' ? 'train'
               : tutorialStep === 'echo_select_echo' ? 'temporal'
               : tutorialStep === 'research_select_research' ? 'research'
+              : tutorialStep === 'anchor_select_set' ? 'epoch_anchor_set'
+              : tutorialStep === 'recall_select_activate' ? 'epoch_anchor_activate'
               : undefined
             }
             onSelect={handleCommandPick}
@@ -1867,13 +2007,19 @@ export default function GameView() {
               tutorialStep === 'echo_lock_in' ||
               tutorialStep === 'techlab_lock_in' ||
               tutorialStep === 'research_lock_in' ||
-              tutorialStep === 'flux_lock_in'
+              tutorialStep === 'flux_lock_in' ||
+              tutorialStep === 'surge_lock_in' ||
+              tutorialStep === 'shift_lock_in' ||
+              tutorialStep === 'anchor_lock_in' ||
+              tutorialStep === 'recall_lock_in'
             }
             tutorialHighlightSlot={
               tutorialStep === 'train_select_slot' ||
               tutorialStep === 'extractor_train_select_slot' ||
               tutorialStep === 'echo_select_slot' ||
-              tutorialStep === 'research_select_slot'
+              tutorialStep === 'research_select_slot' ||
+              tutorialStep === 'anchor_select_slot' ||
+              tutorialStep === 'recall_select_slot'
             }
             onSlotClick={handleGlobalSlotClick}
             onSlotClear={handleGlobalSlotClear}

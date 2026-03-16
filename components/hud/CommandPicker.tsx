@@ -277,7 +277,9 @@ export default function CommandPicker(props: CommandPickerProps) {
       </div>
 
       {mode === 'command' && entries.map((entry) => {
-        const isTutorial = tutorialHighlightType === entry.type;
+        const isTutorial = tutorialHighlightType === entry.type
+          || (entry.type === 'epoch_anchor' && entry.label === 'Anchor Set' && tutorialHighlightType === 'epoch_anchor_set')
+          || (entry.type === 'epoch_anchor' && entry.label === 'Anchor Recall' && tutorialHighlightType === 'epoch_anchor_activate');
         return (
           <div
             key={entry.label}
@@ -305,7 +307,15 @@ export default function CommandPicker(props: CommandPickerProps) {
             )}
             {isTutorial && (
               <span className="tutorial-tooltip" style={{ top: -20, left: 4 }}>
-                {entry.type === 'gather' ? 'SELECT GATHER' : entry.type === 'train' ? 'SELECT TRAIN' : entry.type === 'temporal' ? 'USE TEMPORAL ECHO' : entry.type === 'research' ? 'START RESEARCH' : 'SELECT BUILD'}
+                {entry.type === 'gather' ? 'SELECT GATHER'
+                  : entry.type === 'train' ? 'SELECT TRAIN'
+                  : entry.type === 'temporal' ? 'USE TEMPORAL ECHO'
+                  : entry.type === 'research' ? 'START RESEARCH'
+                  : entry.type === 'phase_surge' ? 'SURGE FORWARD'
+                  : entry.type === 'chrono_shift' ? 'REWIND UNIT'
+                  : entry.type === 'epoch_anchor' && entry.label.includes('Set') ? 'SET ANCHOR POINT'
+                  : entry.type === 'epoch_anchor' && entry.label.includes('Recall') ? 'RECALL TO ANCHOR'
+                  : 'SELECT BUILD'}
               </span>
             )}
           </button>

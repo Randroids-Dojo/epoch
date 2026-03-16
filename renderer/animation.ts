@@ -47,6 +47,10 @@ export interface UnitAnim {
   wasDestroyed: boolean;
   wasSpawned: boolean;
   isDefending: boolean;
+  /** True if this unit was Chrono Shifted (rewind + damage shield). */
+  wasChronoShifted: boolean;
+  /** True if this unit used Phase Surge (extra speed move). */
+  wasPhaseSurged: boolean;
   /** True if this unit was consumed by a merge (animates toward survivor then fades). */
   wasMergeConsumed: boolean;
   /** Pixel position of the merge survivor this unit is being pulled toward. */
@@ -99,6 +103,8 @@ export interface ExecutionAnimation {
   destroyedStructures: StructAnim[];
   /** Units consumed by merge — animate pulling toward survivor then fading. */
   mergedUnits: UnitAnim[];
+  /** True if any player activated Epoch Anchor recall this epoch. */
+  anchorActivated: boolean;
   eventLog: string[];
   startedAt: number; // performance.now()
 }
@@ -109,6 +115,10 @@ export function buildAnimationTimeline(
   unitSnaps: Map<string, UnitSnapshot>,
   structSnaps: Map<string, StructSnapshot>,
   newState: GameState,
+  /** Unit commands issued this epoch, used to detect phase_surge / chrono_shift. */
+  unitCommands?: Map<string, { type: string }>,
+  /** Whether any player activated Epoch Anchor recall this epoch. */
+  anchorWasActivated?: boolean,
 ): ExecutionAnimation {
   const units = new Map<string, UnitAnim>();
   const destroyedUnits: UnitAnim[] = [];
@@ -143,6 +153,7 @@ export function buildAnimationTimeline(
       ? UNIT_DEFS[snap.type].maxHp + (snap.bonusMaxHp ?? 0)
       : effectiveMaxHp(newUnit);
 
+    const unitCmd = unitCommands?.get(id);
     const anim: UnitAnim = {
       unitId: id,
       owner: snap.owner,
@@ -157,6 +168,8 @@ export function buildAnimationTimeline(
       wasDestroyed: destroyed && !wasMergeConsumed,
       wasSpawned: false,
       isDefending: destroyed ? false : newUnit.isDefending,
+      wasChronoShifted: unitCmd?.type === 'chrono_shift',
+      wasPhaseSurged: unitCmd?.type === 'phase_surge',
       wasMergeConsumed,
       mergeSurvivorPixel: survivorPixel,
       mergeCount: destroyed ? (snap.mergeCount ?? 0) : newUnit.mergeCount,
@@ -189,6 +202,8 @@ export function buildAnimationTimeline(
       wasDestroyed: false,
       wasSpawned: true,
       isDefending: false,
+      wasChronoShifted: false,
+      wasPhaseSurged: false,
       wasMergeConsumed: false,
       mergeCount: unit.mergeCount,
     });
@@ -248,6 +263,7 @@ export function buildAnimationTimeline(
     destroyedUnits,
     destroyedStructures,
     mergedUnits,
+    anchorActivated: anchorWasActivated ?? false,
     eventLog: newState.eventLog,
     startedAt: performance.now(),
   };
