@@ -9,6 +9,24 @@ import {
 import { UnitType, UNIT_DEFS } from '@/engine/units';
 import { TRAINABLE_UNIT_TYPES } from '@/components/shared/trainFlow';
 
+// ── Tutorial tooltip labels ───────────────────────────────────────────────────
+
+const TUTORIAL_TOOLTIPS: Record<string, string> = {
+  gather: 'SELECT GATHER',
+  train: 'SELECT TRAIN',
+  temporal: 'USE TEMPORAL ECHO',
+  research: 'START RESEARCH',
+  phase_surge: 'SURGE FORWARD',
+  chrono_shift: 'REWIND UNIT',
+};
+
+function tutorialTooltip(type: string, label: string): string {
+  if (type === 'epoch_anchor') {
+    return label.includes('Set') ? 'SET ANCHOR POINT' : 'RECALL TO ANCHOR';
+  }
+  return TUTORIAL_TOOLTIPS[type] ?? 'SELECT BUILD';
+}
+
 // ── Positioning ───────────────────────────────────────────────────────────────
 
 /** Position the picker to the right of the unit panel. */
@@ -307,15 +325,7 @@ export default function CommandPicker(props: CommandPickerProps) {
             )}
             {isTutorial && (
               <span className="tutorial-tooltip" style={{ top: -20, left: 4 }}>
-                {entry.type === 'gather' ? 'SELECT GATHER'
-                  : entry.type === 'train' ? 'SELECT TRAIN'
-                  : entry.type === 'temporal' ? 'USE TEMPORAL ECHO'
-                  : entry.type === 'research' ? 'START RESEARCH'
-                  : entry.type === 'phase_surge' ? 'SURGE FORWARD'
-                  : entry.type === 'chrono_shift' ? 'REWIND UNIT'
-                  : entry.type === 'epoch_anchor' && entry.label.includes('Set') ? 'SET ANCHOR POINT'
-                  : entry.type === 'epoch_anchor' && entry.label.includes('Recall') ? 'RECALL TO ANCHOR'
-                  : 'SELECT BUILD'}
+                {tutorialTooltip(entry.type, entry.label)}
               </span>
             )}
           </button>

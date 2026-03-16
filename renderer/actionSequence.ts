@@ -60,7 +60,7 @@ const OUTRO_ZOOM = 1.0;
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-function centroid(points: { x: number; y: number }[]): { x: number; y: number } {
+export function centroid(points: { x: number; y: number }[]): { x: number; y: number } {
   if (points.length === 0) return { x: 0, y: 0 };
   let sx = 0, sy = 0;
   for (const p of points) { sx += p.x; sy += p.y; }

@@ -38,7 +38,7 @@ import {
   PHASE_MOVE, PHASE_ATTACK, PHASE_BUILD,
   categorizeLogEntry,
 } from '@/renderer/animation';
-import { ActionBeat, buildActionSequence } from '@/renderer/actionSequence';
+import { ActionBeat, buildActionSequence, centroid } from '@/renderer/actionSequence';
 import { EchoRevealState, ECHO_REVEAL_DURATION_MS } from '@/renderer/drawEntities';
 import { audioEngine } from '@/audio/engine';
 import GameCanvas from './GameCanvas';
@@ -397,7 +397,7 @@ export default function GameView() {
         }
         break;
     }
-  }, [tutorialActive, tutorialStep, gameState.phase, gameState.players.player.resources.te, researchEpochsLeft, playerTechTier, lockedIn, hasEpochAnchor, gameState]);
+  }, [tutorialActive, tutorialStep, gameState.phase, gameState.players.player.resources.te, researchEpochsLeft, playerTechTier, lockedIn, hasEpochAnchor]);
 
   // Mode-driven step advancement (runs on mode / gameState changes).
   useEffect(() => {
@@ -1187,11 +1187,10 @@ export default function GameView() {
           }
         }
         if (targets.length > 0) {
-          const cx = targets.reduce((s, p) => s + p.x, 0) / targets.length;
-          const cy = targets.reduce((s, p) => s + p.y, 0) / targets.length;
+          const center = centroid(targets);
           setEchoReveal({
-            targetWorldX: cx,
-            targetWorldY: cy,
+            targetWorldX: center.x,
+            targetWorldY: center.y,
             startedAt: performance.now(),
             durationMs: ECHO_REVEAL_DURATION_MS,
           });

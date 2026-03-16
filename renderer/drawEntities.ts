@@ -105,6 +105,34 @@ function updateAndDrawParticles(ctx: CanvasRenderingContext2D, dt: number): void
   ctx.globalAlpha = prevAlpha;
 }
 
+// ── Fog-of-war visibility helpers ────────────────────────────────────────────
+
+/** Returns true if an AI unit on `hex` should be hidden (not 'visible'). */
+function isUnitHiddenByFog(
+  owner: string, hex: Hex, fogCells: Map<string, HexCell> | null | undefined,
+): boolean {
+  if (owner !== 'ai' || !fogCells) return false;
+  const cell = fogCells.get(hexKey(hex));
+  return !cell || cell.fog !== 'visible';
+}
+
+/** Returns true if an AI structure on `hex` should be hidden ('unexplored'). */
+function isStructureHiddenByFog(
+  owner: string, hex: Hex, fogCells: Map<string, HexCell> | null | undefined,
+): boolean {
+  if (owner !== 'ai' || !fogCells) return false;
+  const cell = fogCells.get(hexKey(hex));
+  return !cell || cell.fog === 'unexplored';
+}
+
+/** Returns the fog state for an AI structure's hex, or null if not applicable. */
+function getStructureFogState(
+  owner: string, hex: Hex, fogCells: Map<string, HexCell> | null | undefined,
+): string | null {
+  if (owner !== 'ai' || !fogCells) return null;
+  return fogCells.get(hexKey(hex))?.fog ?? null;
+}
+
 // ── Cel-shaded drawing helpers ──────────────────────────────────────────────
 
 /** Draw a cel-shaded drop shadow beneath a shape. */
@@ -877,11 +905,7 @@ export function drawUnits(
   const prevAlpha = ctx.globalAlpha;
 
   for (const unit of units.values()) {
-    // Hide AI units outside player vision.
-    if (unit.owner === 'ai' && fogCells) {
-      const cell = fogCells.get(hexKey(unit.hex));
-      if (!cell || cell.fog !== 'visible') continue;
-    }
+    if (isUnitHiddenByFog(unit.owner, unit.hex, fogCells)) continue;
 
     const wp = hexToPixel(unit.hex, BASE_HEX_SIZE);
     const sx = cam.x + wp.x * cam.zoom;
@@ -936,17 +960,13 @@ export function drawStructures(
   const prevAlpha = ctx.globalAlpha;
 
   for (const s of structures.values()) {
-    // Hide AI structures in unexplored fog. Show dimmed in explored.
-    if (s.owner === 'ai' && fogCells) {
-      const cell = fogCells.get(hexKey(s.hex));
-      if (!cell || cell.fog === 'unexplored') continue;
-    }
+    if (isStructureHiddenByFog(s.owner, s.hex, fogCells)) continue;
 
     const wp = hexToPixel(s.hex, BASE_HEX_SIZE);
     const sx = cam.x + wp.x * cam.zoom;
     const sy = cam.y + wp.y * cam.zoom;
     const color = entityColor(s.owner);
-    const inFog = s.owner === 'ai' && fogCells && fogCells.get(hexKey(s.hex))?.fog === 'explored';
+    const inFog = getStructureFogState(s.owner, s.hex, fogCells) === 'explored';
 
     ctx.globalAlpha = inFog ? 0.3 : (s.buildProgress > 0 ? 0.45 : 0.85);
     paintStructure(ctx, sx, sy, r, s.type, color);
@@ -1547,12 +1567,9 @@ export function drawAnimatedUnits(
   const phase = getCurrentPhase(elapsed);
 
   for (const anim of animation.units.values()) {
-    // Hide AI units outside player vision (check both from and to hex).
-    if (anim.owner === 'ai' && fogCells) {
-      const fromCell = fogCells.get(hexKey(anim.fromHex));
-      const toCell = fogCells.get(hexKey(anim.toHex));
-      if ((!fromCell || fromCell.fog !== 'visible') && (!toCell || toCell.fog !== 'visible')) continue;
-    }
+    // Hide AI units outside player vision (visible from either end of movement).
+    if (isUnitHiddenByFog(anim.owner, anim.fromHex, fogCells)
+        && isUnitHiddenByFog(anim.owner, anim.toHex, fogCells)) continue;
 
     const color = entityColor(anim.owner);
 
@@ -1652,11 +1669,7 @@ export function drawAnimatedStructures(
   const phase = getCurrentPhase(elapsed);
 
   for (const anim of animation.structures.values()) {
-    // Hide AI structures in unexplored fog.
-    if (anim.owner === 'ai' && fogCells) {
-      const cell = fogCells.get(hexKey(anim.hex));
-      if (!cell || cell.fog === 'unexplored') continue;
-    }
+    if (isStructureHiddenByFog(anim.owner, anim.hex, fogCells)) continue;
     const sx = cam.x + anim.pixel.x * cam.zoom;
     const sy = cam.y + anim.pixel.y * cam.zoom;
     const color = entityColor(anim.owner);
@@ -1710,10 +1723,7 @@ export function drawDestroyedEntities(
 
   // Destroyed units: fade out + expanding ring + explosion particles.
   for (const anim of animation.destroyedUnits) {
-    if (anim.owner === 'ai' && fogCells) {
-      const cell = fogCells.get(hexKey(anim.fromHex));
-      if (!cell || cell.fog !== 'visible') continue;
-    }
+    if (isUnitHiddenByFog(anim.owner, anim.fromHex, fogCells)) continue;
     const sx = cam.x + anim.fromPixel.x * cam.zoom;
     const sy = cam.y + anim.fromPixel.y * cam.zoom;
     const color = entityColor(anim.owner);
@@ -1725,10 +1735,7 @@ export function drawDestroyedEntities(
 
   // Destroyed structures: fade out + expanding ring.
   for (const anim of animation.destroyedStructures) {
-    if (anim.owner === 'ai' && fogCells) {
-      const cell = fogCells.get(hexKey(anim.hex));
-      if (!cell || cell.fog === 'unexplored') continue;
-    }
+    if (isStructureHiddenByFog(anim.owner, anim.hex, fogCells)) continue;
     const sx = cam.x + anim.pixel.x * cam.zoom;
     const sy = cam.y + anim.pixel.y * cam.zoom;
     const color = entityColor(anim.owner);
@@ -1907,12 +1914,12 @@ export function drawEchoRevealMist(
   const arms = 5;
   const rotation = t * Math.PI * 4; // 2 full rotations over the reveal
 
-  // Draw multiple spiraling mist tendrils
+  // Draw multiple spiraling mist tendrils (soft circles, no per-blob gradients)
+  ctx.fillStyle = 'rgba(200, 50, 60, 1)';
   for (let arm = 0; arm < arms; arm++) {
     const baseAngle = (arm / arms) * Math.PI * 2 + rotation;
 
-    // Each arm is a series of fading circles along a spiral
-    const steps = 40;
+    const steps = 30;
     for (let i = 0; i < steps; i++) {
       const frac = i / steps;
       const r = frac * maxR * (0.3 + t * 0.7);
@@ -1922,19 +1929,11 @@ export function drawEchoRevealMist(
       const x = cx + Math.cos(angle) * r;
       const y = cy + Math.sin(angle) * r;
 
-      // Each blob fades with distance and overall opacity
       const distFade = 1 - frac * 0.7;
       const blobAlpha = opacity * distFade * 0.12;
       const blobR = maxR * 0.08 * (1 + frac * 0.5);
 
       ctx.globalAlpha = blobAlpha;
-
-      // Crimson-tinted radial gradient for each blob
-      const grad = ctx.createRadialGradient(x, y, 0, x, y, blobR);
-      grad.addColorStop(0, 'rgba(230, 57, 70, 0.6)');
-      grad.addColorStop(0.5, 'rgba(180, 40, 55, 0.3)');
-      grad.addColorStop(1, 'rgba(120, 20, 40, 0)');
-      ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(x, y, blobR, 0, Math.PI * 2);
       ctx.fill();
