@@ -116,21 +116,20 @@ function isUnitHiddenByFog(
   return !cell || cell.fog !== 'visible';
 }
 
-/** Returns true if an AI structure on `hex` should be hidden ('unexplored'). */
-function isStructureHiddenByFog(
+/**
+ * Returns the effective fog display mode for an AI structure:
+ * - 'hidden': skip rendering entirely (unexplored)
+ * - 'dimmed': render at reduced alpha, no HP bar (explored)
+ * - null: render normally (visible, or non-AI owner)
+ */
+function structureFogMode(
   owner: string, hex: Hex, fogCells: Map<string, HexCell> | null | undefined,
-): boolean {
-  if (owner !== 'ai' || !fogCells) return false;
-  const cell = fogCells.get(hexKey(hex));
-  return !cell || cell.fog === 'unexplored';
-}
-
-/** Returns the fog state for an AI structure's hex, or null if not applicable. */
-function getStructureFogState(
-  owner: string, hex: Hex, fogCells: Map<string, HexCell> | null | undefined,
-): string | null {
+): 'hidden' | 'dimmed' | null {
   if (owner !== 'ai' || !fogCells) return null;
-  return fogCells.get(hexKey(hex))?.fog ?? null;
+  const fog = fogCells.get(hexKey(hex))?.fog;
+  if (!fog || fog === 'unexplored') return 'hidden';
+  if (fog === 'explored') return 'dimmed';
+  return null;
 }
 
 // ── Cel-shaded drawing helpers ──────────────────────────────────────────────
@@ -960,13 +959,14 @@ export function drawStructures(
   const prevAlpha = ctx.globalAlpha;
 
   for (const s of structures.values()) {
-    if (isStructureHiddenByFog(s.owner, s.hex, fogCells)) continue;
+    const fogMode = structureFogMode(s.owner, s.hex, fogCells);
+    if (fogMode === 'hidden') continue;
 
     const wp = hexToPixel(s.hex, BASE_HEX_SIZE);
     const sx = cam.x + wp.x * cam.zoom;
     const sy = cam.y + wp.y * cam.zoom;
     const color = entityColor(s.owner);
-    const inFog = getStructureFogState(s.owner, s.hex, fogCells) === 'explored';
+    const inFog = fogMode === 'dimmed';
 
     ctx.globalAlpha = inFog ? 0.3 : (s.buildProgress > 0 ? 0.45 : 0.85);
     paintStructure(ctx, sx, sy, r, s.type, color);
@@ -1381,9 +1381,7 @@ export function drawChronoShiftVFX(
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
   const prevAlpha = ctx.globalAlpha;
 
-  for (const anim of animation.units.values()) {
-    if (!anim.wasChronoShifted) continue;
-
+  for (const anim of animation.chronoShiftedUnits) {
     const sx = cam.x + anim.toPixel.x * cam.zoom;
     const sy = cam.y + anim.toPixel.y * cam.zoom;
 
@@ -1396,14 +1394,10 @@ export function drawChronoShiftVFX(
     ctx.arc(sx, sy, r + 6 * cam.zoom, -Math.PI / 2, -Math.PI / 2 + sweepAngle);
     ctx.stroke();
 
-    // Inner glow ring
+    // Inner glow ring (simple alpha fill instead of gradient for perf)
     const ringR = r + 4 * cam.zoom + dp * 8 * cam.zoom;
-    ctx.globalAlpha = (1 - dp) * 0.35;
-    const grad = ctx.createRadialGradient(sx, sy, r * 0.5, sx, sy, ringR);
-    grad.addColorStop(0, 'rgba(96, 165, 250, 0.0)');
-    grad.addColorStop(0.7, 'rgba(96, 165, 250, 0.3)');
-    grad.addColorStop(1, 'rgba(96, 165, 250, 0.0)');
-    ctx.fillStyle = grad;
+    ctx.globalAlpha = (1 - dp) * 0.12;
+    ctx.fillStyle = '#60a5fa';
     ctx.beginPath();
     ctx.arc(sx, sy, ringR, 0, Math.PI * 2);
     ctx.fill();
@@ -1445,9 +1439,7 @@ export function drawPhaseSurgeVFX(
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
   const prevAlpha = ctx.globalAlpha;
 
-  for (const anim of animation.units.values()) {
-    if (!anim.wasPhaseSurged) continue;
-
+  for (const anim of animation.phaseSurgedUnits) {
     const curPos = getAnimatedUnitPosition(anim, elapsed);
     const sx = cam.x + curPos.x * cam.zoom;
     const sy = cam.y + curPos.y * cam.zoom;
@@ -1669,7 +1661,7 @@ export function drawAnimatedStructures(
   const phase = getCurrentPhase(elapsed);
 
   for (const anim of animation.structures.values()) {
-    if (isStructureHiddenByFog(anim.owner, anim.hex, fogCells)) continue;
+    if (structureFogMode(anim.owner, anim.hex, fogCells) === 'hidden') continue;
     const sx = cam.x + anim.pixel.x * cam.zoom;
     const sy = cam.y + anim.pixel.y * cam.zoom;
     const color = entityColor(anim.owner);
@@ -1735,7 +1727,7 @@ export function drawDestroyedEntities(
 
   // Destroyed structures: fade out + expanding ring.
   for (const anim of animation.destroyedStructures) {
-    if (isStructureHiddenByFog(anim.owner, anim.hex, fogCells)) continue;
+    if (structureFogMode(anim.owner, anim.hex, fogCells) === 'hidden') continue;
     const sx = cam.x + anim.pixel.x * cam.zoom;
     const sy = cam.y + anim.pixel.y * cam.zoom;
     const color = entityColor(anim.owner);

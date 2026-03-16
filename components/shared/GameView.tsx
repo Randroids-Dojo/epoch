@@ -368,7 +368,10 @@ export default function GameView() {
         break;
       case 'wait_for_surge_epoch': {
         // Need a non-drone combat unit + enough TE for phase surge.
-        const hasCombatUnit = [...gameState.units.values()].some(u => u.owner === 'player' && u.type !== 'drone');
+        let hasCombatUnit = false;
+        for (const u of gameState.units.values()) {
+          if (u.owner === 'player' && u.type !== 'drone') { hasCombatUnit = true; break; }
+        }
         if (hasCombatUnit && gameState.players.player.resources.te >= PHASE_SURGE_COST) {
           setTutorialStep('surge_select_unit');
         }
@@ -377,8 +380,13 @@ export default function GameView() {
       case 'wait_for_shift_epoch': {
         // Need Tech Tier 1 + TE + a unit with 2-epoch history.
         const snapshot = getOldestSnapshot(gameState);
-        const canShift = playerTechTier >= 1 && gameState.players.player.resources.te >= CHRONO_SHIFT_COST
-          && snapshot && [...gameState.units.values()].some(u => u.owner === 'player' && u.type !== 'drone' && snapshot.has(u.id));
+        let hasShiftable = false;
+        if (snapshot) {
+          for (const u of gameState.units.values()) {
+            if (u.owner === 'player' && u.type !== 'drone' && snapshot.has(u.id)) { hasShiftable = true; break; }
+          }
+        }
+        const canShift = playerTechTier >= 1 && gameState.players.player.resources.te >= CHRONO_SHIFT_COST && hasShiftable;
         if (canShift) {
           setTutorialStep('shift_select_unit');
         }
@@ -898,7 +906,9 @@ export default function GameView() {
       return;
     }
 
-    const anim = buildAnimationTimeline(unitSnaps, structSnaps, state, playerUnitCmds, anchorWasActivated);
+    const anim = buildAnimationTimeline(unitSnaps, structSnaps, state, {
+      unitCommands: playerUnitCmds, anchorWasActivated,
+    });
     animationRef.current = anim;
     setActionBeats(buildActionSequence(anim, state.map));
 
@@ -2000,25 +2010,10 @@ export default function GameView() {
             forkMode={timelineForkActive}
             tutorialHighlightLockIn={
               tutorialStep === 'lock_in' ||
-              tutorialStep === 'extractor_lock_in' ||
-              tutorialStep === 'train_lock_in' ||
-              tutorialStep === 'gather_lock_in' ||
-              tutorialStep === 'echo_lock_in' ||
-              tutorialStep === 'techlab_lock_in' ||
-              tutorialStep === 'research_lock_in' ||
-              tutorialStep === 'flux_lock_in' ||
-              tutorialStep === 'surge_lock_in' ||
-              tutorialStep === 'shift_lock_in' ||
-              tutorialStep === 'anchor_lock_in' ||
-              tutorialStep === 'recall_lock_in'
+              (tutorialStep?.endsWith('_lock_in') ?? false)
             }
             tutorialHighlightSlot={
-              tutorialStep === 'train_select_slot' ||
-              tutorialStep === 'extractor_train_select_slot' ||
-              tutorialStep === 'echo_select_slot' ||
-              tutorialStep === 'research_select_slot' ||
-              tutorialStep === 'anchor_select_slot' ||
-              tutorialStep === 'recall_select_slot'
+              tutorialStep?.endsWith('_select_slot') ?? false
             }
             onSlotClick={handleGlobalSlotClick}
             onSlotClear={handleGlobalSlotClear}

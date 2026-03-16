@@ -103,10 +103,22 @@ export interface ExecutionAnimation {
   destroyedStructures: StructAnim[];
   /** Units consumed by merge — animate pulling toward survivor then fading. */
   mergedUnits: UnitAnim[];
+  /** Pre-computed: units that have wasChronoShifted === true. */
+  chronoShiftedUnits: UnitAnim[];
+  /** Pre-computed: units that have wasPhaseSurged === true. */
+  phaseSurgedUnits: UnitAnim[];
   /** True if any player activated Epoch Anchor recall this epoch. */
   anchorActivated: boolean;
   eventLog: string[];
   startedAt: number; // performance.now()
+}
+
+/** Optional params for buildAnimationTimeline beyond the core snapshots. */
+export interface AnimationTimelineOptions {
+  /** Unit commands issued this epoch, used to detect phase_surge / chrono_shift. */
+  unitCommands?: Map<string, { type: string }>;
+  /** Whether any player activated Epoch Anchor recall this epoch. */
+  anchorWasActivated?: boolean;
 }
 
 // ── Timeline builder ───────────────────────────────────────────────────────
@@ -115,11 +127,10 @@ export function buildAnimationTimeline(
   unitSnaps: Map<string, UnitSnapshot>,
   structSnaps: Map<string, StructSnapshot>,
   newState: GameState,
-  /** Unit commands issued this epoch, used to detect phase_surge / chrono_shift. */
-  unitCommands?: Map<string, { type: string }>,
-  /** Whether any player activated Epoch Anchor recall this epoch. */
-  anchorWasActivated?: boolean,
+  opts?: AnimationTimelineOptions,
 ): ExecutionAnimation {
+  const unitCommands = opts?.unitCommands;
+  const anchorWasActivated = opts?.anchorWasActivated;
   const units = new Map<string, UnitAnim>();
   const destroyedUnits: UnitAnim[] = [];
   const mergedUnits: UnitAnim[] = [];
@@ -257,12 +268,22 @@ export function buildAnimationTimeline(
     });
   }
 
+  // Pre-compute VFX unit lists so render-loop VFX functions don't iterate all units.
+  const chronoShiftedUnits: UnitAnim[] = [];
+  const phaseSurgedUnits: UnitAnim[] = [];
+  for (const u of units.values()) {
+    if (u.wasChronoShifted) chronoShiftedUnits.push(u);
+    if (u.wasPhaseSurged) phaseSurgedUnits.push(u);
+  }
+
   return {
     units,
     structures,
     destroyedUnits,
     destroyedStructures,
     mergedUnits,
+    chronoShiftedUnits,
+    phaseSurgedUnits,
     anchorActivated: anchorWasActivated ?? false,
     eventLog: newState.eventLog,
     startedAt: performance.now(),
