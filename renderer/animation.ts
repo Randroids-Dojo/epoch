@@ -37,6 +37,8 @@ export interface UnitAnim {
   unitId: string;
   owner: PlayerId;
   unitType: UnitType;
+  fromHex: Hex;
+  toHex: Hex;
   fromPixel: { x: number; y: number };
   toPixel: { x: number; y: number };
   oldHp: number;
@@ -57,6 +59,7 @@ export interface StructAnim {
   structureId: string;
   owner: PlayerId;
   structureType: StructureType;
+  hex: Hex;
   pixel: { x: number; y: number };
   oldHp: number;
   newHp: number;
@@ -144,6 +147,8 @@ export function buildAnimationTimeline(
       unitId: id,
       owner: snap.owner,
       unitType: snap.type,
+      fromHex: snap.hex,
+      toHex: destroyed ? snap.hex : newUnit.hex,
       fromPixel,
       toPixel: wasMergeConsumed ? survivorPixel : toPixel,
       oldHp: snap.hp,
@@ -174,6 +179,8 @@ export function buildAnimationTimeline(
       unitId: id,
       owner: unit.owner,
       unitType: unit.type,
+      fromHex: unit.hex,
+      toHex: unit.hex,
       fromPixel: pixel,
       toPixel: pixel,
       oldHp: 0,
@@ -200,6 +207,7 @@ export function buildAnimationTimeline(
       structureId: id,
       owner: snap.owner,
       structureType: snap.type,
+      hex: snap.hex,
       pixel,
       oldHp: snap.hp,
       newHp: destroyed ? -1 : newStruct.hp,
@@ -223,6 +231,7 @@ export function buildAnimationTimeline(
       structureId: id,
       owner: s.owner,
       structureType: s.type,
+      hex: s.hex,
       pixel,
       oldHp: 0,
       newHp: s.hp,

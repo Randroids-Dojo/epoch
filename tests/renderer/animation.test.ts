@@ -131,6 +131,7 @@ describe('getAnimatedUnitPosition', () => {
   const to = { x: 100, y: 50 };
   const anim = {
     unitId: 'u1', owner: 'player' as const, unitType: 'drone' as const,
+    fromHex: { q: 0, r: 0 }, toHex: { q: 1, r: 0 },
     fromPixel: from, toPixel: to,
     oldHp: 10, newHp: 10, maxHp: 15,
     wasDestroyed: false, wasSpawned: false, isDefending: false,

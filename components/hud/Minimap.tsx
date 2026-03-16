@@ -108,6 +108,11 @@ export default function Minimap({ gameState, cameraSnapshot, isMobile, onRecente
     const entityPx = Math.max(2, cellPx + 1);
 
     for (const s of gameState.structures.values()) {
+      // Hide AI structures in unexplored fog.
+      if (s.owner === 'ai') {
+        const cell = gameState.map.cells.get(hexKey(s.hex));
+        if (!cell || cell.fog === 'unexplored') continue;
+      }
       const p = hexToPixel(s.hex, BASE_HEX_SIZE);
       const m = worldToMini(p.x, p.y);
       ctx.fillStyle = s.owner === 'player' ? '#e63946' : '#8b5cf6';
@@ -116,7 +121,8 @@ export default function Minimap({ gameState, cameraSnapshot, isMobile, onRecente
 
     for (const u of gameState.units.values()) {
       const cell = gameState.map.cells.get(hexKey(u.hex));
-      if (u.owner === 'ai' && cell?.fog === 'unexplored') continue;
+      // Hide AI units outside player vision.
+      if (u.owner === 'ai' && (!cell || cell.fog !== 'visible')) continue;
       const p = hexToPixel(u.hex, BASE_HEX_SIZE);
       const m = worldToMini(p.x, p.y);
       ctx.beginPath();

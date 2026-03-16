@@ -871,11 +871,18 @@ export function drawUnits(
   units: Map<string, Unit>,
   cam: Camera,
   selectedUnitId?: string | null,
+  fogCells?: Map<string, HexCell> | null,
 ): void {
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
   const prevAlpha = ctx.globalAlpha;
 
   for (const unit of units.values()) {
+    // Hide AI units outside player vision.
+    if (unit.owner === 'ai' && fogCells) {
+      const cell = fogCells.get(hexKey(unit.hex));
+      if (!cell || cell.fog !== 'visible') continue;
+    }
+
     const wp = hexToPixel(unit.hex, BASE_HEX_SIZE);
     const sx = cam.x + wp.x * cam.zoom;
     const sy = cam.y + wp.y * cam.zoom;
@@ -923,20 +930,28 @@ export function drawStructures(
   ctx: CanvasRenderingContext2D,
   structures: Map<string, Structure>,
   cam: Camera,
+  fogCells?: Map<string, HexCell> | null,
 ): void {
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
   const prevAlpha = ctx.globalAlpha;
 
   for (const s of structures.values()) {
+    // Hide AI structures in unexplored fog. Show dimmed in explored.
+    if (s.owner === 'ai' && fogCells) {
+      const cell = fogCells.get(hexKey(s.hex));
+      if (!cell || cell.fog === 'unexplored') continue;
+    }
+
     const wp = hexToPixel(s.hex, BASE_HEX_SIZE);
     const sx = cam.x + wp.x * cam.zoom;
     const sy = cam.y + wp.y * cam.zoom;
     const color = entityColor(s.owner);
+    const inFog = s.owner === 'ai' && fogCells && fogCells.get(hexKey(s.hex))?.fog === 'explored';
 
-    ctx.globalAlpha = s.buildProgress > 0 ? 0.45 : 0.85;
+    ctx.globalAlpha = inFog ? 0.3 : (s.buildProgress > 0 ? 0.45 : 0.85);
     paintStructure(ctx, sx, sy, r, s.type, color);
 
-    if (s.buildProgress > 0) {
+    if (!inFog && s.buildProgress > 0) {
       // Dashed outline for structures under construction.
       ctx.globalAlpha = 0.7;
       ctx.strokeStyle = color;
@@ -948,8 +963,10 @@ export function drawStructures(
       ctx.setLineDash([]);
     }
 
-    ctx.globalAlpha = 0.85;
-    drawHpBar(ctx, sx, sy, r, s.hp, STRUCTURE_DEFS[s.type].maxHp);
+    if (!inFog) {
+      ctx.globalAlpha = 0.85;
+      drawHpBar(ctx, sx, sy, r, s.hp, STRUCTURE_DEFS[s.type].maxHp);
+    }
   }
 
   ctx.globalAlpha = prevAlpha;
@@ -1332,12 +1349,20 @@ export function drawAnimatedUnits(
   animation: ExecutionAnimation,
   cam: Camera,
   elapsed: number,
+  fogCells?: Map<string, HexCell> | null,
 ): void {
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
   const prevAlpha = ctx.globalAlpha;
   const phase = getCurrentPhase(elapsed);
 
   for (const anim of animation.units.values()) {
+    // Hide AI units outside player vision (check both from and to hex).
+    if (anim.owner === 'ai' && fogCells) {
+      const fromCell = fogCells.get(hexKey(anim.fromHex));
+      const toCell = fogCells.get(hexKey(anim.toHex));
+      if ((!fromCell || fromCell.fog !== 'visible') && (!toCell || toCell.fog !== 'visible')) continue;
+    }
+
     const color = entityColor(anim.owner);
 
     // Spawned units only appear during build phase.
@@ -1429,12 +1454,18 @@ export function drawAnimatedStructures(
   animation: ExecutionAnimation,
   cam: Camera,
   elapsed: number,
+  fogCells?: Map<string, HexCell> | null,
 ): void {
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
   const prevAlpha = ctx.globalAlpha;
   const phase = getCurrentPhase(elapsed);
 
   for (const anim of animation.structures.values()) {
+    // Hide AI structures in unexplored fog.
+    if (anim.owner === 'ai' && fogCells) {
+      const cell = fogCells.get(hexKey(anim.hex));
+      if (!cell || cell.fog === 'unexplored') continue;
+    }
     const sx = cam.x + anim.pixel.x * cam.zoom;
     const sy = cam.y + anim.pixel.y * cam.zoom;
     const color = entityColor(anim.owner);
@@ -1475,6 +1506,7 @@ export function drawDestroyedEntities(
   animation: ExecutionAnimation,
   cam: Camera,
   elapsed: number,
+  fogCells?: Map<string, HexCell> | null,
 ): void {
   const phase = getCurrentPhase(elapsed);
   if (phase !== 'attack') return;
@@ -1487,6 +1519,10 @@ export function drawDestroyedEntities(
 
   // Destroyed units: fade out + expanding ring + explosion particles.
   for (const anim of animation.destroyedUnits) {
+    if (anim.owner === 'ai' && fogCells) {
+      const cell = fogCells.get(hexKey(anim.fromHex));
+      if (!cell || cell.fog !== 'visible') continue;
+    }
     const sx = cam.x + anim.fromPixel.x * cam.zoom;
     const sy = cam.y + anim.fromPixel.y * cam.zoom;
     const color = entityColor(anim.owner);
@@ -1498,6 +1534,10 @@ export function drawDestroyedEntities(
 
   // Destroyed structures: fade out + expanding ring.
   for (const anim of animation.destroyedStructures) {
+    if (anim.owner === 'ai' && fogCells) {
+      const cell = fogCells.get(hexKey(anim.hex));
+      if (!cell || cell.fog === 'unexplored') continue;
+    }
     const sx = cam.x + anim.pixel.x * cam.zoom;
     const sy = cam.y + anim.pixel.y * cam.zoom;
     const color = entityColor(anim.owner);

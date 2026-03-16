@@ -297,16 +297,17 @@ export default function GameCanvas({
 
     // ── Structures + units ───────────────────────────────────────────────────
     const anim = animationRef.current;
+    const fogCells = map.cells;
     if (anim) {
       const elapsed = (performance.now() - anim.startedAt) / 1000;
-      drawAnimatedStructures(ctx, anim, cam, elapsed);
-      drawDestroyedEntities(ctx, anim, cam, elapsed);
+      drawAnimatedStructures(ctx, anim, cam, elapsed, fogCells);
+      drawDestroyedEntities(ctx, anim, cam, elapsed, fogCells);
       drawMergeAnimations(ctx, anim, cam, elapsed);
-      drawAnimatedUnits(ctx, anim, cam, elapsed);
+      drawAnimatedUnits(ctx, anim, cam, elapsed, fogCells);
     } else {
-      drawStructures(ctx, gs.structures, cam);
+      drawStructures(ctx, gs.structures, cam, fogCells);
       const activeUnitId = ('unitId' in m) ? m.unitId : null;
-      drawUnits(ctx, gs.units, cam, activeUnitId);
+      drawUnits(ctx, gs.units, cam, activeUnitId, fogCells);
     }
 
     // ── Particle effects (gather sparks, weapon impacts, explosions) ─────────
