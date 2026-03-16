@@ -1,4 +1,4 @@
-import { Camera, worldToCanvas } from './camera';
+import { Camera, worldToCanvas, canvasToWorld } from './camera';
 import { BASE_HEX_SIZE, hexPath } from './drawHex';
 import { Hex, hexToPixel, hexEqual, hexKey, hexesInRange } from '../engine/hex';
 import { Unit, UnitType, effectiveMaxHp } from '../engine/units';
@@ -10,7 +10,7 @@ import { TimelineForkResult, ChronoScoutResult } from '../engine/simulation';
 import {
   ExecutionAnimation,
   getAnimatedUnitPosition, getCurrentPhase, getPhaseProgress,
-  PHASE_DEFEND, PHASE_ATTACK, PHASE_BUILD,
+  PHASE_DEFEND, PHASE_MOVE, PHASE_ATTACK, PHASE_BUILD,
 } from './animation';
 
 // ── Theme colors ────────────────────────────────────────────────────────────
@@ -103,6 +103,33 @@ function updateAndDrawParticles(ctx: CanvasRenderingContext2D, dt: number): void
     }
   }
   ctx.globalAlpha = prevAlpha;
+}
+
+// ── Fog-of-war visibility helpers ────────────────────────────────────────────
+
+/** Returns true if an AI unit on `hex` should be hidden (not 'visible'). */
+function isUnitHiddenByFog(
+  owner: string, hex: Hex, fogCells: Map<string, HexCell> | null | undefined,
+): boolean {
+  if (owner !== 'ai' || !fogCells) return false;
+  const cell = fogCells.get(hexKey(hex));
+  return !cell || cell.fog !== 'visible';
+}
+
+/**
+ * Returns the effective fog display mode for an AI structure:
+ * - 'hidden': skip rendering entirely (unexplored)
+ * - 'dimmed': render at reduced alpha, no HP bar (explored)
+ * - null: render normally (visible, or non-AI owner)
+ */
+function structureFogMode(
+  owner: string, hex: Hex, fogCells: Map<string, HexCell> | null | undefined,
+): 'hidden' | 'dimmed' | null {
+  if (owner !== 'ai' || !fogCells) return null;
+  const fog = fogCells.get(hexKey(hex))?.fog;
+  if (!fog || fog === 'unexplored') return 'hidden';
+  if (fog === 'explored') return 'dimmed';
+  return null;
 }
 
 // ── Cel-shaded drawing helpers ──────────────────────────────────────────────
@@ -871,11 +898,14 @@ export function drawUnits(
   units: Map<string, Unit>,
   cam: Camera,
   selectedUnitId?: string | null,
+  fogCells?: Map<string, HexCell> | null,
 ): void {
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
   const prevAlpha = ctx.globalAlpha;
 
   for (const unit of units.values()) {
+    if (isUnitHiddenByFog(unit.owner, unit.hex, fogCells)) continue;
+
     const wp = hexToPixel(unit.hex, BASE_HEX_SIZE);
     const sx = cam.x + wp.x * cam.zoom;
     const sy = cam.y + wp.y * cam.zoom;
@@ -923,20 +953,25 @@ export function drawStructures(
   ctx: CanvasRenderingContext2D,
   structures: Map<string, Structure>,
   cam: Camera,
+  fogCells?: Map<string, HexCell> | null,
 ): void {
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
   const prevAlpha = ctx.globalAlpha;
 
   for (const s of structures.values()) {
+    const fogMode = structureFogMode(s.owner, s.hex, fogCells);
+    if (fogMode === 'hidden') continue;
+
     const wp = hexToPixel(s.hex, BASE_HEX_SIZE);
     const sx = cam.x + wp.x * cam.zoom;
     const sy = cam.y + wp.y * cam.zoom;
     const color = entityColor(s.owner);
+    const inFog = fogMode === 'dimmed';
 
-    ctx.globalAlpha = s.buildProgress > 0 ? 0.45 : 0.85;
+    ctx.globalAlpha = inFog ? 0.3 : (s.buildProgress > 0 ? 0.45 : 0.85);
     paintStructure(ctx, sx, sy, r, s.type, color);
 
-    if (s.buildProgress > 0) {
+    if (!inFog && s.buildProgress > 0) {
       // Dashed outline for structures under construction.
       ctx.globalAlpha = 0.7;
       ctx.strokeStyle = color;
@@ -948,8 +983,10 @@ export function drawStructures(
       ctx.setLineDash([]);
     }
 
-    ctx.globalAlpha = 0.85;
-    drawHpBar(ctx, sx, sy, r, s.hp, STRUCTURE_DEFS[s.type].maxHp);
+    if (!inFog) {
+      ctx.globalAlpha = 0.85;
+      drawHpBar(ctx, sx, sy, r, s.hp, STRUCTURE_DEFS[s.type].maxHp);
+    }
   }
 
   ctx.globalAlpha = prevAlpha;
@@ -1324,6 +1361,189 @@ export function drawParticles(ctx: CanvasRenderingContext2D, dt: number): void {
   updateAndDrawParticles(ctx, dt);
 }
 
+// ── Ability VFX (drawn during execution animation) ──────────────────────────
+
+/**
+ * Draw Chrono Shift VFX: rewind shimmer around a unit that was time-shifted.
+ * Shows a clockwise sweeping arc + temporal particles during the defend phase.
+ */
+export function drawChronoShiftVFX(
+  ctx: CanvasRenderingContext2D,
+  animation: ExecutionAnimation,
+  cam: Camera,
+  elapsed: number,
+): void {
+  const phase = getCurrentPhase(elapsed);
+  if (phase !== 'defend') return;
+  const dp = getPhaseProgress(elapsed, PHASE_DEFEND);
+  if (dp < 0) return;
+
+  const r = BASE_HEX_SIZE * cam.zoom * 0.32;
+  const prevAlpha = ctx.globalAlpha;
+
+  for (const anim of animation.chronoShiftedUnits) {
+    const sx = cam.x + anim.toPixel.x * cam.zoom;
+    const sy = cam.y + anim.toPixel.y * cam.zoom;
+
+    // Clockwise sweep arc (like a clock hand rewinding)
+    const sweepAngle = dp * Math.PI * 4; // 2 full sweeps
+    ctx.globalAlpha = (1 - dp) * 0.6;
+    ctx.strokeStyle = '#60a5fa'; // blue
+    ctx.lineWidth = 3 * cam.zoom;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r + 6 * cam.zoom, -Math.PI / 2, -Math.PI / 2 + sweepAngle);
+    ctx.stroke();
+
+    // Inner glow ring (simple alpha fill instead of gradient for perf)
+    const ringR = r + 4 * cam.zoom + dp * 8 * cam.zoom;
+    ctx.globalAlpha = (1 - dp) * 0.12;
+    ctx.fillStyle = '#60a5fa';
+    ctx.beginPath();
+    ctx.arc(sx, sy, ringR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Shield icon (small diamond) indicating damage shield
+    if (dp > 0.5) {
+      const shieldAlpha = Math.min(1, (dp - 0.5) * 4);
+      ctx.globalAlpha = shieldAlpha * 0.8;
+      ctx.fillStyle = '#93c5fd';
+      const ds = r * 0.3;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - r - ds * 1.5);
+      ctx.lineTo(sx + ds, sy - r - ds * 0.5);
+      ctx.lineTo(sx, sy - r + ds * 0.2);
+      ctx.lineTo(sx - ds, sy - r - ds * 0.5);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  ctx.globalAlpha = prevAlpha;
+}
+
+/**
+ * Draw Phase Surge VFX: speed trails behind a surging unit during the move phase.
+ * Shows stretched afterimages and motion lines.
+ */
+export function drawPhaseSurgeVFX(
+  ctx: CanvasRenderingContext2D,
+  animation: ExecutionAnimation,
+  cam: Camera,
+  elapsed: number,
+): void {
+  const phase = getCurrentPhase(elapsed);
+  if (phase !== 'move') return;
+  const mp = getPhaseProgress(elapsed, PHASE_MOVE);
+  if (mp < 0 || mp >= 1) return;
+
+  const r = BASE_HEX_SIZE * cam.zoom * 0.32;
+  const prevAlpha = ctx.globalAlpha;
+
+  for (const anim of animation.phaseSurgedUnits) {
+    const curPos = getAnimatedUnitPosition(anim, elapsed);
+    const sx = cam.x + curPos.x * cam.zoom;
+    const sy = cam.y + curPos.y * cam.zoom;
+
+    // Direction of travel
+    const dx = anim.toPixel.x - anim.fromPixel.x;
+    const dy = anim.toPixel.y - anim.fromPixel.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1) continue;
+
+    const ux = dx / len;
+    const uy = dy / len;
+
+    // Trailing afterimages (3 ghosts behind the unit)
+    const color = entityColor(anim.owner);
+    for (let i = 1; i <= 3; i++) {
+      const trailDist = i * r * 1.2;
+      const tx = sx - ux * trailDist * cam.zoom;
+      const ty = sy - uy * trailDist * cam.zoom;
+      ctx.globalAlpha = 0.15 * (1 - i / 4);
+      paintUnit(ctx, tx, ty, r * (1 - i * 0.1), anim.unitType, color);
+    }
+
+    // Speed lines — parallel streaks flanking the unit
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = '#c084fc'; // purple surge color
+    ctx.lineWidth = 1.5 * cam.zoom;
+    const perpX = -uy;
+    const perpY = ux;
+
+    for (let side = -1; side <= 1; side += 2) {
+      for (let j = 0; j < 3; j++) {
+        const offset = (r * 0.6 + j * r * 0.4) * side;
+        const lineLen = r * (2 + j * 0.5);
+        const lx = sx + perpX * offset * cam.zoom;
+        const ly = sy + perpY * offset * cam.zoom;
+        ctx.globalAlpha = 0.25 * (1 - j / 4);
+        ctx.beginPath();
+        ctx.moveTo(lx, ly);
+        ctx.lineTo(lx - ux * lineLen * cam.zoom, ly - uy * lineLen * cam.zoom);
+        ctx.stroke();
+      }
+    }
+  }
+
+  ctx.globalAlpha = prevAlpha;
+}
+
+/**
+ * Draw Epoch Anchor Activate VFX: golden flash over all player units at the start
+ * of the defend phase, indicating they're being restored to anchored state.
+ */
+export function drawAnchorActivateVFX(
+  ctx: CanvasRenderingContext2D,
+  animation: ExecutionAnimation,
+  cam: Camera,
+  elapsed: number,
+  cssW: number,
+  cssH: number,
+): void {
+  if (!animation.anchorActivated) return;
+
+  const phase = getCurrentPhase(elapsed);
+  if (phase !== 'defend') return;
+  const dp = getPhaseProgress(elapsed, PHASE_DEFEND);
+  if (dp < 0) return;
+
+  const prevAlpha = ctx.globalAlpha;
+  const r = BASE_HEX_SIZE * cam.zoom * 0.32;
+
+  // Screen-wide golden flash (brief, fading quickly)
+  if (dp < 0.3) {
+    const flashAlpha = (0.3 - dp) / 0.3 * 0.15;
+    ctx.globalAlpha = flashAlpha;
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(0, 0, cssW, cssH);
+  }
+
+  // Golden ring expanding from each player unit
+  for (const anim of animation.units.values()) {
+    if (anim.owner !== 'player') continue;
+
+    const sx = cam.x + anim.toPixel.x * cam.zoom;
+    const sy = cam.y + anim.toPixel.y * cam.zoom;
+
+    const ringR = r + dp * r * 2;
+    ctx.globalAlpha = (1 - dp) * 0.4;
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 2 * cam.zoom;
+    ctx.beginPath();
+    ctx.arc(sx, sy, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Inner golden fill
+    ctx.globalAlpha = (1 - dp) * 0.1;
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.globalAlpha = prevAlpha;
+}
+
 // ── Main animation draw functions ──────────────────────────────────────────
 
 /** Draw units at interpolated positions during the execution animation. */
@@ -1332,12 +1552,17 @@ export function drawAnimatedUnits(
   animation: ExecutionAnimation,
   cam: Camera,
   elapsed: number,
+  fogCells?: Map<string, HexCell> | null,
 ): void {
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
   const prevAlpha = ctx.globalAlpha;
   const phase = getCurrentPhase(elapsed);
 
   for (const anim of animation.units.values()) {
+    // Hide AI units outside player vision (visible from either end of movement).
+    if (isUnitHiddenByFog(anim.owner, anim.fromHex, fogCells)
+        && isUnitHiddenByFog(anim.owner, anim.toHex, fogCells)) continue;
+
     const color = entityColor(anim.owner);
 
     // Spawned units only appear during build phase.
@@ -1429,12 +1654,14 @@ export function drawAnimatedStructures(
   animation: ExecutionAnimation,
   cam: Camera,
   elapsed: number,
+  fogCells?: Map<string, HexCell> | null,
 ): void {
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
   const prevAlpha = ctx.globalAlpha;
   const phase = getCurrentPhase(elapsed);
 
   for (const anim of animation.structures.values()) {
+    if (structureFogMode(anim.owner, anim.hex, fogCells) === 'hidden') continue;
     const sx = cam.x + anim.pixel.x * cam.zoom;
     const sy = cam.y + anim.pixel.y * cam.zoom;
     const color = entityColor(anim.owner);
@@ -1475,6 +1702,7 @@ export function drawDestroyedEntities(
   animation: ExecutionAnimation,
   cam: Camera,
   elapsed: number,
+  fogCells?: Map<string, HexCell> | null,
 ): void {
   const phase = getCurrentPhase(elapsed);
   if (phase !== 'attack') return;
@@ -1487,6 +1715,7 @@ export function drawDestroyedEntities(
 
   // Destroyed units: fade out + expanding ring + explosion particles.
   for (const anim of animation.destroyedUnits) {
+    if (isUnitHiddenByFog(anim.owner, anim.fromHex, fogCells)) continue;
     const sx = cam.x + anim.fromPixel.x * cam.zoom;
     const sy = cam.y + anim.fromPixel.y * cam.zoom;
     const color = entityColor(anim.owner);
@@ -1498,6 +1727,7 @@ export function drawDestroyedEntities(
 
   // Destroyed structures: fade out + expanding ring.
   for (const anim of animation.destroyedStructures) {
+    if (structureFogMode(anim.owner, anim.hex, fogCells) === 'hidden') continue;
     const sx = cam.x + anim.pixel.x * cam.zoom;
     const sy = cam.y + anim.pixel.y * cam.zoom;
     const color = entityColor(anim.owner);
@@ -1631,6 +1861,180 @@ export function drawEchoOverlay(
   }
 
   ctx.globalAlpha = prevAlpha;
+}
+
+// ── Echo Reveal: spiral time-travel mist ──────────────────────────────────────
+
+/** Progress of the echo reveal cinematic (0→1). */
+export interface EchoRevealState {
+  /** World-space center of the echo targets to zoom toward. */
+  targetWorldX: number;
+  targetWorldY: number;
+  /** Timestamp the reveal started (performance.now()). */
+  startedAt: number;
+  /** Duration of the full reveal in ms. */
+  durationMs: number;
+}
+
+/** Total echo reveal duration in ms. */
+export const ECHO_REVEAL_DURATION_MS = 2400;
+
+/**
+ * Draw a spiral time-travel mist effect that radiates outward from screen center.
+ * Called each frame during the echo reveal cinematic.
+ *
+ * t=0: dense swirling mist.  t=0.5: mist at peak during zoom-in.  t=1: mist fades.
+ */
+export function drawEchoRevealMist(
+  ctx: CanvasRenderingContext2D,
+  cssW: number,
+  cssH: number,
+  t: number,
+): void {
+  const prevAlpha = ctx.globalAlpha;
+  const cx = cssW / 2;
+  const cy = cssH / 2;
+  const maxR = Math.hypot(cx, cy) * 1.2;
+
+  // Opacity envelope: fade in 0-0.15, hold 0.15-0.7, fade out 0.7-1.0
+  const opacity =
+    t < 0.15 ? t / 0.15
+    : t < 0.7 ? 1
+    : 1 - (t - 0.7) / 0.3;
+
+  // Spiral arm count and rotation speed
+  const arms = 5;
+  const rotation = t * Math.PI * 4; // 2 full rotations over the reveal
+
+  // Draw multiple spiraling mist tendrils (soft circles, no per-blob gradients)
+  ctx.fillStyle = 'rgba(200, 50, 60, 1)';
+  for (let arm = 0; arm < arms; arm++) {
+    const baseAngle = (arm / arms) * Math.PI * 2 + rotation;
+
+    const steps = 30;
+    for (let i = 0; i < steps; i++) {
+      const frac = i / steps;
+      const r = frac * maxR * (0.3 + t * 0.7);
+      const spiralTwist = frac * Math.PI * 2.5;
+      const angle = baseAngle + spiralTwist;
+
+      const x = cx + Math.cos(angle) * r;
+      const y = cy + Math.sin(angle) * r;
+
+      const distFade = 1 - frac * 0.7;
+      const blobAlpha = opacity * distFade * 0.12;
+      const blobR = maxR * 0.08 * (1 + frac * 0.5);
+
+      ctx.globalAlpha = blobAlpha;
+      ctx.beginPath();
+      ctx.arc(x, y, blobR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Central vortex glow — bright swirling core
+  {
+    const coreAlpha = opacity * 0.25;
+    const coreR = maxR * 0.15 * (0.5 + t * 0.5);
+    ctx.globalAlpha = coreAlpha;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+    grad.addColorStop(0, 'rgba(255, 200, 180, 0.8)');
+    grad.addColorStop(0.4, 'rgba(230, 57, 70, 0.4)');
+    grad.addColorStop(1, 'rgba(100, 20, 30, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Floating mist wisps — scattered translucent circles drifting outward
+  {
+    const wispCount = 20;
+    for (let i = 0; i < wispCount; i++) {
+      // Deterministic positions based on index, animated by t
+      const seed = i * 137.508; // golden angle
+      const angle = seed + t * Math.PI * 3;
+      const drift = (0.2 + (i % 7) / 7) * maxR * (0.1 + t * 0.9);
+      const x = cx + Math.cos(angle) * drift;
+      const y = cy + Math.sin(angle) * drift;
+      const wispR = maxR * 0.03 * (0.5 + (i % 3) * 0.3);
+      const wispAlpha = opacity * 0.08 * (1 - drift / maxR);
+
+      if (wispAlpha < 0.005) continue;
+
+      ctx.globalAlpha = wispAlpha;
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(230, 57, 70, 0.5)' : 'rgba(200, 60, 80, 0.4)';
+      ctx.beginPath();
+      ctx.arc(x, y, wispR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  ctx.globalAlpha = prevAlpha;
+}
+
+/**
+ * Compute the camera target for the echo reveal cinematic.
+ * Returns zoom-out/zoom-in camera params based on progress (0→1).
+ */
+export function getEchoRevealCamera(
+  reveal: EchoRevealState,
+  cssW: number,
+  cssH: number,
+  userCam: Camera,
+): { cam: Camera; t: number; done: boolean } {
+  const elapsed = performance.now() - reveal.startedAt;
+  const t = Math.min(1, elapsed / reveal.durationMs);
+
+  if (t >= 1) {
+    return { cam: userCam, t: 1, done: true };
+  }
+
+  // Easing: smooth start + end
+  const ease = (x: number) => x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+
+  // Phase 1 (0–0.35): zoom out from user position
+  // Phase 2 (0.35–0.65): hold wide, pan toward echo targets
+  // Phase 3 (0.65–1.0): zoom in on echo targets
+  const zoomOutTarget = Math.max(0.35, userCam.zoom * 0.45);
+  const zoomInTarget = Math.max(0.8, userCam.zoom * 0.9);
+
+  let zoom: number;
+  let worldX: number;
+  let worldY: number;
+
+  // User camera center in world space
+  const userWorld = canvasToWorld(cssW / 2, cssH / 2, userCam);
+  const userWorldX = userWorld.x;
+  const userWorldY = userWorld.y;
+
+  if (t < 0.35) {
+    // Zoom out
+    const p = ease(t / 0.35);
+    zoom = userCam.zoom + (zoomOutTarget - userCam.zoom) * p;
+    worldX = userWorldX + (reveal.targetWorldX - userWorldX) * p * 0.3;
+    worldY = userWorldY + (reveal.targetWorldY - userWorldY) * p * 0.3;
+  } else if (t < 0.65) {
+    // Hold wide, pan to targets
+    const p = ease((t - 0.35) / 0.3);
+    zoom = zoomOutTarget;
+    worldX = userWorldX + (reveal.targetWorldX - userWorldX) * (0.3 + 0.7 * p);
+    worldY = userWorldY + (reveal.targetWorldY - userWorldY) * (0.3 + 0.7 * p);
+  } else {
+    // Zoom in on targets
+    const p = ease((t - 0.65) / 0.35);
+    zoom = zoomOutTarget + (zoomInTarget - zoomOutTarget) * p;
+    worldX = reveal.targetWorldX;
+    worldY = reveal.targetWorldY;
+  }
+
+  const cam: Camera = {
+    x: cssW / 2 - worldX * zoom,
+    y: cssH / 2 - worldY * zoom,
+    zoom,
+  };
+
+  return { cam, t, done: false };
 }
 
 // ── Timeline Fork overlay ─────────────────────────────────────────────────────

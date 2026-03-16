@@ -87,6 +87,52 @@ export type TutorialStep =
   | 'gather_select_gather'
   | 'gather_select_target'
   | 'gather_lock_in'
+  // Phase 5 — Epoch 5: use Temporal Echo to reveal enemy's previous moves
+  | 'wait_for_echo_epoch'
+  | 'echo_select_slot'
+  | 'echo_select_echo'
+  | 'echo_lock_in'
+  // Phase 6 — build a Tech Lab (unlocks research)
+  | 'wait_for_techlab_epoch'
+  | 'techlab_select_drone'
+  | 'techlab_select_build'
+  | 'techlab_select_techlab'
+  | 'techlab_select_hex'
+  | 'techlab_lock_in'
+  // Phase 7 — research Tier 1 (unlocks Flux Conduit)
+  | 'wait_for_research_epoch'
+  | 'research_select_slot'
+  | 'research_select_research'
+  | 'research_lock_in'
+  // Wait for research to complete (3 epochs, auto-advances each planning phase)
+  | 'wait_for_research_complete'
+  // Phase 8 — build a Flux Conduit on a flux vent
+  | 'flux_select_drone'
+  | 'flux_select_build'
+  | 'flux_select_conduit'
+  | 'flux_select_hex'
+  | 'flux_lock_in'
+  // Phase 9 — use Phase Surge on a combat unit (requires TE)
+  | 'wait_for_surge_epoch'
+  | 'surge_select_unit'
+  | 'surge_select_surge'
+  | 'surge_select_target'
+  | 'surge_lock_in'
+  // Phase 10 — use Chrono Shift on a unit with 2-epoch history (requires Tech Tier 1 + TE)
+  | 'wait_for_shift_epoch'
+  | 'shift_select_unit'
+  | 'shift_select_shift'
+  | 'shift_lock_in'
+  // Phase 11 — use Epoch Anchor set (requires Tech Tier 3 + 5 TE)
+  | 'wait_for_anchor_epoch'
+  | 'anchor_select_slot'
+  | 'anchor_select_set'
+  | 'anchor_lock_in'
+  // Phase 12 — use Epoch Anchor activate (recall, requires 3 TE after set)
+  | 'wait_for_recall_epoch'
+  | 'recall_select_slot'
+  | 'recall_select_activate'
+  | 'recall_lock_in'
   | null;
 
 export type Phase = 'planning' | 'temporal' | 'execution'

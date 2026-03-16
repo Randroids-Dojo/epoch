@@ -37,6 +37,8 @@ export interface UnitAnim {
   unitId: string;
   owner: PlayerId;
   unitType: UnitType;
+  fromHex: Hex;
+  toHex: Hex;
   fromPixel: { x: number; y: number };
   toPixel: { x: number; y: number };
   oldHp: number;
@@ -45,6 +47,10 @@ export interface UnitAnim {
   wasDestroyed: boolean;
   wasSpawned: boolean;
   isDefending: boolean;
+  /** True if this unit was Chrono Shifted (rewind + damage shield). */
+  wasChronoShifted: boolean;
+  /** True if this unit used Phase Surge (extra speed move). */
+  wasPhaseSurged: boolean;
   /** True if this unit was consumed by a merge (animates toward survivor then fades). */
   wasMergeConsumed: boolean;
   /** Pixel position of the merge survivor this unit is being pulled toward. */
@@ -57,6 +63,7 @@ export interface StructAnim {
   structureId: string;
   owner: PlayerId;
   structureType: StructureType;
+  hex: Hex;
   pixel: { x: number; y: number };
   oldHp: number;
   newHp: number;
@@ -96,8 +103,22 @@ export interface ExecutionAnimation {
   destroyedStructures: StructAnim[];
   /** Units consumed by merge — animate pulling toward survivor then fading. */
   mergedUnits: UnitAnim[];
+  /** Pre-computed: units that have wasChronoShifted === true. */
+  chronoShiftedUnits: UnitAnim[];
+  /** Pre-computed: units that have wasPhaseSurged === true. */
+  phaseSurgedUnits: UnitAnim[];
+  /** True if any player activated Epoch Anchor recall this epoch. */
+  anchorActivated: boolean;
   eventLog: string[];
   startedAt: number; // performance.now()
+}
+
+/** Optional params for buildAnimationTimeline beyond the core snapshots. */
+export interface AnimationTimelineOptions {
+  /** Unit commands issued this epoch, used to detect phase_surge / chrono_shift. */
+  unitCommands?: Map<string, { type: string }>;
+  /** Whether any player activated Epoch Anchor recall this epoch. */
+  anchorWasActivated?: boolean;
 }
 
 // ── Timeline builder ───────────────────────────────────────────────────────
@@ -106,7 +127,10 @@ export function buildAnimationTimeline(
   unitSnaps: Map<string, UnitSnapshot>,
   structSnaps: Map<string, StructSnapshot>,
   newState: GameState,
+  opts?: AnimationTimelineOptions,
 ): ExecutionAnimation {
+  const unitCommands = opts?.unitCommands;
+  const anchorWasActivated = opts?.anchorWasActivated;
   const units = new Map<string, UnitAnim>();
   const destroyedUnits: UnitAnim[] = [];
   const mergedUnits: UnitAnim[] = [];
@@ -140,10 +164,13 @@ export function buildAnimationTimeline(
       ? UNIT_DEFS[snap.type].maxHp + (snap.bonusMaxHp ?? 0)
       : effectiveMaxHp(newUnit);
 
+    const unitCmd = unitCommands?.get(id);
     const anim: UnitAnim = {
       unitId: id,
       owner: snap.owner,
       unitType: snap.type,
+      fromHex: snap.hex,
+      toHex: destroyed ? snap.hex : newUnit.hex,
       fromPixel,
       toPixel: wasMergeConsumed ? survivorPixel : toPixel,
       oldHp: snap.hp,
@@ -152,6 +179,8 @@ export function buildAnimationTimeline(
       wasDestroyed: destroyed && !wasMergeConsumed,
       wasSpawned: false,
       isDefending: destroyed ? false : newUnit.isDefending,
+      wasChronoShifted: unitCmd?.type === 'chrono_shift',
+      wasPhaseSurged: unitCmd?.type === 'phase_surge',
       wasMergeConsumed,
       mergeSurvivorPixel: survivorPixel,
       mergeCount: destroyed ? (snap.mergeCount ?? 0) : newUnit.mergeCount,
@@ -174,6 +203,8 @@ export function buildAnimationTimeline(
       unitId: id,
       owner: unit.owner,
       unitType: unit.type,
+      fromHex: unit.hex,
+      toHex: unit.hex,
       fromPixel: pixel,
       toPixel: pixel,
       oldHp: 0,
@@ -182,6 +213,8 @@ export function buildAnimationTimeline(
       wasDestroyed: false,
       wasSpawned: true,
       isDefending: false,
+      wasChronoShifted: false,
+      wasPhaseSurged: false,
       wasMergeConsumed: false,
       mergeCount: unit.mergeCount,
     });
@@ -200,6 +233,7 @@ export function buildAnimationTimeline(
       structureId: id,
       owner: snap.owner,
       structureType: snap.type,
+      hex: snap.hex,
       pixel,
       oldHp: snap.hp,
       newHp: destroyed ? -1 : newStruct.hp,
@@ -223,6 +257,7 @@ export function buildAnimationTimeline(
       structureId: id,
       owner: s.owner,
       structureType: s.type,
+      hex: s.hex,
       pixel,
       oldHp: 0,
       newHp: s.hp,
@@ -233,12 +268,23 @@ export function buildAnimationTimeline(
     });
   }
 
+  // Pre-compute VFX unit lists so render-loop VFX functions don't iterate all units.
+  const chronoShiftedUnits: UnitAnim[] = [];
+  const phaseSurgedUnits: UnitAnim[] = [];
+  for (const u of units.values()) {
+    if (u.wasChronoShifted) chronoShiftedUnits.push(u);
+    if (u.wasPhaseSurged) phaseSurgedUnits.push(u);
+  }
+
   return {
     units,
     structures,
     destroyedUnits,
     destroyedStructures,
     mergedUnits,
+    chronoShiftedUnits,
+    phaseSurgedUnits,
+    anchorActivated: anchorWasActivated ?? false,
     eventLog: newState.eventLog,
     startedAt: performance.now(),
   };
