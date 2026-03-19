@@ -3,6 +3,7 @@
 import { GlobalCommand } from '@/engine/commands';
 import { UnitType } from '@/engine/units';
 import { DEAD_ZONE, SLOT_LAYOUT } from '@/lib/constants';
+import ActionTooltip from '@/components/shared/ActionTooltip';
 
 interface CommandTrayProps {
   globalCommands: Array<GlobalCommand | null>;
@@ -48,6 +49,25 @@ function cmdIcon(cmd: GlobalCommand): string {
   return CMD_ICON[cmd.type] ?? '?';
 }
 
+/** Human-readable tooltip for a global command slot. */
+const CMD_TOOLTIP: Record<GlobalCommand['type'], string> = {
+  train:         'Train unit',
+  research:      'Research tech tier',
+  temporal:      'Temporal Echo',
+  epoch_anchor:  'Epoch Anchor',
+  timeline_fork: 'Timeline Fork',
+  chrono_scout:  'Chrono Scout',
+};
+
+function slotTooltip(cmd: GlobalCommand | null, index: number): string {
+  if (!cmd) return `Slot ${index + 1} — click to add order`;
+  if (cmd.type === 'train') {
+    const label = (UNIT_ICON[cmd.unitType] ? cmd.unitType : cmd.unitType).replace(/_/g, ' ');
+    return `Train ${label}`;
+  }
+  return CMD_TOOLTIP[cmd.type] ?? cmd.type;
+}
+
 export default function CommandTray({
   globalCommands,
   selectedGlobalSlot,
@@ -74,8 +94,8 @@ export default function CommandTray({
           const isSelected = selectedGlobalSlot === i;
           const isTutorial = i === firstEmptySlot;
           return (
+            <ActionTooltip key={i} text={slotTooltip(cmd, i)}>
             <button
-              key={i}
               data-testid={`command-slot-${i}`}
               type="button"
               disabled={lockedIn}
@@ -150,10 +170,12 @@ export default function CommandTray({
                 </>
               )}
             </button>
+            </ActionTooltip>
           );
         })}
 
       {/* Lock-In button */}
+      <ActionTooltip text={lockedIn ? 'Orders locked in' : forkMode ? 'Confirm the timeline fork' : 'Submit orders and gain Temporal Energy'}>
       <button
         data-testid="lock-in-btn"
         disabled={lockedIn}
@@ -180,6 +202,7 @@ export default function CommandTray({
             ? (isMobile ? 'CONFIRM' : 'CONFIRM FORK')
             : (isMobile ? 'LOCK' : 'LOCK IN +TE')}
       </button>
+      </ActionTooltip>
     </div>
   );
 }
