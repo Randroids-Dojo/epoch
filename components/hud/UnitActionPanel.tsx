@@ -138,7 +138,7 @@ export default function UnitActionPanel({
         padding: '8px 6px',
         background: 'transparent',
         pointerEvents: 'auto',
-        maxHeight: 'calc(100% - 64px)',
+        maxHeight: `calc(100% - ${DEAD_ZONE.TOP + DEAD_ZONE.BOTTOM}px)`,
       }}
     >
       {playerUnits.map((unit, idx) => {
