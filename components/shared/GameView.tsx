@@ -39,7 +39,7 @@ import {
   categorizeLogEntry,
 } from '@/renderer/animation';
 import { ActionBeat, buildActionSequence, centroid } from '@/renderer/actionSequence';
-import { EchoRevealState, ECHO_REVEAL_DURATION_MS, registerWreckage, ageWreckage } from '@/renderer/drawEntities';
+import { EchoRevealState, ECHO_REVEAL_DURATION_MS, registerWreckage, ageWreckage, clearRendererState } from '@/renderer/drawEntities';
 import { audioEngine } from '@/audio/engine';
 import GameCanvas from './GameCanvas';
 import { CameraSnapshot } from './GameCanvas';
@@ -978,6 +978,7 @@ export default function GameView() {
 
   // ── Play Again / Start ────────────────────────────────────────────────────
   const handlePlayAgain = useCallback(() => {
+    clearRendererState();
     setGameState(createInitialState(42));
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
@@ -992,6 +993,7 @@ export default function GameView() {
   }, []);
 
   const handleStartGame = useCallback((diff: AIDifficulty) => {
+    clearRendererState();
     setDifficulty(diff);
     setGameState(createInitialState(Date.now(), diff));
     setMode({ kind: 'idle' });

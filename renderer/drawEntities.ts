@@ -1321,13 +1321,11 @@ interface Wreckage {
   owner: string;
   /** Number of epochs remaining before the wreckage disappears. */
   epochsLeft: number;
-  /** Total epochs the wreckage lasts (for computing fade). */
-  totalEpochs: number;
   /** Random rotation for the wrecked shape (radians). */
   rotation: number;
 }
 
-const wreckageList: Wreckage[] = [];
+let wreckageList: Wreckage[] = [];
 
 /** How many epochs wreckage persists before fully fading. */
 const WRECKAGE_DURATION_EPOCHS = 2;
@@ -1337,12 +1335,11 @@ const WRECKAGE_DURATION_EPOCHS = 2;
  * animation begins so the husks persist into subsequent planning phases.
  */
 export function registerWreckage(animation: ExecutionAnimation): void {
+  const existing = new Set(wreckageList.map(w => `${hexKey(w.hex)}:${w.unitType}`));
   for (const u of animation.destroyedUnits) {
-    // Avoid duplicates at the same hex from the same animation
-    const exists = wreckageList.some(
-      w => w.x === u.fromPixel.x && w.y === u.fromPixel.y && w.unitType === u.unitType,
-    );
-    if (exists) continue;
+    const key = `${hexKey(u.fromHex)}:${u.unitType}`;
+    if (existing.has(key)) continue;
+    existing.add(key);
     wreckageList.push({
       x: u.fromPixel.x,
       y: u.fromPixel.y,
@@ -1350,7 +1347,6 @@ export function registerWreckage(animation: ExecutionAnimation): void {
       unitType: u.unitType,
       owner: u.owner,
       epochsLeft: WRECKAGE_DURATION_EPOCHS,
-      totalEpochs: WRECKAGE_DURATION_EPOCHS,
       rotation: (Math.random() - 0.5) * 0.8,
     });
   }
@@ -1361,12 +1357,47 @@ export function registerWreckage(animation: ExecutionAnimation): void {
  * (when the epoch counter increments).
  */
 export function ageWreckage(): void {
-  for (let i = wreckageList.length - 1; i >= 0; i--) {
-    wreckageList[i].epochsLeft -= 1;
-    if (wreckageList[i].epochsLeft <= 0) {
-      wreckageList.splice(i, 1);
-    }
-  }
+  wreckageList = wreckageList.filter(w => {
+    w.epochsLeft -= 1;
+    return w.epochsLeft > 0;
+  });
+}
+
+/** Clear all wreckage and particles. Call on game reset / new game. */
+export function clearRendererState(): void {
+  wreckageList = [];
+  particles.length = 0;
+}
+
+/** Draw a scorch mark ellipse on the ground. */
+function drawScorchMark(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, r: number,
+  alpha: number, rx: number, ry: number,
+  color: string = '#1a0800',
+): void {
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.ellipse(x, y + r * 0.3, r * rx, r * ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Draw an entity breaking apart: tilting, shrinking, and fading. */
+function drawBreakingApart(
+  ctx: CanvasRenderingContext2D,
+  sx: number, sy: number, r: number,
+  progress: number, rotRate: number, shrinkRate: number,
+  paintFn: (ctx: CanvasRenderingContext2D, x: number, y: number, r: number) => void,
+): void {
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.rotate(progress * rotRate);
+  const scale = 1 - progress * shrinkRate;
+  ctx.scale(scale, scale);
+  ctx.globalAlpha = (1 - progress) * 0.85;
+  paintFn(ctx, 0, 0, r);
+  ctx.restore();
 }
 
 /**
@@ -1387,8 +1418,7 @@ export function drawWreckage(
     if (isUnitHiddenByFog(w.owner, w.hex, fogCells)) continue;
     const sx = cam.x + w.x * cam.zoom;
     const sy = cam.y + w.y * cam.zoom;
-    // Fade: full opacity → transparent over the wreckage lifetime
-    const fade = w.epochsLeft / w.totalEpochs;
+    const fade = w.epochsLeft / WRECKAGE_DURATION_EPOCHS;
 
     ctx.save();
     ctx.translate(sx, sy);
@@ -1399,11 +1429,7 @@ export function drawWreckage(
     paintUnit(ctx, 0, 0, r, w.unitType, '#444');
 
     // Scorch mark beneath
-    ctx.globalAlpha = fade * 0.2;
-    ctx.fillStyle = '#1a1010';
-    ctx.beginPath();
-    ctx.ellipse(0, r * 0.3, r * 1.2, r * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
+    drawScorchMark(ctx, 0, 0, r, fade * 0.2, 1.2, 0.5, '#1a1010');
 
     // Cracks / damage lines across the shape
     ctx.globalAlpha = fade * 0.4;
@@ -1871,23 +1897,9 @@ export function drawDestroyedEntities(
     const sy = cam.y + anim.fromPixel.y * cam.zoom;
     const color = entityColor(anim.owner);
 
-    // Draw the unit shape breaking apart: tilting + scaling down + fading
-    ctx.save();
-    ctx.translate(sx, sy);
-    ctx.rotate(ap * 0.5);           // tilt as it dies
-    const scale = 1 - ap * 0.4;     // shrink slightly
-    ctx.scale(scale, scale);
-    ctx.globalAlpha = (1 - ap) * 0.85;
-    paintUnit(ctx, 0, 0, r, anim.unitType, color);
-    ctx.restore();
-
-    // Scorch mark on ground beneath
-    ctx.globalAlpha = Math.min(ap * 2, 1) * 0.3;
-    ctx.fillStyle = '#1a0800';
-    ctx.beginPath();
-    ctx.ellipse(sx, sy + r * 0.3, r * 1.3, r * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
+    drawBreakingApart(ctx, sx, sy, r, ap, 0.5, 0.4,
+      (c, x, y, sz) => paintUnit(c, x, y, sz, anim.unitType, color));
+    drawScorchMark(ctx, sx, sy, r, Math.min(ap * 2, 1) * 0.3, 1.3, 0.5);
     drawDeathRing(ctx, sx, sy, r, ap, color);
   }
 
@@ -1898,21 +1910,9 @@ export function drawDestroyedEntities(
     const sy = cam.y + anim.pixel.y * cam.zoom;
     const color = entityColor(anim.owner);
 
-    ctx.save();
-    ctx.translate(sx, sy);
-    ctx.rotate(ap * 0.3);
-    const scale = 1 - ap * 0.3;
-    ctx.scale(scale, scale);
-    ctx.globalAlpha = (1 - ap) * 0.85;
-    paintStructure(ctx, 0, 0, r, anim.structureType, color);
-    ctx.restore();
-
-    ctx.globalAlpha = Math.min(ap * 2, 1) * 0.25;
-    ctx.fillStyle = '#1a0800';
-    ctx.beginPath();
-    ctx.ellipse(sx, sy + r * 0.3, r * 1.5, r * 0.6, 0, 0, Math.PI * 2);
-    ctx.fill();
-
+    drawBreakingApart(ctx, sx, sy, r, ap, 0.3, 0.3,
+      (c, x, y, sz) => paintStructure(c, x, y, sz, anim.structureType, color));
+    drawScorchMark(ctx, sx, sy, r, Math.min(ap * 2, 1) * 0.25, 1.5, 0.6);
     drawDeathRing(ctx, sx, sy, r, ap, color);
   }
 
