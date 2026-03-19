@@ -39,7 +39,7 @@ import {
   categorizeLogEntry,
 } from '@/renderer/animation';
 import { ActionBeat, buildActionSequence, centroid } from '@/renderer/actionSequence';
-import { EchoRevealState, ECHO_REVEAL_DURATION_MS } from '@/renderer/drawEntities';
+import { EchoRevealState, ECHO_REVEAL_DURATION_MS, registerWreckage, ageWreckage } from '@/renderer/drawEntities';
 import { audioEngine } from '@/audio/engine';
 import GameCanvas from './GameCanvas';
 import { CameraSnapshot } from './GameCanvas';
@@ -695,6 +695,7 @@ export default function GameView() {
         preEpochStatsRef.current = null;
       }
 
+      ageWreckage();
       s.phase = 'planning';
       setGameState({ ...s });
     }
@@ -909,6 +910,7 @@ export default function GameView() {
     const anim = buildAnimationTimeline(unitSnaps, structSnaps, state, {
       unitCommands: playerUnitCmds, anchorWasActivated,
     });
+    registerWreckage(anim);
     animationRef.current = anim;
     setActionBeats(buildActionSequence(anim, state.map));
 

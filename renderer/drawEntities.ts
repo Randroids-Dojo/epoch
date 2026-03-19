@@ -1252,26 +1252,177 @@ function drawDeathRing(
   progress: number,
   color: string,
 ): void {
-  const expandR = r + r * progress * 2.5;
+  // ── Bright initial flash (fireball) ──────────────────────────────────────
+  if (progress < 0.3) {
+    const flashT = progress / 0.3;
+    const flashR = r * (1.5 + flashT * 2.0);
+    // White-hot core
+    ctx.globalAlpha = (1 - flashT) * 0.7;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(sx, sy, flashR * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    // Orange fireball
+    ctx.globalAlpha = (1 - flashT) * 0.5;
+    ctx.fillStyle = '#ff6600';
+    ctx.beginPath();
+    ctx.arc(sx, sy, flashR * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+    // Outer glow in entity color
+    ctx.globalAlpha = (1 - flashT) * 0.3;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(sx, sy, flashR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ── Expanding shockwave rings ────────────────────────────────────────────
+  const expandR = r + r * progress * 3.0;
   ctx.globalAlpha = (1 - progress) * 0.8;
   ctx.strokeStyle = color;
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.arc(sx, sy, expandR, 0, Math.PI * 2);
   ctx.stroke();
 
-  // Inner flash
-  ctx.globalAlpha = (1 - progress) * 0.2;
-  ctx.fillStyle = '#fff';
+  // Second, faster ring
+  const expandR2 = r + r * progress * 4.5;
+  ctx.globalAlpha = (1 - progress) * 0.4;
+  ctx.strokeStyle = '#ff8800';
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.arc(sx, sy, expandR * 0.5, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.arc(sx, sy, expandR2, 0, Math.PI * 2);
+  ctx.stroke();
 
-  // Spawn explosion particles on early progress
-  if (progress < 0.15 && Math.random() < 0.5) {
-    spawnParticles(sx, sy, 4, 'spark', color, r * 0.5, 50, 0.8, r * 0.15);
-    spawnParticles(sx, sy, 2, 'attack', '#ff8800', r * 0.3, 25, 0.6, r * 0.1);
+  // ── Explosion particles — big burst on early progress ────────────────────
+  if (progress < 0.12 && Math.random() < 0.7) {
+    // Main colored sparks
+    spawnParticles(sx, sy, 8, 'spark', color, r * 0.6, 80, 1.0, r * 0.18);
+    // Fire sparks
+    spawnParticles(sx, sy, 6, 'spark', '#ff8800', r * 0.5, 60, 0.9, r * 0.14);
+    spawnParticles(sx, sy, 4, 'spark', '#ffcc00', r * 0.4, 50, 0.7, r * 0.12);
+    // White-hot debris
+    spawnParticles(sx, sy, 3, 'attack', '#ffffff', r * 0.3, 40, 0.5, r * 0.1);
   }
+  // Lingering embers through mid-progress
+  if (progress > 0.1 && progress < 0.5 && Math.random() < 0.3) {
+    spawnParticles(sx, sy, 2, 'spark', '#ff6600', r * 1.0, 20, 0.6, r * 0.08);
+  }
+}
+
+// ── Wreckage system — burnt-out unit husks that fade over epochs ────────────
+
+interface Wreckage {
+  /** World-pixel position. */
+  x: number;
+  y: number;
+  hex: Hex;
+  unitType: UnitType;
+  owner: string;
+  /** Number of epochs remaining before the wreckage disappears. */
+  epochsLeft: number;
+  /** Total epochs the wreckage lasts (for computing fade). */
+  totalEpochs: number;
+  /** Random rotation for the wrecked shape (radians). */
+  rotation: number;
+}
+
+const wreckageList: Wreckage[] = [];
+
+/** How many epochs wreckage persists before fully fading. */
+const WRECKAGE_DURATION_EPOCHS = 2;
+
+/**
+ * Register destroyed units as wreckage. Called once when an execution
+ * animation begins so the husks persist into subsequent planning phases.
+ */
+export function registerWreckage(animation: ExecutionAnimation): void {
+  for (const u of animation.destroyedUnits) {
+    // Avoid duplicates at the same hex from the same animation
+    const exists = wreckageList.some(
+      w => w.x === u.fromPixel.x && w.y === u.fromPixel.y && w.unitType === u.unitType,
+    );
+    if (exists) continue;
+    wreckageList.push({
+      x: u.fromPixel.x,
+      y: u.fromPixel.y,
+      hex: u.fromHex,
+      unitType: u.unitType,
+      owner: u.owner,
+      epochsLeft: WRECKAGE_DURATION_EPOCHS,
+      totalEpochs: WRECKAGE_DURATION_EPOCHS,
+      rotation: (Math.random() - 0.5) * 0.8,
+    });
+  }
+}
+
+/**
+ * Age all wreckage by one epoch. Call at the start of each new epoch
+ * (when the epoch counter increments).
+ */
+export function ageWreckage(): void {
+  for (let i = wreckageList.length - 1; i >= 0; i--) {
+    wreckageList[i].epochsLeft -= 1;
+    if (wreckageList[i].epochsLeft <= 0) {
+      wreckageList.splice(i, 1);
+    }
+  }
+}
+
+/**
+ * Draw all active wreckage on the canvas. Called during planning phase
+ * (when no execution animation is active) so destroyed unit husks remain
+ * visible as fading, tilted silhouettes.
+ */
+export function drawWreckage(
+  ctx: CanvasRenderingContext2D,
+  cam: Camera,
+  fogCells?: Map<string, HexCell> | null,
+): void {
+  if (wreckageList.length === 0) return;
+  const r = BASE_HEX_SIZE * cam.zoom * 0.32;
+  const prevAlpha = ctx.globalAlpha;
+
+  for (const w of wreckageList) {
+    if (isUnitHiddenByFog(w.owner, w.hex, fogCells)) continue;
+    const sx = cam.x + w.x * cam.zoom;
+    const sy = cam.y + w.y * cam.zoom;
+    // Fade: full opacity → transparent over the wreckage lifetime
+    const fade = w.epochsLeft / w.totalEpochs;
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(w.rotation);
+
+    // Draw the unit shape as a darkened, desaturated husk
+    ctx.globalAlpha = fade * 0.45;
+    paintUnit(ctx, 0, 0, r, w.unitType, '#444');
+
+    // Scorch mark beneath
+    ctx.globalAlpha = fade * 0.2;
+    ctx.fillStyle = '#1a1010';
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.3, r * 1.2, r * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Cracks / damage lines across the shape
+    ctx.globalAlpha = fade * 0.4;
+    ctx.strokeStyle = '#ff4400';
+    ctx.lineWidth = 1;
+    const cr = r * 0.6;
+    for (let i = 0; i < 3; i++) {
+      const a1 = (i / 3) * Math.PI * 2 + w.rotation;
+      const a2 = a1 + 0.5 + Math.sin(w.rotation * 5 + i) * 0.3;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a1) * cr * 0.2, Math.sin(a1) * cr * 0.2);
+      ctx.lineTo(Math.cos(a2) * cr, Math.sin(a2) * cr);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  ctx.globalAlpha = prevAlpha;
 }
 
 /** Draw a spawn glow effect (expanding crimson circle, fading in). */
@@ -1713,15 +1864,30 @@ export function drawDestroyedEntities(
   const prevAlpha = ctx.globalAlpha;
   const r = BASE_HEX_SIZE * cam.zoom * 0.32;
 
-  // Destroyed units: fade out + expanding ring + explosion particles.
+  // Destroyed units: breaking-apart unit + explosion ring + big particle burst.
   for (const anim of animation.destroyedUnits) {
     if (isUnitHiddenByFog(anim.owner, anim.fromHex, fogCells)) continue;
     const sx = cam.x + anim.fromPixel.x * cam.zoom;
     const sy = cam.y + anim.fromPixel.y * cam.zoom;
     const color = entityColor(anim.owner);
 
+    // Draw the unit shape breaking apart: tilting + scaling down + fading
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(ap * 0.5);           // tilt as it dies
+    const scale = 1 - ap * 0.4;     // shrink slightly
+    ctx.scale(scale, scale);
     ctx.globalAlpha = (1 - ap) * 0.85;
-    paintUnit(ctx, sx, sy, r, anim.unitType, color);
+    paintUnit(ctx, 0, 0, r, anim.unitType, color);
+    ctx.restore();
+
+    // Scorch mark on ground beneath
+    ctx.globalAlpha = Math.min(ap * 2, 1) * 0.3;
+    ctx.fillStyle = '#1a0800';
+    ctx.beginPath();
+    ctx.ellipse(sx, sy + r * 0.3, r * 1.3, r * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
     drawDeathRing(ctx, sx, sy, r, ap, color);
   }
 
@@ -1732,8 +1898,21 @@ export function drawDestroyedEntities(
     const sy = cam.y + anim.pixel.y * cam.zoom;
     const color = entityColor(anim.owner);
 
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(ap * 0.3);
+    const scale = 1 - ap * 0.3;
+    ctx.scale(scale, scale);
     ctx.globalAlpha = (1 - ap) * 0.85;
-    paintStructure(ctx, sx, sy, r, anim.structureType, color);
+    paintStructure(ctx, 0, 0, r, anim.structureType, color);
+    ctx.restore();
+
+    ctx.globalAlpha = Math.min(ap * 2, 1) * 0.25;
+    ctx.fillStyle = '#1a0800';
+    ctx.beginPath();
+    ctx.ellipse(sx, sy + r * 0.3, r * 1.5, r * 0.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
     drawDeathRing(ctx, sx, sy, r, ap, color);
   }
 
