@@ -8,6 +8,7 @@ import {
 } from '@/engine/commands';
 import { UnitType, UNIT_DEFS } from '@/engine/units';
 import { TRAINABLE_UNIT_TYPES } from '@/components/shared/trainFlow';
+import ActionTooltip from '@/components/shared/ActionTooltip';
 
 // ── Tutorial tooltip labels ───────────────────────────────────────────────────
 
@@ -26,6 +27,46 @@ function tutorialTooltip(type: string, label: string): string {
   }
   return TUTORIAL_TOOLTIPS[type] ?? 'SELECT BUILD';
 }
+
+// ── Action descriptions (shown in hover / long-press tooltips) ────────────────
+
+const ACTION_DESCRIPTIONS: Record<string, string> = {
+  move:          'Direct unit to a target hex',
+  attack:        'Engage an enemy unit or structure',
+  gather:        'Harvest from an extractor or conduit',
+  build:         'Construct a new structure',
+  defend:        'Fortify in place (+50% effective HP)',
+  chrono_shift:  'Rewind unit to its state 2 epochs ago',
+  phase_surge:   'Boost movement speed this epoch',
+  merge:         'Combine with same-type units nearby',
+  train:         'Produce a new unit',
+  research:      'Advance to the next tech tier',
+  temporal:      'Reveal enemy previous-epoch moves',
+  epoch_anchor_set:      'Bookmark all friendly positions & HP',
+  epoch_anchor_activate: 'Restore units to bookmarked state',
+  timeline_fork: 'Preview the next execution phase',
+  chrono_scout:  'Predict enemy positions next epoch',
+};
+
+function actionDescription(type: string, label: string): string {
+  if (type === 'epoch_anchor') {
+    return label.includes('Set')
+      ? ACTION_DESCRIPTIONS.epoch_anchor_set
+      : ACTION_DESCRIPTIONS.epoch_anchor_activate;
+  }
+  return ACTION_DESCRIPTIONS[type] ?? label;
+}
+
+const UNIT_DESCRIPTIONS: Partial<Record<UnitType, string>> = {
+  drone:           'Worker unit — gathers resources & builds',
+  pulse_sentry:    'Melee tank — high HP, short range',
+  arc_ranger:      'Ranged attacker — strikes from afar',
+  phase_walker:    'Fast flanker — high speed, moderate damage',
+  temporal_warden: 'Support — shields & temporal abilities',
+  void_striker:    'Glass cannon — devastating burst damage',
+  flux_weaver:     'AOE specialist — area damage dealer',
+  chrono_titan:    'Ultimate unit — massive stats, high cost',
+};
 
 // ── Positioning ───────────────────────────────────────────────────────────────
 
@@ -299,8 +340,12 @@ export default function CommandPicker(props: CommandPickerProps) {
           || (entry.type === 'epoch_anchor' && entry.label === 'Anchor Set' && tutorialHighlightType === 'epoch_anchor_set')
           || (entry.type === 'epoch_anchor' && entry.label === 'Anchor Recall' && tutorialHighlightType === 'epoch_anchor_activate');
         return (
-          <div
+          <ActionTooltip
             key={entry.label}
+            text={actionDescription(entry.type, entry.label)}
+            position="bottom"
+          >
+          <div
             onClick={() => {
               if (!entry.enabled && entry.disabledReason) {
                 showDisabledFeedback(entry.disabledReason);
@@ -330,6 +375,7 @@ export default function CommandPicker(props: CommandPickerProps) {
             )}
           </button>
           </div>
+          </ActionTooltip>
         );
       })}
 
@@ -345,8 +391,12 @@ export default function CommandPicker(props: CommandPickerProps) {
         const isTutorial = tutorialHighlightUnitType === unitType;
 
         return (
-          <button
+          <ActionTooltip
             key={unitType}
+            text={UNIT_DESCRIPTIONS[unitType] ?? def.label}
+            position="bottom"
+          >
+          <button
             role="menuitem"
             disabled={!isEnabled}
             onClick={() => isEnabled && onTrainSelect?.(unitType)}
@@ -361,6 +411,7 @@ export default function CommandPicker(props: CommandPickerProps) {
             </span>
             {isTutorial && <span className="tutorial-tooltip" style={{ top: -20, left: 4 }}>TRAIN THIS UNIT</span>}
           </button>
+          </ActionTooltip>
         );
       })}
 

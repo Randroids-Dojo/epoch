@@ -178,6 +178,23 @@ canvas {
   animation: fadeIn 0.3s ease;
 }
 
+/* ── Action Tooltip (hover / long-press) ──────────────────────────────── */
+
+.action-tooltip {
+  position: absolute;
+  background: rgba(13, 19, 33, 0.96);
+  border: 1px solid #475569;
+  border-radius: 4px;
+  color: #e2e8f0;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  padding: 4px 8px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 300;
+  animation: fadeIn 0.15s ease;
+}
+
 /* ── Feedback FAB ────────────────────────────────────────────────────────── */
 
 .epoch-fab {
