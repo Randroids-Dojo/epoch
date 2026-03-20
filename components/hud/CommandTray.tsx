@@ -62,7 +62,7 @@ const CMD_TOOLTIP: Record<GlobalCommand['type'], string> = {
 function slotTooltip(cmd: GlobalCommand | null, index: number): string {
   if (!cmd) return `Slot ${index + 1} — click to add order`;
   if (cmd.type === 'train') {
-    const label = (UNIT_ICON[cmd.unitType] ? cmd.unitType : cmd.unitType).replace(/_/g, ' ');
+    const label = cmd.unitType.replace(/_/g, ' ');
     return `Train ${label}`;
   }
   return CMD_TOOLTIP[cmd.type] ?? cmd.type;
