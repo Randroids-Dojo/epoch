@@ -8,7 +8,7 @@ import { Hex, hexKey, hexToPixel, pixelToHex } from '@/engine/hex';
 import { Camera, DEFAULT_ZOOM, zoomToward, canvasToWorld, lerpCamera } from '@/renderer/camera';
 import { ActionBeat, getSequenceCameraTarget } from '@/renderer/actionSequence';
 import { BASE_HEX_SIZE, drawBackground, drawHexCell } from '@/renderer/drawHex';
-import { drawUnits, drawStructures, drawTargetingOverlay, drawRangeBorders, drawCommandArrows, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawMergeAnimations, drawEchoOverlay, drawTimelineForkOverlay, drawChronoScoutOverlay, drawParticles, drawChronoShiftVFX, drawPhaseSurgeVFX, drawAnchorActivateVFX, EchoRevealState, getEchoRevealCamera, drawEchoRevealMist } from '@/renderer/drawEntities';
+import { drawUnits, drawStructures, drawTargetingOverlay, drawRangeBorders, drawCommandArrows, drawAnimatedUnits, drawAnimatedStructures, drawDestroyedEntities, drawMergeAnimations, drawEchoOverlay, drawTimelineForkOverlay, drawChronoScoutOverlay, drawParticles, drawChronoShiftVFX, drawPhaseSurgeVFX, drawAnchorActivateVFX, EchoRevealState, getEchoRevealCamera, drawEchoRevealMist, drawWreckage } from '@/renderer/drawEntities';
 import { TimelineForkResult, ChronoScoutResult } from '@/engine/simulation';
 import { InteractionMode } from '@/lib/types';
 import { ExecutionAnimation, getAnimatedUnitPosition } from '@/renderer/animation';
@@ -309,6 +309,7 @@ export default function GameCanvas({
       drawPhaseSurgeVFX(ctx, anim, cam, elapsed);
       drawAnchorActivateVFX(ctx, anim, cam, elapsed, cssW, cssH);
     } else {
+      drawWreckage(ctx, cam, fogCells);
       drawStructures(ctx, gs.structures, cam, fogCells);
       const activeUnitId = ('unitId' in m) ? m.unitId : null;
       drawUnits(ctx, gs.units, cam, activeUnitId, fogCells);
