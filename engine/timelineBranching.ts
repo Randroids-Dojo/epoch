@@ -90,7 +90,7 @@ export function createBranchManager(initialState: GameState): BranchManager {
  */
 export function recordBranchSnapshot(mgr: BranchManager, state: GameState): void {
   const branch = mgr.branches.get(mgr.activeBranchId);
-  if (!branch) return;
+  if (!branch) throw new Error(`Active branch ${mgr.activeBranchId} not found`);
 
   branch.snapshots.push({
     entry: captureEpochEntry(state),
@@ -101,7 +101,7 @@ export function recordBranchSnapshot(mgr: BranchManager, state: GameState): void
 /** Update the active branch's tip state after resolution. */
 export function updateBranchTip(mgr: BranchManager, state: GameState): void {
   const branch = mgr.branches.get(mgr.activeBranchId);
-  if (!branch) return;
+  if (!branch) throw new Error(`Active branch ${mgr.activeBranchId} not found`);
 
   branch.currentState = deepCopyState(state);
 }
@@ -109,7 +109,7 @@ export function updateBranchTip(mgr: BranchManager, state: GameState): void {
 /** Mark the active branch as complete with the given winner. */
 export function finalizeBranch(mgr: BranchManager, winner: PlayerId): void {
   const branch = mgr.branches.get(mgr.activeBranchId);
-  if (!branch) return;
+  if (!branch) throw new Error(`Active branch ${mgr.activeBranchId} not found`);
 
   branch.isComplete = true;
   branch.winner = winner;
@@ -177,10 +177,7 @@ export function getBranchSummaries(mgr: BranchManager): BranchSummary[] {
 
   for (const [id, branch] of mgr.branches) {
     const firstEpoch = branch.branchEpoch;
-    const lastEpoch = branch.snapshots.length > 0
-      ? branch.snapshots[branch.snapshots.length - 1].entry.epoch
-      : firstEpoch;
-    const currentEpoch = branch.currentState.epoch;
+    const tipEpoch = branch.currentState.epoch;
 
     let status: BranchSummary['status'];
     if (branch.isComplete) {
@@ -192,9 +189,9 @@ export function getBranchSummaries(mgr: BranchManager): BranchSummary[] {
     summaries.push({
       id,
       name: branch.name,
-      epochRange: lastEpoch > firstEpoch
-        ? `Epochs ${firstEpoch}–${currentEpoch}`
-        : `Epoch ${currentEpoch}`,
+      epochRange: tipEpoch > firstEpoch
+        ? `Epochs ${firstEpoch}–${tipEpoch}`
+        : `Epoch ${tipEpoch}`,
       status,
       isActive: id === mgr.activeBranchId,
     });
