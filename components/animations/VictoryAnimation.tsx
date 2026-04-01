@@ -7,6 +7,8 @@ interface VictoryAnimationProps {
   winner: 'player' | 'ai';
   epoch: number;
   onComplete: () => void;
+  /** When provided, shows a "Temporal Debrief" button to explore timeline branches. */
+  onDebrief?: () => void;
   /** When provided, shows a "Challenge a Friend" share button after victory. */
   onShareTimeline?: () => void;
   /** Whether the share URL has been copied to clipboard. */
@@ -24,7 +26,7 @@ interface VictoryAnimationProps {
  * "DEFEAT" uses red/coral tones with a darker aesthetic.
  */
 export default function VictoryAnimation({
-  winner, epoch, onComplete, onShareTimeline, shareCopied, shareFallbackUrl, isRivalMode, rivalName,
+  winner, epoch, onComplete, onDebrief, onShareTimeline, shareCopied, shareFallbackUrl, isRivalMode, rivalName,
 }: VictoryAnimationProps) {
   const [phase, setPhase] = useState<'flash' | 'slam' | 'rings' | 'details' | 'idle'>('flash');
 
@@ -260,6 +262,24 @@ export default function VictoryAnimation({
               textAlign: 'center',
             }}
           />
+        )}
+
+        {/* Temporal Debrief button */}
+        {onDebrief && (
+          <button
+            data-testid="temporal-debrief-btn"
+            className="font-mono text-sm tracking-widest uppercase px-6 py-2 border"
+            style={{
+              color: '#ffd700',
+              borderColor: '#ffd700',
+              background: 'rgba(255,215,0,0.06)',
+              cursor: phase === 'idle' ? 'pointer' : 'default',
+              transition: 'border-color 0.2s ease, color 0.2s ease, background 0.2s ease',
+            }}
+            onClick={(e) => { e.stopPropagation(); onDebrief(); }}
+          >
+            Temporal Debrief
+          </button>
         )}
 
         {/* Play Again button */}

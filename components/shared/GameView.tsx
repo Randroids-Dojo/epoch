@@ -25,7 +25,14 @@ import {
   BuildStructureType,
 } from '@/engine/targeting';
 import { generateAICommands } from '@/engine/ai';
-import { recordEpoch, replayEpochCommands, encodeTimeline, decodeTimeline, TimelineRecording, EpochRecord } from '@/engine/timeline';
+import { captureCommands, replayCommands, EpochRecord } from '@/engine/timeline';
+import { encodeTimeline, decodeTimeline, TimelineRecording } from '@/engine/timelineRivals';
+import {
+  createBranchManager, recordBranchSnapshot, updateBranchTip, finalizeBranch,
+  forkFromEpoch, switchBranch, getActiveBranch, getBranchSummaries,
+  BranchManager,
+} from '@/engine/timelineBranching';
+import { deepCopyState } from '@/engine/simulation';
 import { isComplete, STRUCTURE_DEFS } from '@/engine/structures';
 import { PlayerId } from '@/engine/player';
 import { COLORS, DEAD_ZONE, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
@@ -56,6 +63,8 @@ import UnitActionPanel from '../hud/UnitActionPanel';
 import GameStatsPanel from '../hud/GameStatsPanel';
 import ExecutionOverlay from '../hud/ExecutionOverlay';
 import Minimap from '../hud/Minimap';
+import TimelineBar from '../hud/TimelineBar';
+import BranchSwitcher from '../hud/BranchSwitcher';
 import HexTargetPicker from '../hud/HexTargetPicker';
 import GatherTargetPicker from '../hud/GatherTargetPicker';
 import IntroAnimation from '../animations/IntroAnimation';
@@ -166,6 +175,12 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
   const [shareCopied, setShareCopied] = useState(false);
   /** Fallback URL shown when clipboard write fails. */
   const [shareFallbackUrl, setShareFallbackUrl] = useState<string | null>(null);
+
+  // ── Timeline Branching state ─────────────────────────────────────────────
+  const branchManagerRef = useRef<BranchManager | null>(null);
+  const [activeBranchId, setActiveBranchId] = useState('');
+  const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
+  const [branchVersion, setBranchVersion] = useState(0);
 
   const dismissEpochStats = useCallback(() => {
     const popup = epochStatsPopup;
@@ -893,13 +908,18 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
     };
 
     // Record player commands for timeline sharing
-    timelineRecorderRef.current.push(recordEpoch(state, 'player'));
+    timelineRecorderRef.current.push(captureCommands(state, 'player'));
 
     // Use rival's recorded commands or generate AI commands
     if (rivalTimeline && state.epoch <= rivalTimeline.epochs.length) {
-      replayEpochCommands(state, rivalTimeline.epochs[state.epoch - 1]);
+      replayCommands(state, 'ai', rivalTimeline.epochs[state.epoch - 1]);
     } else {
       generateAICommands(state);
+    }
+
+    // Record full state snapshot for timeline branching (before resolution mutates state)
+    if (branchManagerRef.current) {
+      recordBranchSnapshot(branchManagerRef.current, state);
     }
 
     const unitSnaps = new Map<string, UnitSnapshot>();
@@ -922,12 +942,21 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
 
     resolveEpoch(state);
 
+    // Update branch tip after resolution
+    if (branchManagerRef.current) {
+      updateBranchTip(branchManagerRef.current, state);
+      setBranchVersion(v => v + 1);
+    }
+
     // When the game ends, skip the execution animation and show the result
     // immediately. Otherwise the victory/defeat overlay stacks on top of
     // the execution overlay, blocking the SKIP button and leaving the player
     // unable to interact for several seconds.
     // Note: resolveEpoch mutates state.phase; cast to avoid TS narrowing issue.
     if ((state.phase as string) === 'over') {
+      if (branchManagerRef.current) {
+        finalizeBranch(branchManagerRef.current, state.winner!);
+      }
       animationRef.current = null;
       setMode({ kind: 'idle' });
       setGameState({ ...state });
@@ -1007,6 +1036,9 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
   const handlePlayAgain = useCallback(() => {
     clearRendererState();
     timelineRecorderRef.current = [];
+    branchManagerRef.current = null;
+    setActiveBranchId('');
+    setShowBranchSwitcher(false);
 
     setShareCopied(false);
     setShareFallbackUrl(null);
@@ -1023,6 +1055,86 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
     }
   }, []);
 
+  // ── Timeline Branching handlers ──────────────────────────────────────────
+  const handleTimelineRewind = useCallback((epochIndex: number) => {
+    const mgr = branchManagerRef.current;
+    const state = gameStateRef.current;
+    if (!mgr) return;
+    if (state.phase !== 'planning' && state.phase !== 'over') return;
+
+    // Save current branch tip
+    updateBranchTip(mgr, state);
+
+    // Fork from the selected epoch
+    const newBranch = forkFromEpoch(mgr, epochIndex);
+    const newState = deepCopyState(newBranch.currentState);
+
+    // Clear player commands for fresh planning
+    newState.players.player.unitOrders.clear();
+    newState.players.player.globalCommands = newState.players.player.globalCommands.map(() => null);
+    newState.players.player.lockedIn = false;
+    newState.players.player.defaultOrderUnitIds.clear();
+    newState.phase = 'planning';
+
+    // Apply state
+    setGameState(newState);
+    setMode({ kind: 'idle' });
+    setTimeLeft(PLANNING_DURATION);
+
+    // Clear animation & overlay state
+    animationRef.current = null;
+    setActionBeats(null);
+    setAnimElapsed(0);
+    setTimelineForkResult(null);
+    setChronoScoutResult(null);
+    setEchoReveal(null);
+    timelineForkActiveRef.current = false;
+    setTimelineForkActive(false);
+
+    // Reset rivals recorder for this branch
+    timelineRecorderRef.current = [];
+
+    setActiveBranchId(newBranch.id);
+    setBranchVersion(v => v + 1);
+  }, []);
+
+  const handleBranchSwitch = useCallback((branchId: string) => {
+    const mgr = branchManagerRef.current;
+    if (!mgr) return;
+
+    // Save current branch tip
+    updateBranchTip(mgr, gameStateRef.current);
+
+    // Switch to target branch
+    const branch = switchBranch(mgr, branchId);
+    const newState = deepCopyState(branch.currentState);
+
+    // Apply state
+    setGameState(newState);
+    setMode({ kind: 'idle' });
+    setShowBranchSwitcher(false);
+
+    // Clear animation state
+    animationRef.current = null;
+    setActionBeats(null);
+    setAnimElapsed(0);
+
+    if (!branch.isComplete) {
+      setTimeLeft(PLANNING_DURATION);
+    }
+
+    setActiveBranchId(branch.id);
+    setBranchVersion(v => v + 1);
+  }, []);
+
+  const handleTemporalDebrief = useCallback(() => {
+    // Dismiss victory overlay but keep timeline manager alive
+    const state = gameStateRef.current;
+    state.phase = 'planning';
+    setGameState({ ...state });
+    setTimeLeft(PLANNING_DURATION);
+  }, []);
+
   const handleStartGame = useCallback((diff: AIDifficulty) => {
     clearRendererState();
     timelineRecorderRef.current = [];
@@ -1031,7 +1143,12 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
     setShareFallbackUrl(null);
     setDifficulty(diff);
     const seed = rivalTimeline ? rivalTimeline.seed : Date.now();
-    setGameState(createInitialState(seed, diff));
+    const initialState = createInitialState(seed, diff);
+    setGameState(initialState);
+    branchManagerRef.current = createBranchManager(initialState);
+    setActiveBranchId(branchManagerRef.current.activeBranchId);
+    setBranchVersion(0);
+    setShowBranchSwitcher(false);
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
     setShowSetup(false);
@@ -1685,6 +1802,20 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
         </div>
       )}
 
+      {/* Timeline bar for branching — hidden during tutorial/setup/intro */}
+      {branchManagerRef.current && !showSetup && !introPlaying && tutorialStep === null && (
+        <TimelineBar
+          key={branchVersion}
+          snapshotCount={getActiveBranch(branchManagerRef.current).snapshots.length}
+          currentEpoch={gameState.epoch}
+          branchName={getActiveBranch(branchManagerRef.current).name}
+          branchCount={branchManagerRef.current.branches.size}
+          onRewind={handleTimelineRewind}
+          onOpenSwitcher={() => setShowBranchSwitcher(true)}
+          disabled={gameState.phase !== 'planning' && gameState.phase !== 'over'}
+        />
+      )}
+
       {/* Canvas area fills remaining space */}
       <div
         className="relative min-h-0 flex-1"
@@ -2080,6 +2211,7 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
               winner={gameState.winner === 'player' ? 'player' : 'ai'}
               epoch={gameState.epoch}
               onComplete={handlePlayAgain}
+              onDebrief={branchManagerRef.current ? handleTemporalDebrief : undefined}
               onShareTimeline={handleShareTimeline}
               shareCopied={shareCopied}
               shareFallbackUrl={shareFallbackUrl}
@@ -2090,6 +2222,16 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
               {gameState.winner === 'player' ? 'VICTORY' : 'DEFEAT'}
             </div>
           </div>
+        )}
+
+        {/* Branch switcher overlay */}
+        {showBranchSwitcher && branchManagerRef.current && (
+          <BranchSwitcher
+            branches={getBranchSummaries(branchManagerRef.current)}
+            activeBranchId={activeBranchId}
+            onSwitch={handleBranchSwitch}
+            onClose={() => setShowBranchSwitcher(false)}
+          />
         )}
 
         {/* Global command tray — bottom-right, aligned with unit cards */}
