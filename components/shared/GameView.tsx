@@ -25,6 +25,7 @@ import {
   BuildStructureType,
 } from '@/engine/targeting';
 import { generateAICommands } from '@/engine/ai';
+import { recordEpoch, replayEpochCommands, encodeTimeline, decodeTimeline, TimelineRecording, EpochRecord } from '@/engine/timeline';
 import { isComplete, STRUCTURE_DEFS } from '@/engine/structures';
 import { PlayerId } from '@/engine/player';
 import { COLORS, DEAD_ZONE, GAME_CONSTANTS, MOBILE_BREAKPOINT_PX, SLOT_LAYOUT } from '@/lib/constants';
@@ -109,7 +110,18 @@ function captureAllEpochStats(state: GameState): { player: EpochSideStats; ai: E
   return sides;
 }
 
-export default function GameView() {
+interface GameViewProps {
+  /** Encoded rival timeline string from URL query parameter. */
+  rivalEncoded?: string;
+}
+
+export default function GameView({ rivalEncoded }: GameViewProps) {
+  // Decode the rival timeline on mount (async due to decompression).
+  const [rivalTimeline, setRivalTimeline] = useState<TimelineRecording | null>(null);
+  useEffect(() => {
+    if (!rivalEncoded) return;
+    decodeTimeline(rivalEncoded).then((t) => { if (t) setRivalTimeline(t); });
+  }, [rivalEncoded]);
   const [showSetup, setShowSetup]   = useState(true);
   const { maxUnlocked, isUnlocked, recordVictory } = useDifficultyUnlock();
   const [difficulty, setDifficulty] = useState<AIDifficulty>(() => maxUnlocked);
@@ -147,6 +159,13 @@ export default function GameView() {
   // ── Bonus card state ───────────────────────────────────────────────────
   const [pendingBonusCard, setPendingBonusCard] = useState<PendingBonusCard | null>(null);
   const [bonusAppliedMsg, setBonusAppliedMsg] = useState<string | null>(null);
+
+  // ── Timeline Rivals state ───────────────────────────────────────────────
+  /** Records player commands each epoch for sharing after victory. */
+  const timelineRecorderRef = useRef<EpochRecord[]>([]);
+  const [shareCopied, setShareCopied] = useState(false);
+  /** Fallback URL shown when clipboard write fails. */
+  const [shareFallbackUrl, setShareFallbackUrl] = useState<string | null>(null);
 
   const dismissEpochStats = useCallback(() => {
     const popup = epochStatsPopup;
@@ -873,7 +892,15 @@ export default function GameView() {
       epoch: state.epoch,
     };
 
-    generateAICommands(state);
+    // Record player commands for timeline sharing
+    timelineRecorderRef.current.push(recordEpoch(state, 'player'));
+
+    // Use rival's recorded commands or generate AI commands
+    if (rivalTimeline && state.epoch <= rivalTimeline.epochs.length) {
+      replayEpochCommands(state, rivalTimeline.epochs[state.epoch - 1]);
+    } else {
+      generateAICommands(state);
+    }
 
     const unitSnaps = new Map<string, UnitSnapshot>();
     for (const [id, u] of state.units) {
@@ -919,7 +946,7 @@ export default function GameView() {
 
     setMode({ kind: 'idle' });
     setGameState({ ...state });
-  }, []);
+  }, [rivalTimeline]);
 
   handleResolveRef.current = handleResolve;
 
@@ -979,6 +1006,10 @@ export default function GameView() {
   // ── Play Again / Start ────────────────────────────────────────────────────
   const handlePlayAgain = useCallback(() => {
     clearRendererState();
+    timelineRecorderRef.current = [];
+
+    setShareCopied(false);
+    setShareFallbackUrl(null);
     setGameState(createInitialState(42));
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
@@ -994,15 +1025,51 @@ export default function GameView() {
 
   const handleStartGame = useCallback((diff: AIDifficulty) => {
     clearRendererState();
+    timelineRecorderRef.current = [];
+
+    setShareCopied(false);
+    setShareFallbackUrl(null);
     setDifficulty(diff);
-    setGameState(createInitialState(Date.now(), diff));
+    const seed = rivalTimeline ? rivalTimeline.seed : Date.now();
+    setGameState(createInitialState(seed, diff));
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
     setShowSetup(false);
-  }, []);
+  }, [rivalTimeline]);
 
   const handleIntroComplete = useCallback(() => {
     setIntroPlaying(false);
+  }, []);
+
+  // ── Auto-start rival mode ───────────────────────────────────────────────
+  const rivalAutoStarted = useRef(false);
+  useEffect(() => {
+    if (rivalTimeline && !rivalAutoStarted.current) {
+      rivalAutoStarted.current = true;
+      handleStartGame(rivalTimeline.difficulty);
+    }
+  }, [rivalTimeline, handleStartGame]);
+
+  // ── Share timeline handler ──────────────────────────────────────────────
+  const handleShareTimeline = useCallback(async () => {
+    const recording: TimelineRecording = {
+      v: 1,
+      seed: gameStateRef.current.map.seed,
+      epochs: timelineRecorderRef.current,
+      name: 'Commander',
+      difficulty: gameStateRef.current.aiConfig.difficulty,
+    };
+    const encoded = await encodeTimeline(recording);
+    const url = `${window.location.origin}${window.location.pathname}?rival=${encoded}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      setShareFallbackUrl(null);
+      setTimeout(() => setShareCopied(false), 3000);
+    } catch {
+      // Clipboard failed — show URL for manual copy
+      setShareFallbackUrl(url);
+    }
   }, []);
 
   const queueRecenter = useCallback((worldX: number, worldY: number) => {
@@ -1597,6 +1664,27 @@ export default function GameView() {
         </div>
       )}
 
+      {/* Timeline Rival indicator */}
+      {rivalTimeline && gameState.phase !== 'over' && (
+        <div
+          data-testid="rival-indicator"
+          className="shrink-0 font-mono text-xs text-center py-1"
+          style={{
+            background: 'rgba(167,139,250,0.08)',
+            borderBottom: '1px solid rgba(167,139,250,0.2)',
+            color: '#a78bfa',
+            letterSpacing: '0.15em',
+            textShadow: '0 0 6px rgba(167,139,250,0.4)',
+          }}
+        >
+          VS {rivalTimeline.name.toUpperCase()}&apos;S TIMELINE
+          {gameState.epoch <= rivalTimeline.epochs.length
+            ? <span style={{ color: '#64748b', marginLeft: 8 }}>({rivalTimeline.epochs.length - gameState.epoch + 1} epochs remain)</span>
+            : <span style={{ color: '#f97316', marginLeft: 8 }}>(AI fallback)</span>
+          }
+        </div>
+      )}
+
       {/* Canvas area fills remaining space */}
       <div
         className="relative min-h-0 flex-1"
@@ -1992,6 +2080,11 @@ export default function GameView() {
               winner={gameState.winner === 'player' ? 'player' : 'ai'}
               epoch={gameState.epoch}
               onComplete={handlePlayAgain}
+              onShareTimeline={handleShareTimeline}
+              shareCopied={shareCopied}
+              shareFallbackUrl={shareFallbackUrl}
+              isRivalMode={!!rivalTimeline}
+              rivalName={rivalTimeline?.name}
             />
             <div data-testid="game-over-result" style={{ display: 'none' }}>
               {gameState.winner === 'player' ? 'VICTORY' : 'DEFEAT'}

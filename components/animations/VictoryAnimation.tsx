@@ -7,6 +7,15 @@ interface VictoryAnimationProps {
   winner: 'player' | 'ai';
   epoch: number;
   onComplete: () => void;
+  /** When provided, shows a "Challenge a Friend" share button after victory. */
+  onShareTimeline?: () => void;
+  /** Whether the share URL has been copied to clipboard. */
+  shareCopied?: boolean;
+  /** Fallback URL shown when clipboard write fails. */
+  shareFallbackUrl?: string | null;
+  /** Whether we're in rival mode (played against a timeline). */
+  isRivalMode?: boolean;
+  rivalName?: string;
 }
 
 /**
@@ -14,7 +23,9 @@ interface VictoryAnimationProps {
  * "VICTORY" crashes in with screen flash, expanding rings, and particle burst.
  * "DEFEAT" uses red/coral tones with a darker aesthetic.
  */
-export default function VictoryAnimation({ winner, epoch, onComplete }: VictoryAnimationProps) {
+export default function VictoryAnimation({
+  winner, epoch, onComplete, onShareTimeline, shareCopied, shareFallbackUrl, isRivalMode, rivalName,
+}: VictoryAnimationProps) {
   const [phase, setPhase] = useState<'flash' | 'slam' | 'rings' | 'details' | 'idle'>('flash');
 
   const isVictory = winner === 'player';
@@ -162,7 +173,13 @@ export default function VictoryAnimation({ winner, epoch, onComplete }: VictoryA
           zIndex: 2,
         }}
       >
-        EPOCH {epoch} {isVictory ? '· TIMELINE SECURED' : '· TIMELINE COLLAPSED'}
+        EPOCH {epoch} {isVictory
+          ? isRivalMode
+            ? `· ${rivalName ? rivalName.toUpperCase() + "'S" : ''} TIMELINE DEFEATED`
+            : '· TIMELINE SECURED'
+          : isRivalMode
+            ? `· ${rivalName ? rivalName.toUpperCase() + "'S" : ''} TIMELINE PREVAILS`
+            : '· TIMELINE COLLAPSED'}
       </div>
 
       {/* Particle burst */}
@@ -195,36 +212,82 @@ export default function VictoryAnimation({ winner, epoch, onComplete }: VictoryA
         </div>
       )}
 
-      {/* Play Again button */}
-      <button
-        data-testid="play-again-btn"
-        className="font-mono text-sm tracking-widest uppercase px-6 py-2 border"
+      {/* Buttons row */}
+      <div
         style={{
-          color: '#94a3b8',
-          borderColor: '#334155',
-          background: 'transparent',
+          display: 'flex',
+          gap: '1rem',
           marginTop: '2.5rem',
           opacity: phase === 'idle' ? 1 : 0,
           transform: phase === 'idle' ? 'translateY(0)' : 'translateY(8px)',
-          transition: 'opacity 0.4s ease, transform 0.4s ease, border-color 0.2s ease, color 0.2s ease',
-          cursor: phase === 'idle' ? 'pointer' : 'default',
+          transition: 'opacity 0.4s ease, transform 0.4s ease',
           position: 'relative',
           zIndex: 2,
         }}
-        onClick={onComplete}
-        onMouseEnter={(e) => {
-          if (phase === 'idle') {
-            e.currentTarget.style.borderColor = accentColor;
-            e.currentTarget.style.color = accentColor;
-          }
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = '#334155';
-          e.currentTarget.style.color = '#94a3b8';
-        }}
       >
-        Play Again
-      </button>
+        {/* Share / Challenge button — only on victory */}
+        {isVictory && onShareTimeline && (
+          <button
+            data-testid="share-timeline-btn"
+            className="font-mono text-sm tracking-widest uppercase px-6 py-2 border"
+            style={{
+              color: shareCopied ? '#22c55e' : COLORS.CYAN,
+              borderColor: shareCopied ? '#22c55e' : COLORS.CYAN,
+              background: shareCopied ? 'rgba(34,197,94,0.08)' : 'rgba(0,212,255,0.08)',
+              cursor: phase === 'idle' ? 'pointer' : 'default',
+              transition: 'border-color 0.2s ease, color 0.2s ease, background 0.2s ease',
+            }}
+            onClick={(e) => { e.stopPropagation(); onShareTimeline(); }}
+          >
+            {shareCopied ? 'Link Copied!' : 'Challenge a Friend'}
+          </button>
+        )}
+
+        {/* Fallback: show URL in a selectable input when clipboard fails */}
+        {shareFallbackUrl && (
+          <input
+            data-testid="share-fallback-url"
+            readOnly
+            value={shareFallbackUrl}
+            onClick={(e) => { e.stopPropagation(); (e.target as HTMLInputElement).select(); }}
+            className="font-mono text-xs px-3 py-1.5 border rounded"
+            style={{
+              color: '#94a3b8',
+              borderColor: '#334155',
+              background: 'rgba(15,23,42,0.8)',
+              width: '100%',
+              maxWidth: 360,
+              textAlign: 'center',
+            }}
+          />
+        )}
+
+        {/* Play Again button */}
+        <button
+          data-testid="play-again-btn"
+          className="font-mono text-sm tracking-widest uppercase px-6 py-2 border"
+          style={{
+            color: '#94a3b8',
+            borderColor: '#334155',
+            background: 'transparent',
+            cursor: phase === 'idle' ? 'pointer' : 'default',
+            transition: 'border-color 0.2s ease, color 0.2s ease',
+          }}
+          onClick={onComplete}
+          onMouseEnter={(e) => {
+            if (phase === 'idle') {
+              e.currentTarget.style.borderColor = accentColor;
+              e.currentTarget.style.color = accentColor;
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = '#334155';
+            e.currentTarget.style.color = '#94a3b8';
+          }}
+        >
+          Play Again
+        </button>
+      </div>
     </div>
   );
 }
