@@ -11,6 +11,8 @@ interface VictoryAnimationProps {
   onShareTimeline?: () => void;
   /** Whether the share URL has been copied to clipboard. */
   shareCopied?: boolean;
+  /** Fallback URL shown when clipboard write fails. */
+  shareFallbackUrl?: string | null;
   /** Whether we're in rival mode (played against a timeline). */
   isRivalMode?: boolean;
   rivalName?: string;
@@ -22,7 +24,7 @@ interface VictoryAnimationProps {
  * "DEFEAT" uses red/coral tones with a darker aesthetic.
  */
 export default function VictoryAnimation({
-  winner, epoch, onComplete, onShareTimeline, shareCopied, isRivalMode, rivalName,
+  winner, epoch, onComplete, onShareTimeline, shareCopied, shareFallbackUrl, isRivalMode, rivalName,
 }: VictoryAnimationProps) {
   const [phase, setPhase] = useState<'flash' | 'slam' | 'rings' | 'details' | 'idle'>('flash');
 
@@ -239,6 +241,25 @@ export default function VictoryAnimation({
           >
             {shareCopied ? 'Link Copied!' : 'Challenge a Friend'}
           </button>
+        )}
+
+        {/* Fallback: show URL in a selectable input when clipboard fails */}
+        {shareFallbackUrl && (
+          <input
+            data-testid="share-fallback-url"
+            readOnly
+            value={shareFallbackUrl}
+            onClick={(e) => { e.stopPropagation(); (e.target as HTMLInputElement).select(); }}
+            className="font-mono text-xs px-3 py-1.5 border rounded"
+            style={{
+              color: '#94a3b8',
+              borderColor: '#334155',
+              background: 'rgba(15,23,42,0.8)',
+              width: '100%',
+              maxWidth: 360,
+              textAlign: 'center',
+            }}
+          />
         )}
 
         {/* Play Again button */}

@@ -164,6 +164,8 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
   /** Records player commands each epoch for sharing after victory. */
   const timelineRecorderRef = useRef<EpochRecord[]>([]);
   const [shareCopied, setShareCopied] = useState(false);
+  /** Fallback URL shown when clipboard write fails. */
+  const [shareFallbackUrl, setShareFallbackUrl] = useState<string | null>(null);
 
   const dismissEpochStats = useCallback(() => {
     const popup = epochStatsPopup;
@@ -1007,6 +1009,7 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
     timelineRecorderRef.current = [];
 
     setShareCopied(false);
+    setShareFallbackUrl(null);
     setGameState(createInitialState(42));
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
@@ -1025,6 +1028,7 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
     timelineRecorderRef.current = [];
 
     setShareCopied(false);
+    setShareFallbackUrl(null);
     setDifficulty(diff);
     const seed = rivalTimeline ? rivalTimeline.seed : Date.now();
     setGameState(createInitialState(seed, diff));
@@ -1042,7 +1046,7 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
   useEffect(() => {
     if (rivalTimeline && !rivalAutoStarted.current) {
       rivalAutoStarted.current = true;
-      handleStartGame('adept');
+      handleStartGame(rivalTimeline.difficulty);
     }
   }, [rivalTimeline, handleStartGame]);
 
@@ -1052,18 +1056,21 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
       v: 1,
       seed: gameStateRef.current.map.seed,
       epochs: timelineRecorderRef.current,
-      name: rivalTimeline?.name ?? 'Commander',
+      name: 'Commander',
+      difficulty: gameStateRef.current.aiConfig.difficulty,
     };
     const encoded = await encodeTimeline(recording);
     const url = `${window.location.origin}${window.location.pathname}?rival=${encoded}`;
     try {
       await navigator.clipboard.writeText(url);
       setShareCopied(true);
+      setShareFallbackUrl(null);
       setTimeout(() => setShareCopied(false), 3000);
     } catch {
-      // clipboard may fail, URL is still shown
+      // Clipboard failed — show URL for manual copy
+      setShareFallbackUrl(url);
     }
-  }, [rivalTimeline]);
+  }, []);
 
   const queueRecenter = useCallback((worldX: number, worldY: number) => {
     centerNonceRef.current += 1;
@@ -2075,6 +2082,7 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
               onComplete={handlePlayAgain}
               onShareTimeline={handleShareTimeline}
               shareCopied={shareCopied}
+              shareFallbackUrl={shareFallbackUrl}
               isRivalMode={!!rivalTimeline}
               rivalName={rivalTimeline?.name}
             />
