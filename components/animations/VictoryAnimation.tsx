@@ -232,6 +232,7 @@ export default function VictoryAnimation({
           <button
             data-testid="share-timeline-btn"
             className="font-mono text-sm tracking-widest uppercase px-6 py-2 border"
+            disabled={phase !== 'idle'}
             style={{
               color: shareCopied ? '#22c55e' : COLORS.CYAN,
               borderColor: shareCopied ? '#22c55e' : COLORS.CYAN,
@@ -287,6 +288,7 @@ export default function VictoryAnimation({
         <button
           data-testid="play-again-btn"
           className="font-mono text-sm tracking-widest uppercase px-6 py-2 border"
+          disabled={phase !== 'idle'}
           style={{
             color: '#94a3b8',
             borderColor: '#334155',

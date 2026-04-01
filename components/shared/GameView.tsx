@@ -1125,6 +1125,7 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
     setEchoReveal(null);
     timelineForkActiveRef.current = false;
     setTimelineForkActive(false);
+    timelineRecorderRef.current = [];
 
     if (!branch.isComplete) {
       setTimeLeft(PLANNING_DURATION);
@@ -1143,6 +1144,7 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
     setMode({ kind: 'idle' });
     setEpochStatsPopup(null);
     setPendingBonusCard(null);
+    setShowBranchSwitcher(false);
   }, []);
 
   const handleStartGame = useCallback((diff: AIDifficulty) => {
