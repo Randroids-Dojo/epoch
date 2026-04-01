@@ -12,6 +12,8 @@ interface PlanningBarProps {
   instabilityTier?: 0 | 1 | 2;
   instabilityEpochsLeft?: number;
   hasEpochAnchor?: boolean;
+  /** Rival mode info: name and total recorded epochs. */
+  rival?: { name: string; totalEpochs: number } | null;
 }
 
 function timerColor(t: number): string {
@@ -23,6 +25,7 @@ function timerColor(t: number): string {
 export default function PlanningBar({
   epoch, resources, timeLeft, lockedIn, techTier, researchEpochsLeft,
   instabilityTier = 0, instabilityEpochsLeft = 0, hasEpochAnchor = false,
+  rival = null,
 }: PlanningBarProps) {
   const color = timerColor(timeLeft);
   const pct   = Math.round((timeLeft / 30) * 100);
@@ -49,6 +52,18 @@ export default function PlanningBar({
           </span>
           <span style={{ color: '#334155' }}>|</span>
           <span style={{ color: '#64748b' }}>PLANNING</span>
+          {rival && (
+            <>
+              <span style={{ color: '#334155' }}>|</span>
+              <span
+                data-testid="rival-indicator"
+                style={{ color: '#a78bfa', textShadow: '0 0 6px rgba(167,139,250,0.4)' }}
+                title={`Playing against ${rival.name}'s recorded timeline (${rival.totalEpochs} epochs)`}
+              >
+                VS {rival.name.toUpperCase()}
+              </span>
+            </>
+          )}
         </div>
 
         {/* Centre: resources + tech tier */}
