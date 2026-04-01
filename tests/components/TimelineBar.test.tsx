@@ -55,4 +55,16 @@ describe('TimelineBar', () => {
     fireEvent.click(screen.getByTestId('branch-name'));
     expect(onOpenSwitcher).toHaveBeenCalled();
   });
+
+  it('renders only current dot when no snapshots exist', () => {
+    render(<TimelineBar {...defaultProps} snapshotCount={0} currentEpoch={1} />);
+
+    expect(screen.getByTestId('epoch-dot-1')).toBeTruthy();
+    expect(screen.queryByTestId('epoch-dot-2')).toBeNull();
+  });
+
+  it('does not show branch count badge when only 1 branch', () => {
+    render(<TimelineBar {...defaultProps} branchCount={1} />);
+    expect(screen.getByTestId('branch-name').textContent).not.toContain('(');
+  });
 });

@@ -109,7 +109,9 @@ export default function BranchSwitcher({
             <button
               key={branch.id}
               data-testid={`branch-item-${branch.id}`}
-              onClick={() => !isActive && onSwitch(branch.id)}
+              disabled={isActive}
+              aria-current={isActive ? 'true' : undefined}
+              onClick={() => onSwitch(branch.id)}
               style={{
                 display: 'block',
                 width: '100%',

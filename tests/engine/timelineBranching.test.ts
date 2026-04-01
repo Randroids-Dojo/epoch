@@ -161,7 +161,7 @@ describe('forkFromEpoch', () => {
     const originalId = mgr.activeBranchId;
     const newBranch = forkFromEpoch(mgr, 1); // fork from epoch 2 snapshot
 
-    expect(newBranch.name).toBe('Fork from Epoch 2');
+    expect(newBranch.name).toBe('Fork 2 from Epoch 2');
     expect(newBranch.parentBranchId).toBe(originalId);
     expect(newBranch.branchEpoch).toBe(2);
     expect(newBranch.isComplete).toBe(false);

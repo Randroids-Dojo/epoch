@@ -131,24 +131,19 @@ export function forkFromEpoch(mgr: BranchManager, epochIndex: number): TimelineB
   if (!snapshot) throw new Error(`No snapshot at index ${epochIndex}`);
 
   const id = newId('br');
-  const num = mgr.nextBranchNum++;
+  const branchNum = mgr.nextBranchNum++;
   const branch: TimelineBranch = {
     id,
-    name: `Fork from Epoch ${snapshot.entry.epoch}`,
+    name: `Fork ${branchNum} from Epoch ${snapshot.entry.epoch}`,
     parentBranchId: parent.id,
     branchEpoch: snapshot.entry.epoch,
-    // Copy snapshots up to (but not including) the fork point
-    snapshots: parent.snapshots.slice(0, epochIndex).map(s => ({
-      entry: s.entry,
-      state: s.state, // already deep copies
-    })),
+    // Carry over snapshots up to (but not including) the fork point.
+    // Snapshot states were deep-copied at recording time, so sharing references is safe.
+    snapshots: parent.snapshots.slice(0, epochIndex),
     currentState: deepCopyState(snapshot.state),
     isComplete: false,
     winner: null,
   };
-
-  // Suppress unused variable — num reserved for future branch naming
-  void num;
 
   mgr.branches.set(id, branch);
   mgr.activeBranchId = id;

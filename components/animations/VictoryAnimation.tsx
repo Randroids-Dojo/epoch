@@ -269,9 +269,10 @@ export default function VictoryAnimation({
           <button
             data-testid="temporal-debrief-btn"
             className="font-mono text-sm tracking-widest uppercase px-6 py-2 border"
+            disabled={phase !== 'idle'}
             style={{
-              color: '#ffd700',
-              borderColor: '#ffd700',
+              color: COLORS.GOLD,
+              borderColor: COLORS.GOLD,
               background: 'rgba(255,215,0,0.06)',
               cursor: phase === 'idle' ? 'pointer' : 'default',
               transition: 'border-color 0.2s ease, color 0.2s ease, background 0.2s ease',

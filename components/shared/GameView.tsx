@@ -1114,10 +1114,17 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
     setMode({ kind: 'idle' });
     setShowBranchSwitcher(false);
 
-    // Clear animation state
+    // Clear animation & overlay state
     animationRef.current = null;
     setActionBeats(null);
     setAnimElapsed(0);
+    setEpochStatsPopup(null);
+    setPendingBonusCard(null);
+    setTimelineForkResult(null);
+    setChronoScoutResult(null);
+    setEchoReveal(null);
+    timelineForkActiveRef.current = false;
+    setTimelineForkActive(false);
 
     if (!branch.isComplete) {
       setTimeLeft(PLANNING_DURATION);
@@ -1128,11 +1135,14 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
   }, []);
 
   const handleTemporalDebrief = useCallback(() => {
-    // Dismiss victory overlay but keep timeline manager alive
-    const state = gameStateRef.current;
-    state.phase = 'planning';
-    setGameState({ ...state });
+    // Dismiss victory overlay but keep timeline manager alive for browsing
+    const newState = deepCopyState(gameStateRef.current);
+    newState.phase = 'planning';
+    setGameState(newState);
     setTimeLeft(PLANNING_DURATION);
+    setMode({ kind: 'idle' });
+    setEpochStatsPopup(null);
+    setPendingBonusCard(null);
   }, []);
 
   const handleStartGame = useCallback((diff: AIDifficulty) => {
