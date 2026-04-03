@@ -44,7 +44,7 @@ export interface BranchSummary {
   name: string;
   /** e.g. "Epochs 1–7" */
   epochRange: string;
-  status: 'playing' | 'victory' | 'defeat';
+  status: 'active' | 'paused' | 'victory' | 'defeat';
   isActive: boolean;
 }
 
@@ -182,8 +182,10 @@ export function getBranchSummaries(mgr: BranchManager): BranchSummary[] {
     let status: BranchSummary['status'];
     if (branch.isComplete) {
       status = branch.winner === 'player' ? 'victory' : 'defeat';
+    } else if (id === mgr.activeBranchId) {
+      status = 'active';
     } else {
-      status = 'playing';
+      status = 'paused';
     }
 
     summaries.push({

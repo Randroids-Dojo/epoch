@@ -285,11 +285,12 @@ describe('getBranchSummaries', () => {
 
     const original = summaries.find(s => s.id === originalId)!;
     expect(original.name).toBe('Original');
-    expect(original.status).toBe('playing');
+    expect(original.status).toBe('paused');
     expect(original.isActive).toBe(false);
 
     const fork = summaries.find(s => s.id !== originalId)!;
     expect(fork.name).toContain('Fork');
+    expect(fork.status).toBe('active');
     expect(fork.isActive).toBe(true);
   });
 

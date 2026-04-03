@@ -11,13 +11,15 @@ interface BranchSwitcherProps {
 }
 
 const STATUS_COLORS: Record<BranchSummary['status'], string> = {
-  playing: '#64748b',
+  active: COLORS.CYAN,
+  paused: '#475569',
   victory: '#22c55e',
   defeat: COLORS.CORAL,
 };
 
 const STATUS_LABELS: Record<BranchSummary['status'], string> = {
-  playing: 'PLAYING',
+  active: 'ACTIVE',
+  paused: 'PAUSED',
   victory: 'VICTORY',
   defeat: 'DEFEAT',
 };

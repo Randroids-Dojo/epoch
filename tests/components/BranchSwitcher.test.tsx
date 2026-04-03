@@ -4,8 +4,8 @@ import BranchSwitcher from '@/components/hud/BranchSwitcher';
 import type { BranchSummary } from '@/engine/timelineBranching';
 
 const makeBranches = (): BranchSummary[] => [
-  { id: 'br1', name: 'Original', epochRange: 'Epochs 1–5', status: 'playing', isActive: false },
-  { id: 'br2', name: 'Fork 2 from Epoch 3', epochRange: 'Epochs 3–4', status: 'victory', isActive: true },
+  { id: 'br1', name: 'Original', epochRange: 'Epochs 1–5', status: 'paused', isActive: false },
+  { id: 'br2', name: 'Fork 2 from Epoch 3', epochRange: 'Epochs 3–4', status: 'active', isActive: true },
   { id: 'br3', name: 'Fork 3 from Epoch 2', epochRange: 'Epoch 2', status: 'defeat', isActive: false },
 ];
 
