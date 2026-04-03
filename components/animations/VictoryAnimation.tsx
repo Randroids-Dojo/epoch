@@ -47,8 +47,6 @@ export default function VictoryAnimation({
   return (
     <div
       data-testid="victory-animation"
-      onClick={onComplete}
-      onTouchEnd={onComplete}
       style={{
         position: 'absolute',
         inset: 0,
@@ -218,7 +216,9 @@ export default function VictoryAnimation({
       <div
         style={{
           display: 'flex',
-          gap: '1rem',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '0.75rem',
           marginTop: '2.5rem',
           opacity: phase === 'idle' ? 1 : 0,
           transform: phase === 'idle' ? 'translateY(0)' : 'translateY(8px)',
@@ -227,6 +227,26 @@ export default function VictoryAnimation({
           zIndex: 2,
         }}
       >
+        {/* Temporal Debrief — primary action */}
+        {onDebrief && (
+          <button
+            data-testid="temporal-debrief-btn"
+            className="font-mono text-sm tracking-widest uppercase px-8 py-3 border"
+            disabled={phase !== 'idle'}
+            style={{
+              color: COLORS.GOLD,
+              borderColor: COLORS.GOLD,
+              background: 'rgba(255,215,0,0.08)',
+              cursor: phase === 'idle' ? 'pointer' : 'default',
+              transition: 'border-color 0.2s ease, color 0.2s ease, background 0.2s ease',
+              fontSize: '0.85rem',
+            }}
+            onClick={(e) => { e.stopPropagation(); onDebrief(); }}
+          >
+            Temporal Debrief
+          </button>
+        )}
+
         {/* Share / Challenge button — only on victory */}
         {isVictory && onShareTimeline && (
           <button
@@ -263,25 +283,6 @@ export default function VictoryAnimation({
               textAlign: 'center',
             }}
           />
-        )}
-
-        {/* Temporal Debrief button */}
-        {onDebrief && (
-          <button
-            data-testid="temporal-debrief-btn"
-            className="font-mono text-sm tracking-widest uppercase px-6 py-2 border"
-            disabled={phase !== 'idle'}
-            style={{
-              color: COLORS.GOLD,
-              borderColor: COLORS.GOLD,
-              background: 'rgba(255,215,0,0.06)',
-              cursor: phase === 'idle' ? 'pointer' : 'default',
-              transition: 'border-color 0.2s ease, color 0.2s ease, background 0.2s ease',
-            }}
-            onClick={(e) => { e.stopPropagation(); onDebrief(); }}
-          >
-            Temporal Debrief
-          </button>
         )}
 
         {/* Play Again button */}
