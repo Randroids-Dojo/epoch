@@ -696,6 +696,22 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
   const animationRef = useRef<ExecutionAnimation | null>(null);
   const [actionBeats, setActionBeats] = useState<ActionBeat[] | null>(null);
 
+  // ── Shared overlay/animation reset ────────────────────────────────────────
+  const clearOverlayState = useCallback(() => {
+    animationRef.current = null;
+    setActionBeats(null);
+    setAnimElapsed(0);
+    setEpochStatsPopup(null);
+    setPendingBonusCard(null);
+    setTimelineForkResult(null);
+    setChronoScoutResult(null);
+    setEchoReveal(null);
+    timelineForkActiveRef.current = false;
+    setTimelineForkActive(false);
+    setShowBranchSwitcher(false);
+    timelineRecorderRef.current = [];
+  }, []);
+
   // ── finishExecution ───────────────────────────────────────────────────────
   const finishExecutionRef = useRef<() => void>(() => {});
 
@@ -1042,10 +1058,9 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
   // ── Play Again / Start ────────────────────────────────────────────────────
   const handlePlayAgain = useCallback(() => {
     clearRendererState();
-    timelineRecorderRef.current = [];
     branchManagerRef.current = null;
     setActiveBranchId('');
-    setShowBranchSwitcher(false);
+    clearOverlayState();
 
     setShareCopied(false);
     setShareFallbackUrl(null);
@@ -1060,7 +1075,7 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
       setIntroPlaying(true);
       setShowSetup(true);
     }
-  }, []);
+  }, [clearOverlayState]);
 
   // ── Timeline Branching handlers ──────────────────────────────────────────
   const handleTimelineRewind = useCallback((epochIndex: number) => {
@@ -1085,30 +1100,14 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
     }
     newState.phase = 'planning';
 
-    // Apply state
     setGameState(newState);
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
-
-    // Clear all animation & overlay state
-    animationRef.current = null;
-    setActionBeats(null);
-    setAnimElapsed(0);
-    setEpochStatsPopup(null);
-    setPendingBonusCard(null);
-    setTimelineForkResult(null);
-    setChronoScoutResult(null);
-    setEchoReveal(null);
-    timelineForkActiveRef.current = false;
-    setTimelineForkActive(false);
-    setShowBranchSwitcher(false);
-
-    // Reset rivals recorder for this branch
-    timelineRecorderRef.current = [];
+    clearOverlayState();
 
     setActiveBranchId(newBranch.id);
     setBranchVersion(v => v + 1);
-  }, []);
+  }, [clearOverlayState]);
 
   const handleBranchSwitch = useCallback((branchId: string) => {
     const mgr = branchManagerRef.current;
@@ -1121,23 +1120,9 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
     const branch = switchBranch(mgr, branchId);
     const newState = deepCopyState(branch.currentState);
 
-    // Apply state
     setGameState(newState);
     setMode({ kind: 'idle' });
-    setShowBranchSwitcher(false);
-
-    // Clear animation & overlay state
-    animationRef.current = null;
-    setActionBeats(null);
-    setAnimElapsed(0);
-    setEpochStatsPopup(null);
-    setPendingBonusCard(null);
-    setTimelineForkResult(null);
-    setChronoScoutResult(null);
-    setEchoReveal(null);
-    timelineForkActiveRef.current = false;
-    setTimelineForkActive(false);
-    timelineRecorderRef.current = [];
+    clearOverlayState();
 
     if (!branch.isComplete) {
       setTimeLeft(PLANNING_DURATION);
@@ -1145,7 +1130,7 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
 
     setActiveBranchId(branch.id);
     setBranchVersion(v => v + 1);
-  }, []);
+  }, [clearOverlayState]);
 
   const handleTemporalDebrief = useCallback(() => {
     // Dismiss victory overlay but keep timeline manager alive for browsing
@@ -1154,20 +1139,8 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
     setGameState(newState);
     setTimeLeft(PLANNING_DURATION);
     setMode({ kind: 'idle' });
-
-    // Clear all overlays and animation state
-    animationRef.current = null;
-    setActionBeats(null);
-    setAnimElapsed(0);
-    setEpochStatsPopup(null);
-    setPendingBonusCard(null);
-    setTimelineForkResult(null);
-    setChronoScoutResult(null);
-    setEchoReveal(null);
-    timelineForkActiveRef.current = false;
-    setTimelineForkActive(false);
-    setShowBranchSwitcher(false);
-  }, []);
+    clearOverlayState();
+  }, [clearOverlayState]);
 
   const handleStartGame = useCallback((diff: AIDifficulty) => {
     clearRendererState();
