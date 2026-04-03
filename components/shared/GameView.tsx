@@ -1821,8 +1821,8 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
         </div>
       )}
 
-      {/* Timeline bar for branching — hidden during tutorial/setup/intro */}
-      {branchManagerRef.current && !showSetup && !introPlaying && tutorialStep === null && (
+      {/* Timeline bar for branching — always visible once game is running */}
+      {branchManagerRef.current && !showSetup && !introPlaying && (
         <TimelineBar
           key={branchVersion}
           snapshotCount={getActiveBranch(branchManagerRef.current).snapshots.length}
