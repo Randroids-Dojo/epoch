@@ -64,9 +64,11 @@ export async function encodeTimeline(recording: TimelineRecording): Promise<stri
         }
       })();
 
-      void writer.write(Uint8Array.from(bytes));
-      void writer.close();
-      await readAll;
+      const writeAll = (async () => {
+        await writer.write(Uint8Array.from(bytes));
+        await writer.close();
+      })();
+      await Promise.all([readAll, writeAll]);
 
       const totalLen = chunks.reduce((s, c) => s + c.length, 0);
       const compressed = new Uint8Array(totalLen);
@@ -110,9 +112,11 @@ export async function decodeTimeline(encoded: string): Promise<TimelineRecording
         }
       })();
 
-      void writer.write(Uint8Array.from(payload));
-      void writer.close();
-      await readAll;
+      const writeAll = (async () => {
+        await writer.write(Uint8Array.from(payload));
+        await writer.close();
+      })();
+      await Promise.all([readAll, writeAll]);
 
       const totalLen = chunks.reduce((s, c) => s + c.length, 0);
       const decompressed = new Uint8Array(totalLen);

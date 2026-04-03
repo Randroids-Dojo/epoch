@@ -942,9 +942,14 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
 
     resolveEpoch(state);
 
-    // Update branch tip after resolution
+    // Update branch tip after resolution. Normalize the phase so that
+    // restored branch states are always in a UI-supported phase.
     if (branchManagerRef.current) {
-      updateBranchTip(branchManagerRef.current, state);
+      const tipState = deepCopyState(state);
+      if ((tipState.phase as string) === 'transition') {
+        tipState.phase = 'planning';
+      }
+      updateBranchTip(branchManagerRef.current, tipState);
       setBranchVersion(v => v + 1);
     }
 
@@ -1069,11 +1074,13 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
     const newBranch = forkFromEpoch(mgr, epochIndex);
     const newState = deepCopyState(newBranch.currentState);
 
-    // Clear player commands for fresh planning
-    newState.players.player.unitOrders.clear();
-    newState.players.player.globalCommands = newState.players.player.globalCommands.map(() => null);
-    newState.players.player.lockedIn = false;
-    newState.players.player.defaultOrderUnitIds.clear();
+    // Clear all players' commands for fresh planning (human and AI)
+    for (const ps of Object.values(newState.players)) {
+      ps.unitOrders.clear();
+      ps.globalCommands = ps.globalCommands.map(() => null);
+      ps.lockedIn = false;
+      ps.defaultOrderUnitIds.clear();
+    }
     newState.phase = 'planning';
 
     // Apply state

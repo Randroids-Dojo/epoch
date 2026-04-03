@@ -90,6 +90,7 @@ export default function TimelineBar({
       {/* Branch name + switcher */}
       <button
         data-testid="branch-name"
+        disabled={branchCount <= 1}
         onClick={onOpenSwitcher}
         style={{
           background: 'none',
