@@ -199,8 +199,18 @@ describe('forkFromEpoch', () => {
     expect(mgr.activeBranchId).toBe(newBranch.id);
   });
 
-  it('throws for invalid epoch index', () => {
-    expect(() => forkFromEpoch(mgr, 99)).toThrow();
+  it('throws for out-of-range epoch index', () => {
+    expect(() => forkFromEpoch(mgr, 99)).toThrow(/out of range/);
+  });
+
+  it('throws for negative epoch index', () => {
+    expect(() => forkFromEpoch(mgr, -1)).toThrow(/out of range/);
+  });
+
+  it('forks from epoch index 0 with empty prior snapshots', () => {
+    const branch = forkFromEpoch(mgr, 0);
+    expect(branch.snapshots).toHaveLength(0);
+    expect(branch.branchEpoch).toBe(1);
   });
 
   it('creates independent branches when forking same epoch twice', () => {

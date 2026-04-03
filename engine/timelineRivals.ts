@@ -134,6 +134,10 @@ export async function decodeTimeline(encoded: string): Promise<TimelineRecording
 
     const parsed = JSON.parse(json);
     if (!validateTimelineShape(parsed)) return null;
+    // Backfill difficulty for legacy recordings (kept out of validator to avoid mutation)
+    if (parsed.difficulty === undefined) {
+      parsed.difficulty = 'adept';
+    }
     return parsed as TimelineRecording;
   } catch {
     return null;
@@ -174,11 +178,6 @@ function validateTimelineShape(obj: unknown): boolean {
       if (cmd === null) continue;
       if (typeof cmd !== 'object' || !VALID_GLOBAL_CMD_TYPES.has(cmd.type)) return false;
     }
-  }
-
-  // Backfill difficulty for legacy recordings
-  if (rec.difficulty === undefined) {
-    rec.difficulty = 'adept';
   }
 
   return true;

@@ -180,6 +180,8 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
   const branchManagerRef = useRef<BranchManager | null>(null);
   const [activeBranchId, setActiveBranchId] = useState('');
   const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
+  const showBranchSwitcherRef = useRef(false);
+  showBranchSwitcherRef.current = showBranchSwitcher;
   const [branchVersion, setBranchVersion] = useState(0);
 
   const dismissEpochStats = useCallback(() => {
@@ -1088,15 +1090,18 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
     setMode({ kind: 'idle' });
     setTimeLeft(PLANNING_DURATION);
 
-    // Clear animation & overlay state
+    // Clear all animation & overlay state
     animationRef.current = null;
     setActionBeats(null);
     setAnimElapsed(0);
+    setEpochStatsPopup(null);
+    setPendingBonusCard(null);
     setTimelineForkResult(null);
     setChronoScoutResult(null);
     setEchoReveal(null);
     timelineForkActiveRef.current = false;
     setTimelineForkActive(false);
+    setShowBranchSwitcher(false);
 
     // Reset rivals recorder for this branch
     timelineRecorderRef.current = [];
@@ -1149,8 +1154,18 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
     setGameState(newState);
     setTimeLeft(PLANNING_DURATION);
     setMode({ kind: 'idle' });
+
+    // Clear all overlays and animation state
+    animationRef.current = null;
+    setActionBeats(null);
+    setAnimElapsed(0);
     setEpochStatsPopup(null);
     setPendingBonusCard(null);
+    setTimelineForkResult(null);
+    setChronoScoutResult(null);
+    setEchoReveal(null);
+    timelineForkActiveRef.current = false;
+    setTimelineForkActive(false);
     setShowBranchSwitcher(false);
   }, []);
 
@@ -1665,6 +1680,13 @@ export default function GameView({ rivalEncoded }: GameViewProps) {
         e.preventDefault();
         // Don't allow pause during setup or game-over.
         if (showSetupRef.current) return;
+
+        // Close branch switcher first if open.
+        if (showBranchSwitcherRef.current) {
+          setShowBranchSwitcher(false);
+          return;
+        }
+
         if (gameStateRef.current.phase === 'over') return;
 
         // If paused, always unpause.

@@ -127,8 +127,10 @@ export function forkFromEpoch(mgr: BranchManager, epochIndex: number): TimelineB
   const parent = mgr.branches.get(mgr.activeBranchId);
   if (!parent) throw new Error(`Active branch ${mgr.activeBranchId} not found`);
 
+  if (epochIndex < 0 || epochIndex >= parent.snapshots.length) {
+    throw new Error(`Epoch index ${epochIndex} out of range (0–${parent.snapshots.length - 1})`);
+  }
   const snapshot = parent.snapshots[epochIndex];
-  if (!snapshot) throw new Error(`No snapshot at index ${epochIndex}`);
 
   const id = newId('br');
   const branchNum = mgr.nextBranchNum++;

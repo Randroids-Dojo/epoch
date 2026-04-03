@@ -57,7 +57,6 @@ export default function VictoryAnimation({
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        cursor: 'pointer',
       }}
     >
       {/* Initial white flash */}
