@@ -7,6 +7,8 @@ interface VictoryAnimationProps {
   winner: 'player' | 'ai';
   epoch: number;
   onComplete: () => void;
+  /** When provided, shows a "Temporal Debrief" button to explore timeline branches. */
+  onDebrief?: () => void;
   /** When provided, shows a "Challenge a Friend" share button after victory. */
   onShareTimeline?: () => void;
   /** Whether the share URL has been copied to clipboard. */
@@ -24,7 +26,7 @@ interface VictoryAnimationProps {
  * "DEFEAT" uses red/coral tones with a darker aesthetic.
  */
 export default function VictoryAnimation({
-  winner, epoch, onComplete, onShareTimeline, shareCopied, shareFallbackUrl, isRivalMode, rivalName,
+  winner, epoch, onComplete, onDebrief, onShareTimeline, shareCopied, shareFallbackUrl, isRivalMode, rivalName,
 }: VictoryAnimationProps) {
   const [phase, setPhase] = useState<'flash' | 'slam' | 'rings' | 'details' | 'idle'>('flash');
 
@@ -45,8 +47,6 @@ export default function VictoryAnimation({
   return (
     <div
       data-testid="victory-animation"
-      onClick={onComplete}
-      onTouchEnd={onComplete}
       style={{
         position: 'absolute',
         inset: 0,
@@ -57,7 +57,6 @@ export default function VictoryAnimation({
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        cursor: 'pointer',
       }}
     >
       {/* Initial white flash */}
@@ -216,7 +215,9 @@ export default function VictoryAnimation({
       <div
         style={{
           display: 'flex',
-          gap: '1rem',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '0.75rem',
           marginTop: '2.5rem',
           opacity: phase === 'idle' ? 1 : 0,
           transform: phase === 'idle' ? 'translateY(0)' : 'translateY(8px)',
@@ -225,11 +226,32 @@ export default function VictoryAnimation({
           zIndex: 2,
         }}
       >
+        {/* Temporal Debrief — primary action */}
+        {onDebrief && (
+          <button
+            data-testid="temporal-debrief-btn"
+            className="font-mono text-sm tracking-widest uppercase px-8 py-3 border"
+            disabled={phase !== 'idle'}
+            style={{
+              color: COLORS.GOLD,
+              borderColor: COLORS.GOLD,
+              background: 'rgba(255,215,0,0.08)',
+              cursor: phase === 'idle' ? 'pointer' : 'default',
+              transition: 'border-color 0.2s ease, color 0.2s ease, background 0.2s ease',
+              fontSize: '0.85rem',
+            }}
+            onClick={(e) => { e.stopPropagation(); onDebrief(); }}
+          >
+            Temporal Debrief
+          </button>
+        )}
+
         {/* Share / Challenge button — only on victory */}
         {isVictory && onShareTimeline && (
           <button
             data-testid="share-timeline-btn"
             className="font-mono text-sm tracking-widest uppercase px-6 py-2 border"
+            disabled={phase !== 'idle'}
             style={{
               color: shareCopied ? '#22c55e' : COLORS.CYAN,
               borderColor: shareCopied ? '#22c55e' : COLORS.CYAN,
@@ -266,6 +288,7 @@ export default function VictoryAnimation({
         <button
           data-testid="play-again-btn"
           className="font-mono text-sm tracking-widest uppercase px-6 py-2 border"
+          disabled={phase !== 'idle'}
           style={{
             color: '#94a3b8',
             borderColor: '#334155',
